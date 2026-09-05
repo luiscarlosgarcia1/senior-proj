@@ -1,0 +1,25 @@
+{
+  "publisher": "Texas Water Development Board",
+  "dataset": "2025 Cursory Floodplain Dataset - Existing Flood Risk Map",
+  "retrieved_at": "2026-09-05T03:10:33Z",
+  "source_landing_page": "https://www.twdb.texas.gov/flood/science/floodplain-dataset.asp",
+  "service_endpoint": "https://gis2.twdb.texas.gov/server/rest/services/OOP_FP_SFPV/Existing_Flood_Risk_Map/FeatureServer/12",
+  "layer": {
+    "id": 12,
+    "name": "Existing Flood Hazard",
+    "geometry_type": "esriGeometryPolygon",
+    "description": "Perform existing condition flood hazard analyses to determine the location and magnitude of both 1.0% annual chance and 0.2% annual chance flood events."
+  },
+  "hidalgo_query": {
+    "where": "COUNTY='HIDALGO'",
+    "returned_feature_count": 180,
+    "geometry_export_status": "deferred_after_bounded_retrieval_timeout"
+  },
+  "dataset_context": {
+    "coverage": "Texas statewide",
+    "hazard_type": "modeled existing-condition flood hazard",
+    "probability_frequencies_described_by_twdb": ["20% annual chance", "10% annual chance", "1% annual chance", "0.2% annual chance"],
+    "resolution_described_by_twdb": "3 meters"
+  },
+  "license_or_terms_note": "TWDB public planning data. The layer is contextual and modeled; it is not an effective FEMA flood insurance regulatory layer."
+}

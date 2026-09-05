@@ -1,0 +1,21 @@
+{
+  "publisher": "Federal Emergency Management Agency",
+  "dataset": "National Flood Hazard Layer",
+  "retrieved_at": "2026-09-05T03:10:33Z",
+  "source_landing_page": "https://www.fema.gov/flood-maps/products-tools/national-flood-hazard-layer",
+  "service_endpoint": "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28",
+  "layer": {
+    "id": 28,
+    "name": "Flood Hazard Zones",
+    "geometry_type": "esriGeometryPolygon",
+    "spatial_reference": "NAD 1983 (WKID 4269)",
+    "fields_of_interest": ["DFIRM_ID", "FLD_ZONE", "ZONE_SUBTY", "SFHA_TF", "STATIC_BFE", "DEPTH", "VELOCITY", "SOURCE_CIT"]
+  },
+  "hidalgo_retrieval_status": {
+    "status": "metadata_retrieved_geometry_deferred",
+    "attempted_query": "Flood Hazard Zones intersecting a Hidalgo County envelope in EPSG:4326",
+    "result": "FEMA service returned HTTP 500 Error performing query operation",
+    "policy": "No county geometry or count was stored from the failed response. Retry against the official service before adding a layer record."
+  },
+  "license_or_terms_note": "FEMA NFHL is the preferred effective-hazard source when coverage is available. Do not use this source note as evidence that any individual Hidalgo location is mapped or as a substitute for an official property-level determination."
+}
