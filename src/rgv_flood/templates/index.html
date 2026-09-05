@@ -1,73 +1,105 @@
 {% extends "base.html" %}
 
 {% block content %}
-<main class="layout">
-  <aside class="sidebar">
-    <section>
-      <h2>County</h2>
-      <select id="county-select"
-              name="county_slug"
-              hx-get="/partials/closures"
-              hx-target="#closures"
-              hx-trigger="change">
-        <option value="">All four counties</option>
-        {% for slug, county in counties.items() %}
-        <option value="{{ slug }}">{{ county.name }}</option>
-        {% endfor %}
-      </select>
-    </section>
+<div class="app">
 
-    <section>
-      <h2>Layers</h2>
-      {% if layers %}
-      <ul class="layer-list">
-        {% for layer in layers %}
-        <li>
-          <label>
-            <input type="checkbox" class="layer-toggle" value="{{ layer.id }}">
-            {{ layer.title }}
-          </label>
-          <button type="button" class="link"
-                  hx-get="/partials/metadata/{{ layer.id }}"
-                  hx-target="#metadata">source</button>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="muted">No layers yet — run the preprocessing pipeline.</p>
-      {% endif %}
-    </section>
+  <header class="topbar">
+    <div class="brand">RGV Flood Impact Visualizer</div>
 
-    <section>
-      <h2>Relative severity</h2>
-      <ul class="legend">
-        {% for cls in relative_classes %}
-        <li><span class="swatch swatch-{{ cls }}"></span>{{ cls }}</li>
-        {% endfor %}
-      </ul>
-      <p class="muted">
-        A documented mapping table assigns these classes only to comparable
-        source categories. Others keep their original label.
-      </p>
-    </section>
-
-    <section>
-      <h2>Source metadata</h2>
-      <div id="metadata"><p class="muted">Select a layer's “source”.</p></div>
-    </section>
-
-    <section>
-      <h2>Historical road-closure reports</h2>
-      <div id="closures"
-           hx-get="/partials/closures"
-           hx-trigger="load">
-        <p class="muted">Loading…</p>
+    <div class="topbar-controls">
+      <div class="county-field">
+        <span class="county-label">County</span>
+        <select id="county-select"
+                name="county_slug"
+                hx-get="/partials/closures"
+                hx-target="#closures-body"
+                hx-trigger="change">
+          <option value="">All four counties</option>
+          {% for slug, county in counties.items() %}
+          <option value="{{ slug }}">{{ county.name }}</option>
+          {% endfor %}
+        </select>
+        <span class="county-caret" aria-hidden="true">&#9662;</span>
       </div>
-    </section>
-  </aside>
 
-  <div id="map"></div>
-</main>
+      <details class="info">
+        <summary class="info-btn" title="About this map" aria-label="About this map">i</summary>
+        <div class="info-card">
+          <div class="info-card-head">
+            <span>About this map</span>
+          </div>
+          <p>
+            Educational and comparative only. Not for flood-insurance,
+            emergency-routing, or engineering decisions. Historical road-closure
+            reports are not live closures. For an authoritative property-level
+            determination, contact FEMA or your county.
+          </p>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="sidebar">
+
+      <section class="panel">
+        <h2>Layers</h2>
+        {% if layers %}
+        <ul class="layer-list">
+          {% for layer in layers %}
+          <li class="layer-row">
+            <label class="layer-toggle-label">
+              <input type="checkbox" class="layer-toggle" value="{{ layer.id }}">
+              <span>{{ layer.title }}</span>
+            </label>
+            <button type="button" class="linklike"
+                    hx-get="/partials/metadata/{{ layer.id }}"
+                    hx-target="#metadata"
+                    hx-on::after-request="document.getElementById('metadata').hidden = false">source</button>
+          </li>
+          {% endfor %}
+        </ul>
+        <div id="metadata" hidden></div>
+        {% else %}
+        <p class="note">No layers yet — run the preprocessing pipeline.</p>
+        {% endif %}
+      </section>
+
+      <hr class="divider">
+
+      <section class="panel">
+        <h2>Relative severity</h2>
+        <ul class="legend">
+          {% for cls in relative_classes %}
+          <li><span class="swatch swatch-{{ cls }}"></span>{{ cls }}</li>
+          {% endfor %}
+        </ul>
+        <p class="note">
+          A documented mapping table assigns these classes only to comparable
+          source categories. Others keep their original label.
+        </p>
+      </section>
+
+      <hr class="divider">
+
+      <section class="panel">
+        <details class="collapse" open>
+          <summary><h2>Historical road closures</h2><span class="chev" aria-hidden="true">&#9662;</span></summary>
+          <div id="closures-body"
+               hx-get="/partials/closures"
+               hx-trigger="load">
+            <p class="note">Loading…</p>
+          </div>
+        </details>
+      </section>
+
+    </aside>
+
+    <div class="map-wrap">
+      <div id="map"></div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

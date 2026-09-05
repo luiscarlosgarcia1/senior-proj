@@ -10,23 +10,33 @@
 
   const map = L.map("map").setView(cfg.center, cfg.zoom);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // The map container gets its size from flexbox; make sure Leaflet measures it
+  // after layout has settled.
+  requestAnimationFrame(() => map.invalidateSize());
+  window.addEventListener("load", () => map.invalidateSize());
+
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
 
+  // Fill colors match the sidebar legend swatches (see app.css --sev-*).
   const SEVERITY_STYLE = {
-    high: { color: "#7f1d1d", weight: 1, fillColor: "#dc2626", fillOpacity: 0.35 },
-    moderate: { color: "#92400e", weight: 1, fillColor: "#f59e0b", fillOpacity: 0.3 },
-    low: { color: "#1e40af", weight: 1, fillColor: "#60a5fa", fillOpacity: 0.2 },
-    uncategorized: { color: "#374151", weight: 1, fillColor: "#9ca3af", fillOpacity: 0.25 },
+    high: { color: "#a83232", weight: 1, fillColor: "#d64545", fillOpacity: 0.38 },
+    moderate: { color: "#b06d22", weight: 1, fillColor: "#e0913a", fillOpacity: 0.34 },
+    low: { color: "#3f68a8", weight: 1, fillColor: "#5b8bd6", fillOpacity: 0.28 },
+    uncategorized: { color: "#7c8296", weight: 1, fillColor: "#aeb3c2", fillOpacity: 0.25 },
   };
 
   const loaded = new Map(); // layerId -> L.GeoJSON
 
+  const BOUNDARY_STYLE = { color: "#1b2a4a", weight: 1.5, fill: false, dashArray: "3 3" };
+
   function styleFor(feature) {
-    const cls = (feature.properties && feature.properties.relative_class) || "uncategorized";
-    return SEVERITY_STYLE[cls] || SEVERITY_STYLE.uncategorized;
+    const p = feature.properties || {};
+    if (p.original_category === "county boundary") return BOUNDARY_STYLE;
+    return SEVERITY_STYLE[p.relative_class] || SEVERITY_STYLE.uncategorized;
   }
 
   async function showLayer(layerId) {
@@ -43,10 +53,14 @@
       style: styleFor,
       onEachFeature: (feature, lyr) => {
         const p = feature.properties || {};
+        if (p.original_category === "county boundary") {
+          lyr.bindPopup(`<strong>${p.county || "County"}</strong>`);
+          return;
+        }
         lyr.bindPopup(
           `<strong>${p.source || "source"}</strong><br>` +
-            `${p.original_category || ""}<br>` +
-            `relative class: ${p.relative_class || "uncategorized"}`
+            `zone: ${p.original_category || "—"}<br>` +
+            `relative severity: ${p.relative_class || "uncategorized"}`
         );
       },
     });

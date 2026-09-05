@@ -12,15 +12,6 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
-  <header class="app-header">
-    <h1>RGV Flood Impact Visualizer</h1>
-    <p class="disclaimer">
-      Educational and comparative only. Not for flood-insurance, emergency-routing,
-      or engineering decisions. Historical road-closure reports are not live closures.
-      For an authoritative property-level determination, contact FEMA or your county.
-    </p>
-  </header>
-
   {% block content %}{% endblock %}
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"

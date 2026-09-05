@@ -1,5 +1,5 @@
 <div class="closures">
-  <p class="muted">
+  <p>
     Historical reports from selected local news coverage
     {%- if county %} for {{ county.name }}{% endif %}. Not live closure data.
   </p>
@@ -20,6 +20,6 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p class="muted">No reviewed reports for this selection yet.</p>
+  <div class="empty">No reviewed reports for this selection yet.</div>
   {% endif %}
 </div>
