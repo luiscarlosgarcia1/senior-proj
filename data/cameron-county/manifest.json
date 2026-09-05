@@ -1,0 +1,83 @@
+{
+  "manifest_version": "1.0.0",
+  "dataset_id": "cameron-county-flood-evidence",
+  "title": "Cameron County Flood Evidence Collection",
+  "status": "collection_scaffold",
+  "purpose": "Shared collection of flood events, flood susceptibility, weather, terrain, public reports, and public infrastructure or closure evidence for the initial project dataset.",
+  "geography": {
+    "name": "Cameron County, Texas",
+    "boundary_policy": "Include an event when its claimed location is in Cameron County or its documented footprint overlaps Cameron County."
+  },
+  "temporal_coverage": {
+    "start": "2000-01-01",
+    "end": "present"
+  },
+  "record_policy": {
+    "shared_collection": true,
+    "source_type_is_acceptance_tier": false,
+    "preserve_provenance": true,
+    "link_likely_duplicates": true,
+    "do_not_silently_delete_duplicates": true
+  },
+  "record_sets": [
+    {
+      "id": "events-and-public-reports",
+      "path": "records/events-and-public-reports",
+      "format": "ndjson",
+      "schema": "schemas/event-public-report.schema.json",
+      "description": "Documented flood events and supplementary public reports."
+    },
+    {
+      "id": "layers-and-weather",
+      "path": "records/layers-and-weather",
+      "format": "ndjson",
+      "schema": "schemas/layer-weather-observation.schema.json",
+      "description": "Static/reference layers and weather-observation datasets."
+    }
+  ],
+  "source_families": [
+    {
+      "id": "official-events",
+      "path": "sources/official-events",
+      "description": "Historical documented flood events and official incident or disaster records."
+    },
+    {
+      "id": "weather",
+      "path": "sources/weather",
+      "description": "Weather observations and rainfall or event data."
+    },
+    {
+      "id": "terrain-hydrography",
+      "path": "sources/terrain-hydrography",
+      "description": "Terrain, elevation, hydrography, and drainage-related layers."
+    },
+    {
+      "id": "flood-susceptibility",
+      "path": "sources/flood-susceptibility",
+      "description": "Flood-susceptibility and reference layers."
+    },
+    {
+      "id": "public-reports",
+      "path": "sources/public-reports",
+      "description": "Local news and permitted public Facebook, Instagram, and X material."
+    },
+    {
+      "id": "infrastructure-closures",
+      "path": "sources/infrastructure-closures",
+      "description": "Public roads, drainage infrastructure, closures, and service reports."
+    }
+  ],
+  "processed_layers": {
+    "path": "flood-hazard-layers",
+    "description": "Map-ready GeoJSON imported from the earlier Flood Project working directory; see flood-hazard-layers/manifest.json."
+  },
+  "primary_discovery_sources": [
+    "NOAA NCEI Storm Events Database",
+    "FEMA disaster declarations and local agency records",
+    "NOAA NCEI Daily Summaries and Local Climatological Data",
+    "USGS 3DEP and 3D Hydrography Program",
+    "FEMA National Flood Hazard Layer",
+    "TWDB Flood Planning Data Hub and Lower Rio Grande Region 15 materials",
+    "Hidalgo County Drainage District No. 1 and local government public records"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "publisher": "U.S. Census Bureau",
+  "dataset": "TIGER/Line 2023 - Counties",
+  "acquired_via": "Imported from Flood Project (data/raw/rgv_counties.geojson), originally TIGER 2023 county shapefile filtered to the RGV FIPS.",
+  "source_landing_page": "https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html",
+  "query": {
+    "where": "GEOID='48061'",
+    "return_geometry": true
+  },
+  "result": {
+    "feature_count": 1,
+    "geoid": "48061",
+    "name": "Cameron County"
+  },
+  "stored_at": "flood-hazard-layers/boundary.geojson",
+  "license_or_terms_note": "Public Census geographic reference service. The boundary is a study-area reference and must not be presented as flood evidence."
+}
