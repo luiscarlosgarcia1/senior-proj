@@ -1,4 +1,65 @@
 {
   "generated_by": "pipeline/build_layers.py",
-  "layers": []
+  "layers": [
+    {
+      "id": "county-boundaries",
+      "file": "county-boundaries.geojson",
+      "feature_count": 4,
+      "title": "County boundaries",
+      "source": "US Census TIGER/Line 2023",
+      "vintage": "2023",
+      "hazard_type": "n/a \u2014 study-area reference",
+      "coverage": "Cameron, Hidalgo, Starr, Willacy",
+      "limitation": "Geographic reference only. Not flood evidence.",
+      "source_url": "https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html"
+    },
+    {
+      "id": "fema-nfhl",
+      "file": "fema-nfhl.geojson",
+      "feature_count": 20,
+      "title": "FEMA effective flood hazard (NFHL)",
+      "source": "FEMA National Flood Hazard Layer",
+      "vintage": "effective FIRM date varies by panel",
+      "hazard_type": "effective regulatory flood hazard",
+      "coverage": "Cameron, Starr, Willacy",
+      "limitation": "No digital NFHL coverage for Hidalgo County. Clipped to county boundary; not a property-level determination.",
+      "source_url": "https://msc.fema.gov/portal/home"
+    },
+    {
+      "id": "hidalgo-firm-1981",
+      "file": "hidalgo-firm-1981.geojson",
+      "feature_count": 7,
+      "title": "Hidalgo County historic flood zones (1981 FIRM)",
+      "source": "Hidalgo County Drainage District No. 1 \u2014 digitized 1981 FIRM",
+      "vintage": "1981 base map; some zones later revised by LOMR",
+      "hazard_type": "historic local flood-zone reference",
+      "coverage": "Hidalgo",
+      "limitation": "44 years old; urban core largely undrawn. Legacy B/C zones shown as shaded-X / minimal by long-standing FEMA equivalence, but this is not current effective data.",
+      "source_url": "https://www.hcdd1.org/page/floodplains"
+    },
+    {
+      "id": "twdb-cursory-1in100",
+      "file": "twdb-cursory-1in100.geojson",
+      "feature_count": 4,
+      "title": "TWDB modeled flood extent \u2014 1% annual chance",
+      "source": "TWDB 2025 cursory floodplain (Fathom 3m)",
+      "vintage": "2025",
+      "hazard_type": "modeled pluvial/fluvial/coastal (contextual)",
+      "coverage": "all four counties",
+      "limitation": "Modeled estimate, not an effective FEMA map or regulatory determination.",
+      "source_url": "https://www.twdb.texas.gov/flood/science/floodplain-dataset.asp"
+    },
+    {
+      "id": "twdb-cursory-1in500",
+      "file": "twdb-cursory-1in500.geojson",
+      "feature_count": 4,
+      "title": "TWDB modeled flood extent \u2014 0.2% annual chance",
+      "source": "TWDB 2025 cursory floodplain (Fathom 3m)",
+      "vintage": "2025",
+      "hazard_type": "modeled pluvial/fluvial/coastal (contextual)",
+      "coverage": "all four counties",
+      "limitation": "Modeled estimate, not an effective FEMA map or regulatory determination.",
+      "source_url": "https://www.twdb.texas.gov/flood/science/floodplain-dataset.asp"
+    }
+  ]
 }
