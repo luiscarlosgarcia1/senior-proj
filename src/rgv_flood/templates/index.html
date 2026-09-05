@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<main class="layout">
+  <aside class="sidebar">
+    <section>
+      <h2>County</h2>
+      <select id="county-select"
+              name="county_slug"
+              hx-get="/partials/closures"
+              hx-target="#closures"
+              hx-trigger="change">
+        <option value="">All four counties</option>
+        {% for slug, county in counties.items() %}
+        <option value="{{ slug }}">{{ county.name }}</option>
+        {% endfor %}
+      </select>
+    </section>
+
+    <section>
+      <h2>Layers</h2>
+      {% if layers %}
+      <ul class="layer-list">
+        {% for layer in layers %}
+        <li>
+          <label>
+            <input type="checkbox" class="layer-toggle" value="{{ layer.id }}">
+            {{ layer.title }}
+          </label>
+          <button type="button" class="link"
+                  hx-get="/partials/metadata/{{ layer.id }}"
+                  hx-target="#metadata">source</button>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No layers yet — run the preprocessing pipeline.</p>
+      {% endif %}
+    </section>
+
+    <section>
+      <h2>Relative severity</h2>
+      <ul class="legend">
+        {% for cls in relative_classes %}
+        <li><span class="swatch swatch-{{ cls }}"></span>{{ cls }}</li>
+        {% endfor %}
+      </ul>
+      <p class="muted">
+        A documented mapping table assigns these classes only to comparable
+        source categories. Others keep their original label.
+      </p>
+    </section>
+
+    <section>
+      <h2>Source metadata</h2>
+      <div id="metadata"><p class="muted">Select a layer's “source”.</p></div>
+    </section>
+
+    <section>
+      <h2>Historical road-closure reports</h2>
+      <div id="closures"
+           hx-get="/partials/closures"
+           hx-trigger="load">
+        <p class="muted">Loading…</p>
+      </div>
+    </section>
+  </aside>
+
+  <div id="map"></div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.RGV_CONFIG = {
+    center: {{ config.MAP_CENTER | tojson }},
+    zoom: {{ config.MAP_ZOOM }},
+  };
+</script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+{% endblock %}

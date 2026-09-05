@@ -1,0 +1,69 @@
+:root {
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --ink: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #1d4ed8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.app-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.app-header h1 { margin: 0; font-size: 1.15rem; }
+.disclaimer { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--muted); max-width: 60ch; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: calc(100vh - 84px);
+}
+
+.sidebar {
+  overflow-y: auto;
+  padding: 1rem;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+}
+.sidebar section { margin-bottom: 1.5rem; }
+.sidebar h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+
+#map { height: 100%; }
+
+select { width: 100%; padding: 0.4rem; }
+
+.layer-list, .legend, .closures ul { list-style: none; padding: 0; margin: 0; }
+.layer-list li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0.3rem 0; }
+
+button.link, .link {
+  background: none; border: none; color: var(--accent);
+  cursor: pointer; font-size: 0.8rem; padding: 0; text-decoration: underline;
+}
+
+.legend li { display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem 0; }
+.swatch { width: 14px; height: 14px; display: inline-block; border: 1px solid rgba(0,0,0,0.2); }
+.swatch-high { background: #dc2626; }
+.swatch-moderate { background: #f59e0b; }
+.swatch-low { background: #60a5fa; }
+.swatch-uncategorized { background: #9ca3af; }
+
+.muted { color: var(--muted); font-size: 0.85rem; }
+
+.source-card dl { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.6rem; font-size: 0.85rem; }
+.source-card dt { color: var(--muted); }
+.limitation { font-size: 0.82rem; background: #fef9c3; padding: 0.4rem 0.5rem; border-radius: 4px; }
+
+.closure { padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.closure.unresolved { opacity: 0.7; }
+.closure-meta { color: var(--muted); font-size: 0.78rem; }

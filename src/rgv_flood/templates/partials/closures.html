@@ -1,0 +1,25 @@
+<div class="closures">
+  <p class="muted">
+    Historical reports from selected local news coverage
+    {%- if county %} for {{ county.name }}{% endif %}. Not live closure data.
+  </p>
+  {% if reports %}
+  <ul>
+    {% for r in reports %}
+    <li class="closure {{ 'unresolved' if r.get('unresolved') }}">
+      <strong>{{ r.road | default("road not identified", true) }}</strong>
+      {% if r.location %}<span>— {{ r.location }}</span>{% endif %}
+      <div class="closure-meta">
+        {{ r.published_at | default("date unknown", true) }}
+        {% if r.unresolved %}· <em>unresolved</em>{% endif %}
+      </div>
+      {% if r.article_url %}
+      <a href="{{ r.article_url }}" target="_blank" rel="noopener">source article</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No reviewed reports for this selection yet.</p>
+  {% endif %}
+</div>

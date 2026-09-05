@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Pipeline scratch — raw downloads and intermediates are not committed
+data/**/raw/
+pipeline/_work/
+*.tmp
+
+# Generated map layers (rebuilt by pipeline/build_layers.py).
+# Keep the checked-in placeholders; ignore the large generated GeoJSON.
+src/rgv_flood/static/data/*.geojson
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
