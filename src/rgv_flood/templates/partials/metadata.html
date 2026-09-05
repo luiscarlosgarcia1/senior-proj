@@ -1,11 +1,17 @@
 <article class="source-card">
   <h3>{{ layer.title }}</h3>
+
+  {% if layer.description %}
+  <p class="desc">{{ layer.description }}</p>
+  {% endif %}
+
   <dl>
     <dt>Source</dt><dd>{{ layer.source }}</dd>
     <dt>Vintage</dt><dd>{{ layer.vintage | default("unknown", true) }}</dd>
     <dt>Hazard</dt><dd>{{ layer.hazard_type | default("see source", true) }}</dd>
     <dt>Coverage</dt><dd>{{ layer.coverage | default("—", true) }}</dd>
   </dl>
+
   <p class="limitation">{{ layer.limitation }}</p>
   {% if layer.source_url %}
   <p class="agency"><a href="{{ layer.source_url }}" target="_blank" rel="noopener">Originating agency &rarr;</a></p>

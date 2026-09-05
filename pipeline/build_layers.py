@@ -148,6 +148,10 @@ def build_twdb(freq: str, chance: str) -> int:
 LAYER_META: dict[str, dict] = {
     "county-boundaries": {
         "title": "County boundaries",
+        "description": (
+            "Just the outlines of the four counties. It sets the area the map "
+            "covers and shows no flood risk of its own."
+        ),
         "source": "US Census TIGER/Line 2023",
         "vintage": "2023",
         "hazard_type": "n/a — study-area reference",
@@ -157,6 +161,12 @@ LAYER_META: dict[str, dict] = {
     },
     "fema-nfhl": {
         "title": "FEMA effective flood hazard (NFHL)",
+        "description": (
+            "The official government flood map used to set flood-insurance rates "
+            "and building rules. Red areas flood most often, orange areas only in "
+            "rarer big storms, and blue areas hardly ever. Not available for "
+            "Hidalgo County."
+        ),
         "source": "FEMA National Flood Hazard Layer",
         "vintage": "effective FIRM date varies by panel",
         "hazard_type": "effective regulatory flood hazard",
@@ -166,6 +176,12 @@ LAYER_META: dict[str, dict] = {
     },
     "hidalgo-firm-1981": {
         "title": "Hidalgo County historic flood zones (1981 FIRM)",
+        "description": (
+            "Hidalgo County's only flood map, drawn back in 1981 — FEMA never "
+            "made a modern one here. It's very out of date and leaves out most of "
+            "today's neighborhoods, so treat it as a rough guide. Red areas flood "
+            "most often, orange less often, blue rarely."
+        ),
         "source": "Hidalgo County Drainage District No. 1 — digitized 1981 FIRM",
         "vintage": "1981 base map; some zones later revised by LOMR",
         "hazard_type": "historic local flood-zone reference",
@@ -175,6 +191,12 @@ LAYER_META: dict[str, dict] = {
     },
     "twdb-cursory-1in100": {
         "title": "TWDB modeled flood extent — 1% annual chance",
+        "description": (
+            "A state computer model's guess at which land would flood in a bad "
+            "storm (about a 1-in-100-year flood), including flooding from heavy "
+            "rain. One shaded area, not graded zones. It's an estimate for "
+            "context, not an official flood map."
+        ),
         "source": "TWDB 2025 cursory floodplain (Fathom 3m)",
         "vintage": "2025",
         "hazard_type": "modeled pluvial/fluvial/coastal (contextual)",
@@ -184,6 +206,11 @@ LAYER_META: dict[str, dict] = {
     },
     "twdb-cursory-1in500": {
         "title": "TWDB modeled flood extent — 0.2% annual chance",
+        "description": (
+            "The same state model, but for a rarer, more extreme flood (about "
+            "1-in-500-year) — a wider guess at what could go under water. For "
+            "context only, not an official flood map."
+        ),
         "source": "TWDB 2025 cursory floodplain (Fathom 3m)",
         "vintage": "2025",
         "hazard_type": "modeled pluvial/fluvial/coastal (contextual)",
