@@ -1,0 +1,16 @@
+<div class="rainfall">
+  {% if days %}
+  <p class="note">Wettest single days at RGV gauges, 2000–2025. A sense of what a big storm delivers.</p>
+  <ul class="rainfall-list">
+    {% for d in days %}
+    <li>
+      <span class="rain-amount">{{ d.inches }} in</span>
+      <span class="rain-date">{{ d.date }}</span>
+      <span class="rain-station">{{ d.station }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty">No rainfall records.</div>
+  {% endif %}
+</div>

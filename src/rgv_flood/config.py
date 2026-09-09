@@ -18,11 +18,10 @@ class Default:
         os.environ.get("RGV_MAP_DATA_DIR", _PACKAGE_ROOT / "static" / "data")
     )
 
-    # Reviewed historical road-closure reports (one JSON file, manually curated
-    # by the pipeline's review step). Never treated as live closure data.
-    CLOSURES_FILE = Path(
-        os.environ.get("RGV_CLOSURES_FILE", MAP_DATA_DIR / "closures.json")
-    )
+    # Overlays built from the ingested NOAA records (pipeline/build_events.py).
+    FLOOD_EVENTS_FILE = MAP_DATA_DIR / "flood-events.geojson"
+    FLOOD_REPORTS_FILE = MAP_DATA_DIR / "flood-reports.json"
+    RAINFALL_FILE = MAP_DATA_DIR / "rainfall-records.json"
 
     # Initial Leaflet view: centered on the Lower Rio Grande Valley.
     MAP_CENTER = (26.3, -98.15)

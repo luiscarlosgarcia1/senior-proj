@@ -19,6 +19,7 @@ def index():
         layers=data_access.available_layers(),
         relative_classes=RELATIVE_CLASSES,
         severity_mapping=MAPPING,
+        event_count=len(data_access.flood_events()),
     )
 
 
@@ -30,6 +31,14 @@ def layer(layer_id: str):
     return jsonify(data)
 
 
+@bp.get("/api/flood-events.geojson")
+def flood_events_geojson():
+    fc = data_access.flood_events_fc()
+    if fc is None:
+        abort(404)
+    return jsonify(fc)
+
+
 @bp.get("/partials/metadata/<layer_id>")
 def metadata_partial(layer_id: str):
     """Source card shown when a layer or zone is selected."""
@@ -39,13 +48,29 @@ def metadata_partial(layer_id: str):
     abort(404)
 
 
-@bp.get("/partials/closures")
-def closures_partial():
+@bp.get("/partials/events")
+def events_partial():
+    year = request.args.get("year") or None
+    return render_template(
+        "partials/events.html",
+        events=data_access.flood_events(year),
+        years=data_access.flood_event_years(),
+        selected_year=year,
+    )
+
+
+@bp.get("/partials/rainfall")
+def rainfall_partial():
+    return render_template("partials/rainfall.html", days=data_access.rainfall_records())
+
+
+@bp.get("/partials/reports")
+def reports_partial():
     county_slug = request.args.get("county_slug") or None
     if county_slug is not None and not is_county(county_slug):
         abort(404)
     return render_template(
-        "partials/closures.html",
-        reports=data_access.closure_reports(county_slug),
+        "partials/reports.html",
+        reports=data_access.flood_reports(county_slug),
         county=COUNTIES.get(county_slug) if county_slug else None,
     )

@@ -1,0 +1,26 @@
+<div class="reports">
+  <p>
+    Local news and government reports from documented flood events
+    {%- if county %} in {{ county.name }}{% endif %}. Historical only — not live
+    conditions.
+  </p>
+  {% if reports %}
+  <ul>
+    {% for r in reports %}
+    <li class="report">
+      <div class="report-head">{{ r.headline }}</div>
+      <div class="report-meta">
+        {{ r.published_at | default("date unknown", true) }}
+        · {{ r.publisher }}
+        {%- if r.location %} · {{ r.location }}{% endif %}
+      </div>
+      {% if r.source_url %}
+      <a href="{{ r.source_url }}" target="_blank" rel="noopener">source</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty">No reports for this selection.</div>
+  {% endif %}
+</div>

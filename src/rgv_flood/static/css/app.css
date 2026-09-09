@@ -328,24 +328,119 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 .collapse > summary h2 { margin: 0; }
 .collapse .chev { color: var(--faint); font-size: 12px; transition: transform 0.15s; }
 .collapse[open] .chev { transform: rotate(180deg); }
-#closures-body { margin-top: 10px; }
-
-/* closure reports */
-.closures p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.closures ul { list-style: none; margin: 0; padding: 0; }
-.closures .empty {
+.collapse .count {
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--muted-2);
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 4px;
+}
+#events-body, #rainfall-body, #reports-body { margin-top: 10px; }
+.empty {
   background: var(--bg);
   padding: 10px 12px;
   font-size: 12.5px;
   color: var(--muted-2);
 }
-.closure {
+
+/* address search (header) */
+.addr-search { display: flex; align-items: center; }
+.addr-search input {
+  font: inherit;
+  font-size: 13px;
+  width: 210px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius) 0 0 var(--radius);
+  border-right: 0;
+  padding: 8px 10px;
+  outline: none;
+}
+.addr-search input:focus { border-color: var(--accent); }
+.addr-search.not-found input { border-color: var(--accent); background: #fdf3ef; }
+.addr-search button {
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border-2);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.addr-search button:hover { color: var(--accent); border-color: var(--accent); }
+
+/* flood events */
+.event-map-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.event-map-toggle input { accent-color: var(--ink); }
+#event-year {
+  font: inherit;
+  font-size: 12.5px;
+  width: 100%;
+  margin-top: 6px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.event-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.event-item {
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 12px;
+}
+.event-item.locatable { cursor: pointer; }
+.event-item.locatable:hover { background: var(--hover); }
+.event-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.event-type { font-weight: 600; color: var(--ink); }
+.event-date { color: var(--muted-2); font-size: 11px; white-space: nowrap; }
+.event-loc { color: var(--muted); text-transform: capitalize; }
+.event-unmapped { color: var(--faint); text-transform: none; font-style: italic; }
+
+/* rainfall records */
+.rainfall-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.rainfall-list li {
+  display: grid;
+  grid-template-columns: 4.5em 6em 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 12px;
+}
+.rain-amount { font-weight: 700; color: var(--ink); }
+.rain-date { color: var(--muted-2); }
+.rain-station { color: var(--muted); }
+
+/* local reports */
+.reports p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.reports ul { list-style: none; margin: 0; padding: 0; }
+.report {
   padding: 8px 0;
   border-bottom: 1px solid var(--divider);
   font-size: 12.5px;
 }
-.closure.unresolved { opacity: 0.7; }
-.closure-meta { color: var(--muted-2); font-size: 11.5px; }
+.report-head { color: var(--text); line-height: 1.45; }
+.report-meta { color: var(--muted-2); font-size: 11px; margin: 3px 0 2px; }
 
 /* ---- map --------------------------------------------------------------- */
 

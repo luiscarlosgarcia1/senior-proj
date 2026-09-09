@@ -48,10 +48,11 @@ uv run pytest
 uv run ruff check .
 ```
 
-Build map layers (after ingest scripts have produced GeoJSON):
+Build the map data (the generated files are gitignored — run this after a clone):
 
 ```bash
-uv run python pipeline/build_layers.py
+uv run --group pipeline python pipeline/build_layers.py   # hazard layers (~90s)
+uv run python pipeline/build_events.py                    # flood events, reports, rainfall
 ```
 
 ## Layout

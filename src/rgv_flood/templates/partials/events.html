@@ -1,0 +1,36 @@
+<div class="events">
+  <select id="event-year"
+          name="year"
+          hx-get="/partials/events"
+          hx-target="#events-body"
+          hx-trigger="change">
+    <option value="">All years</option>
+    {% for y in years %}
+    <option value="{{ y }}" {{ 'selected' if y == selected_year }}>{{ y }}</option>
+    {% endfor %}
+  </select>
+
+  {% if events %}
+  <p class="note">
+    {{ events | length }} event{{ 's' if events | length != 1 }}{% if selected_year %} in {{ selected_year }}{% endif %} ·
+    NOAA Storm Events, Hidalgo County
+  </p>
+  <ul class="event-list">
+    {% for e in events %}
+    <li class="event-item {{ 'locatable' if e.lat is defined }}"
+        {% if e.lat is defined %}data-id="{{ e.id }}" data-lat="{{ e.lat }}" data-lon="{{ e.lon }}"{% endif %}>
+      <div class="event-row">
+        <span class="event-type">{{ e.type }}</span>
+        <span class="event-date">{{ e.date }}</span>
+      </div>
+      <div class="event-loc">
+        {{ e.location | replace(', Texas', '') }}
+        {%- if e.geometry_note %} <span class="event-unmapped" title="{{ e.geometry_note }}">· not mapped</span>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty">No events{% if selected_year %} in {{ selected_year }}{% endif %}.</div>
+  {% endif %}
+</div>

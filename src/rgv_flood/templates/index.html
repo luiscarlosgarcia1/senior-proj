@@ -7,12 +7,18 @@
     <div class="brand">RGV Flood Impact Visualizer</div>
 
     <div class="topbar-controls">
+      <form id="addr-search" class="addr-search" role="search" autocomplete="off">
+        <input type="search" name="q" placeholder="Search an address or place…"
+               aria-label="Search an address or place">
+        <button type="submit" aria-label="Search">&#9906;</button>
+      </form>
+
       <div class="county-field">
         <span class="county-label">County</span>
         <select id="county-select"
                 name="county_slug"
-                hx-get="/partials/closures"
-                hx-target="#closures-body"
+                hx-get="/partials/reports"
+                hx-target="#reports-body"
                 hx-trigger="change">
           <option value="">All four counties</option>
           {% for slug, county in counties.items() %}
@@ -30,8 +36,8 @@
           </div>
           <p>
             Educational and comparative only. Not for flood-insurance,
-            emergency-routing, or engineering decisions. Historical road-closure
-            reports are not live closures. For an authoritative property-level
+            emergency-routing, or engineering decisions. Historical reports are
+            not live conditions. For an authoritative property-level
             determination, contact FEMA or your county.
           </p>
         </div>
@@ -57,7 +63,7 @@
                     hx-target="#metadata"
                     hx-on::after-request="document.getElementById('metadata').hidden = false">source</button>
           </li>
-          {% endfor %}
+        {% endfor %}
         </ul>
         <div id="metadata" hidden></div>
         {% else %}
@@ -84,10 +90,37 @@
 
       <section class="panel">
         <details class="collapse" open>
-          <summary><h2>Historical road closures</h2><span class="chev" aria-hidden="true">&#9662;</span></summary>
-          <div id="closures-body"
-               hx-get="/partials/closures"
-               hx-trigger="load">
+          <summary>
+            <h2>Flood events{% if event_count %} <span class="count">{{ event_count }}</span>{% endif %}</h2>
+            <span class="chev" aria-hidden="true">&#9662;</span>
+          </summary>
+          <label class="event-map-toggle">
+            <input type="checkbox" id="events-toggle">
+            <span>Show event points on the map</span>
+          </label>
+          <div id="events-body" hx-get="/partials/events" hx-trigger="load">
+            <p class="note">Loading…</p>
+          </div>
+        </details>
+      </section>
+
+      <hr class="divider">
+
+      <section class="panel">
+        <details class="collapse">
+          <summary><h2>Rainfall records</h2><span class="chev" aria-hidden="true">&#9662;</span></summary>
+          <div id="rainfall-body" hx-get="/partials/rainfall" hx-trigger="load">
+            <p class="note">Loading…</p>
+          </div>
+        </details>
+      </section>
+
+      <hr class="divider">
+
+      <section class="panel">
+        <details class="collapse">
+          <summary><h2>Local reports</h2><span class="chev" aria-hidden="true">&#9662;</span></summary>
+          <div id="reports-body" hx-get="/partials/reports" hx-trigger="load">
             <p class="note">Loading…</p>
           </div>
         </details>

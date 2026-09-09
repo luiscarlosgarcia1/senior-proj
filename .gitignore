@@ -10,9 +10,12 @@ data/**/raw/
 pipeline/_work/
 *.tmp
 
-# Generated map layers (rebuilt by pipeline/build_layers.py).
-# Keep the checked-in placeholders; ignore the large generated GeoJSON.
+# Generated overlays — rebuilt by the pipeline scripts, not committed.
+#   pipeline/build_layers.py  -> *.geojson (hazard layers), layers.json stays tracked
+#   pipeline/build_events.py  -> flood-events.geojson, flood-reports.json, rainfall-records.json
 src/rgv_flood/static/data/*.geojson
+src/rgv_flood/static/data/flood-reports.json
+src/rgv_flood/static/data/rainfall-records.json
 
 # OS / editor
 .DS_Store
