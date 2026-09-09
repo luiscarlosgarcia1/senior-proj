@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" fill="#1b2a4a"/>
+  <path d="M32 8 C32 8 21 22 21 30 C21 35.5 25.7 40 32 40 C38.3 40 43 35.5 43 30 C43 22 32 8 32 8 Z" fill="#e2624c"/>
+  <text x="32" y="55" font-family="Manrope, Arial, sans-serif" font-weight="800" font-size="15" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">RGV</text>
+</svg>
