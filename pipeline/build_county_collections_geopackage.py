@@ -21,7 +21,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 from pyproj import Transformer
-from shapely import make_valid
+from shapely import from_wkb, make_valid
 from shapely.geometry import shape
 from shapely.ops import transform, unary_union
 
@@ -63,6 +63,29 @@ def _gpkg_geometry(
             ) from error
     # GeoPackage binary header: GP, v0, little-endian/no envelope, then SRS ID.
     return b"GP" + bytes((0, 1)) + struct.pack("<i", EPSG_4326) + parsed.wkb
+
+
+def _geometry_bounds(
+    geometry: bytes | None,
+) -> tuple[float, float, float, float] | None:
+    if geometry is None:
+        return None
+    return from_wkb(geometry[8:]).bounds
+
+
+def _register_spatial_functions(connection: sqlite3.Connection) -> None:
+    def coordinate(position: int):
+        def value(geometry: bytes | None) -> float | None:
+            bounds = _geometry_bounds(geometry)
+            return bounds[position] if bounds is not None else None
+
+        return value
+
+    connection.create_function("ST_IsEmpty", 1, lambda geometry: geometry is None)
+    connection.create_function("ST_MinX", 1, coordinate(0))
+    connection.create_function("ST_MinY", 1, coordinate(1))
+    connection.create_function("ST_MaxX", 1, coordinate(2))
+    connection.create_function("ST_MaxY", 1, coordinate(3))
 
 
 def _iter_ndjson(path: Path) -> Iterator[tuple[int, dict]]:
@@ -118,8 +141,13 @@ def _create_schema(connection: sqlite3.Connection) -> None:
           srs_id INTEGER NOT NULL, z TINYINT NOT NULL, m TINYINT NOT NULL,
           PRIMARY KEY (table_name, column_name)
         );
+        CREATE TABLE gpkg_extensions (
+          table_name TEXT, column_name TEXT, extension_name TEXT NOT NULL,
+          definition TEXT NOT NULL, scope TEXT NOT NULL,
+          CONSTRAINT ge_tce UNIQUE (table_name, column_name, extension_name)
+        );
         CREATE TABLE counties (
-          county_id TEXT PRIMARY KEY, name TEXT NOT NULL, collection_path TEXT NOT NULL UNIQUE,
+          fid INTEGER PRIMARY KEY, county_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, collection_path TEXT NOT NULL UNIQUE,
           manifest_json TEXT NOT NULL, geometry BLOB
         );
         CREATE TABLE source_artifacts (
@@ -128,7 +156,7 @@ def _create_schema(connection: sqlite3.Connection) -> None:
           artifact_kind TEXT NOT NULL, UNIQUE(county_id, relative_path)
         );
         CREATE TABLE records (
-          record_id TEXT PRIMARY KEY, county_id TEXT NOT NULL REFERENCES counties(county_id),
+          fid INTEGER PRIMARY KEY, record_id TEXT NOT NULL UNIQUE, county_id TEXT NOT NULL REFERENCES counties(county_id),
           source_artifact_id TEXT NOT NULL REFERENCES source_artifacts(artifact_id),
           record_kind TEXT NOT NULL, source_publisher TEXT, source_channel TEXT,
           source_reference_kind TEXT, source_reference_value TEXT, event_start TEXT, event_end TEXT,
@@ -136,7 +164,7 @@ def _create_schema(connection: sqlite3.Connection) -> None:
           original_attributes_json TEXT, record_json TEXT NOT NULL, geometry BLOB
         );
         CREATE TABLE weather_observations (
-          record_id TEXT PRIMARY KEY REFERENCES records(record_id), dataset_name TEXT NOT NULL,
+          fid INTEGER PRIMARY KEY, record_id TEXT NOT NULL UNIQUE REFERENCES records(record_id), dataset_name TEXT NOT NULL,
           dataset_version_or_publication_date TEXT NOT NULL, retrieved_at TEXT NOT NULL,
           license_or_terms_note TEXT NOT NULL, coverage_geometry_absence_reason TEXT,
           observation_attributes_json TEXT NOT NULL, geometry BLOB
@@ -148,9 +176,17 @@ def _create_schema(connection: sqlite3.Connection) -> None:
           declared_crs TEXT, feature_count INTEGER, note TEXT, layer_json TEXT NOT NULL
         );
         CREATE TABLE layer_features (
-          feature_id TEXT PRIMARY KEY, layer_id TEXT NOT NULL REFERENCES spatial_layers(layer_id),
+          fid INTEGER PRIMARY KEY, feature_id TEXT NOT NULL UNIQUE, layer_id TEXT NOT NULL REFERENCES spatial_layers(layer_id),
           source_feature_index INTEGER NOT NULL, original_attributes_json TEXT NOT NULL,
           feature_json TEXT NOT NULL, geometry BLOB, UNIQUE(layer_id, source_feature_index)
+        );
+        CREATE INDEX records_county_kind_date_idx
+          ON records(county_id, record_kind, event_start, published_at);
+        CREATE INDEX records_event_start_idx ON records(event_start);
+        CREATE INDEX spatial_layers_county_idx ON spatial_layers(county_id);
+        CREATE INDEX layer_features_layer_idx ON layer_features(layer_id);
+        CREATE VIRTUAL TABLE records_fts USING fts5(
+          record_id UNINDEXED, county_id UNINDEXED, record_kind, content
         );
         """
     )
@@ -174,6 +210,36 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO gpkg_geometry_columns VALUES (?, 'geometry', 'GEOMETRY', ?, 0, 0)",
             (table_name, EPSG_4326),
+        )
+    for table_name in ("records", "weather_observations", "layer_features"):
+        connection.execute(
+            f"CREATE VIRTUAL TABLE rtree_{table_name}_geometry "
+            "USING rtree(id, min_x, max_x, min_y, max_y)"
+        )
+        connection.execute(
+            "INSERT INTO gpkg_extensions VALUES (?, 'geometry', 'gpkg_rtree_index', ?, 'write-only')",
+            (table_name, "http://www.geopackage.org/spec120/#extension_rtree"),
+        )
+        connection.executescript(
+            f"""
+            CREATE TRIGGER rtree_{table_name}_geometry_insert AFTER INSERT ON {table_name}
+            WHEN NEW.geometry NOT NULL AND NOT ST_IsEmpty(NEW.geometry)
+            BEGIN
+              INSERT OR REPLACE INTO rtree_{table_name}_geometry
+              VALUES (NEW.fid, ST_MinX(NEW.geometry), ST_MaxX(NEW.geometry), ST_MinY(NEW.geometry), ST_MaxY(NEW.geometry));
+            END;
+            CREATE TRIGGER rtree_{table_name}_geometry_update AFTER UPDATE OF geometry ON {table_name}
+            BEGIN
+              DELETE FROM rtree_{table_name}_geometry WHERE id = OLD.fid;
+              INSERT OR REPLACE INTO rtree_{table_name}_geometry
+              SELECT NEW.fid, ST_MinX(NEW.geometry), ST_MaxX(NEW.geometry), ST_MinY(NEW.geometry), ST_MaxY(NEW.geometry)
+              WHERE NEW.geometry NOT NULL AND NOT ST_IsEmpty(NEW.geometry);
+            END;
+            CREATE TRIGGER rtree_{table_name}_geometry_delete AFTER DELETE ON {table_name}
+            BEGIN
+              DELETE FROM rtree_{table_name}_geometry WHERE id = OLD.fid;
+            END;
+            """
         )
 
 
@@ -202,7 +268,7 @@ def _build(connection: sqlite3.Connection) -> None:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         county_name = manifest.get("geography", {}).get("name", slug.title())
         connection.execute(
-            "INSERT INTO counties(county_id,name,collection_path,manifest_json) VALUES (?, ?, ?, ?)",
+            "INSERT INTO counties(county_id, name, collection_path, manifest_json) VALUES (?, ?, ?, ?)",
             (
                 slug,
                 county_name,
@@ -261,8 +327,9 @@ def _build(connection: sqlite3.Connection) -> None:
                         "geometry_absence_reason",
                         record.get("coverage_or_station_geometry_absence_reason"),
                     )
+                    geometry = _gpkg_geometry(geometry, context)
                     connection.execute(
-                        "INSERT INTO records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO records(record_id, county_id, source_artifact_id, record_kind, source_publisher, source_channel, source_reference_kind, source_reference_value, event_start, event_end, published_at, location_text, location_precision, geometry_absence_reason, original_attributes_json, record_json, geometry) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             record_id,
                             slug,
@@ -282,12 +349,37 @@ def _build(connection: sqlite3.Connection) -> None:
                             if "original_attributes" in record
                             else None,
                             _canonical_json(record),
-                            _gpkg_geometry(geometry, context),
+                            geometry,
+                        ),
+                    )
+                    search_content = " ".join(
+                        str(value)
+                        for value in (
+                            record.get("summary"),
+                            record.get("original_content_reference"),
+                            record.get("location_text"),
+                            record.get("source_publisher"),
+                            record.get("source_channel"),
+                            source_reference.get("value"),
+                            record.get("original_attributes"),
+                        )
+                        if value
+                    )
+                    connection.execute(
+                        "INSERT INTO records_fts VALUES (?, ?, ?, ?)",
+                        (
+                            record_id,
+                            slug,
+                            record.get("record_kind", "unknown"),
+                            search_content,
                         ),
                     )
                     if record.get("record_kind") == "weather_observation":
+                        weather_geometry = _gpkg_geometry(
+                            record.get("coverage_or_station_geometry"), context
+                        )
                         connection.execute(
-                            "INSERT INTO weather_observations VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO weather_observations(record_id, dataset_name, dataset_version_or_publication_date, retrieved_at, license_or_terms_note, coverage_geometry_absence_reason, observation_attributes_json, geometry) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                             (
                                 record_id,
                                 record["dataset_name"],
@@ -298,10 +390,7 @@ def _build(connection: sqlite3.Connection) -> None:
                                     "coverage_or_station_geometry_absence_reason"
                                 ),
                                 _canonical_json(record["original_attributes"]),
-                                _gpkg_geometry(
-                                    record.get("coverage_or_station_geometry"),
-                                    context,
-                                ),
+                                weather_geometry,
                             ),
                         )
 
@@ -351,19 +440,20 @@ def _build(connection: sqlite3.Connection) -> None:
                     if not feature_identity.startswith(f"{layer_id}:")
                     else feature_identity
                 )
+                geometry = _gpkg_geometry(
+                    feature.get("geometry"),
+                    f"{geojson_path.relative_to(REPO_ROOT)} feature {index}",
+                    layer.get("crs", "EPSG:4326"),
+                )
                 connection.execute(
-                    "INSERT INTO layer_features VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO layer_features(feature_id, layer_id, source_feature_index, original_attributes_json, feature_json, geometry) VALUES (?, ?, ?, ?, ?, ?)",
                     (
                         feature_id,
                         layer_id,
                         index,
                         _canonical_json(properties),
                         _canonical_json(feature),
-                        _gpkg_geometry(
-                            feature.get("geometry"),
-                            f"{geojson_path.relative_to(REPO_ROOT)} feature {index}",
-                            layer.get("crs", "EPSG:4326"),
-                        ),
+                        geometry,
                     ),
                 )
                 if layer["id"] == "boundary" and feature.get("geometry") is not None:
@@ -397,6 +487,7 @@ def build(output: Path) -> None:
     temporary = Path(temporary_name)
     try:
         with sqlite3.connect(temporary) as connection:
+            _register_spatial_functions(connection)
             _create_schema(connection)
             _build(connection)
             connection.commit()
