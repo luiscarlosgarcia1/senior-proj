@@ -9,6 +9,7 @@ __pycache__/
 data/**/raw/
 pipeline/_work/
 *.tmp
+data/generated/*.gpkg
 
 # Generated overlays — rebuilt by the pipeline scripts, not committed.
 #   pipeline/build_layers.py  -> *.geojson (hazard layers), layers.json stays tracked

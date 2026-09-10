@@ -8,6 +8,22 @@ Everything here is deterministic and re-runnable — it only overwrites its own
 outputs. All generated files except `layers.json` are gitignored, so both scripts
 must run after a clone.
 
+## `build_county_collections_geopackage.py` — local spatial query database
+
+```bash
+uv run --group pipeline python pipeline/build_county_collections_geopackage.py
+```
+
+Builds the ignored `data/generated/county-collections.gpkg` from the four
+canonical county collections in fixed Cameron, Hidalgo, Starr, Willacy order.
+Pass `--output path/to/file.gpkg` to override that destination. It records exact
+SHA-256 fingerprints for every canonical input artifact, links records and layers
+to their source artifacts, retains source JSON and nullable-geometry evidence, and
+stores usable GeoJSON as native EPSG:4326 GeoPackage geometry. It validates input
+and replaces the destination atomically, so malformed geometry or duplicate record
+identities never produce a partial artifact. It is deliberately separate from the
+app's static-overlay builders.
+
 ## `build_layers.py` — hazard layers
 
 ```bash

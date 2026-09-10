@@ -52,9 +52,27 @@ shows no layers.
 | `uv run ruff format .` | Format |
 | `uv run --group pipeline python pipeline/build_layers.py` | Rebuild the hazard-layer GeoJSON + `layers.json` |
 | `uv run python pipeline/build_events.py` | Rebuild `flood-events.geojson`, `flood-reports.json`, `rainfall-records.json` |
+| `uv run --group pipeline python pipeline/build_county_collections_geopackage.py` | Build the local query GeoPackage from all canonical county collections |
 
 Rebuild after changing anything the pipeline reads (`data/**`), the severity rules
 in `src/rgv_flood/severity.py`, or the pipeline scripts themselves.
+
+### Local county-collections GeoPackage
+
+The canonical files in `data/<county>-county/` remain the source of record. To
+produce a deterministic local relational/spatial database from all four
+collections, run:
+
+```bash
+uv run --group pipeline python pipeline/build_county_collections_geopackage.py
+```
+
+It writes `data/generated/county-collections.gpkg`, which is ignored by Git. Use
+`--output path/to/file.gpkg` to place the artifact elsewhere. The build validates
+GeoJSON geometry and canonical record identities, stores usable geometry as native
+EPSG:4326 GeoPackage geometry, and writes atomically: a failed build leaves an
+existing output untouched. This artifact is a local developer query boundary; the
+app continues to read its precomputed static data as before.
 
 ## Dependency groups
 
