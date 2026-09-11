@@ -74,6 +74,24 @@ EPSG:4326 GeoPackage geometry, and writes atomically: a failed build leaves an
 existing output untouched. This artifact is a local developer query boundary; the
 app continues to read its precomputed static data as before.
 
+The GeoPackage is organized as related tables rather than one generic data dump:
+
+| Table | Purpose |
+| --- | --- |
+| `counties` | One row per canonical county collection. |
+| `source_artifacts` | Every canonical input file's path, SHA-256, size, and artifact type. |
+| `records` | Documented flood events and public reports, linked to a county and source artifact. |
+| `weather_observations` | Weather-specific fields linked to their canonical record. |
+| `spatial_layers` | Metadata for county flood-hazard and reference layers. |
+| `layer_features` | Individual native-geometry features belonging to a spatial layer. |
+| `records_fts` | Full-text search index for user-relevant record descriptions and source context. |
+| `rtree_records_geometry` | Spatial bounding-box index for non-null record geometries. |
+| `rtree_weather_observations_geometry` | Spatial bounding-box index for non-null weather geometries. |
+| `rtree_layer_features_geometry` | Spatial bounding-box index for non-null layer-feature geometries. |
+
+The canonical files under `data/<county>-county/` remain the source of record.
+The database stores their queryable representation and provenance fingerprints.
+
 ## Dependency groups
 
 ```bash
