@@ -78,20 +78,21 @@ in `src/rgv_flood/severity.py`, or the pipeline scripts themselves.
 
 ### Local county-collections GeoPackage
 
-The canonical files in `data/<county>-county/` remain the source of record. To
-produce a deterministic local relational/spatial database from all four
-collections, run:
+`pipeline/build_all.py` (see Setup, above) ends by building
+`data/generated/county-collections.gpkg` from the canonical files in
+`data/<county>-county/` — a queryable local relational/spatial database
+covering all four counties. To rebuild just that last step, once `data/` is
+already populated:
 
 ```bash
 uv run --group pipeline python pipeline/build_county_collections_geopackage.py
 ```
 
-It writes `data/generated/county-collections.gpkg`, which is ignored by Git. Use
-`--output path/to/file.gpkg` to place the artifact elsewhere. The build validates
-GeoJSON geometry and canonical record identities, stores usable geometry as native
-EPSG:4326 GeoPackage geometry, and writes atomically: a failed build leaves an
-existing output untouched. This artifact is a local developer query boundary; the
-app continues to read its precomputed static data as before.
+`--output path/to/file.gpkg` places the artifact elsewhere. The build validates
+GeoJSON geometry and canonical record identities, stores usable geometry as
+native EPSG:4326 GeoPackage geometry, and writes atomically: a failed build
+leaves an existing output untouched. This artifact is a local developer query
+boundary; the app continues to read its precomputed static data as before.
 
 The GeoPackage is organized as related tables rather than one generic data dump:
 
@@ -108,9 +109,6 @@ The GeoPackage is organized as related tables rather than one generic data dump:
 | `rtree_weather_observations_geometry` | Spatial bounding-box index for non-null weather geometries. |
 | `rtree_layer_features_geometry` | Spatial bounding-box index for non-null layer-feature geometries. |
 
-The canonical files under `data/<county>-county/` remain the source of record.
-The database stores their queryable representation and provenance fingerprints.
-
 ## Dependency groups
 
 ```bash
@@ -119,8 +117,10 @@ uv sync --group dev           # + pytest, ruff
 uv sync --group pipeline      # + geopandas, shapely, pyproj, requests, beautifulsoup4
 ```
 
-`--group pipeline` is only needed to run `pipeline/build_layers.py`. The app,
-`build_events.py`, and the tests do not use it.
+`--group pipeline` is needed for `pipeline/build_layers.py`,
+`pipeline/build_county_collections_geopackage.py`, and `pipeline/build_all.py`
+(which calls the GeoPackage builder). The app, `build_events.py`, and the tests
+do not use it.
 
 ## Raw per-county data (gitignored)
 
