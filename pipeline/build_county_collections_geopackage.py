@@ -10,11 +10,14 @@ Run: uv run --group pipeline python pipeline/build_county_collections_geopackage
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import os
+import shutil
 import sqlite3
 import tempfile
+import time
 from pathlib import Path
 
 from county_collections_geopackage.county_import import CountyImport
@@ -128,6 +131,29 @@ def _import_county_boundaries(
             )
 
 
+def _replace_with_retry(temporary: Path, output: Path) -> None:
+    """``os.replace`` with retries for Windows' transient post-write file lock.
+
+    Immediately after a file is closed, Windows (antivirus real-time scanning in
+    particular) can hold a brief exclusive lock on it, so the very next
+    ``os.replace`` fails with ``PermissionError`` even though nothing in this
+    process still has it open. POSIX has no such lock, so this never triggers
+    there. Retrying with a short backoff is the standard workaround.
+    """
+    delays = (0.05, 0.1, 0.2)
+    for delay in delays:
+        try:
+            os.replace(temporary, output)
+            return
+        except PermissionError:
+            time.sleep(delay)
+    # Rename still refused (observed with an existing destination that was just
+    # read). Fall back to a copy + delete, which goes through different Win32
+    # calls than MoveFileEx and isn't subject to the same lock.
+    shutil.copyfile(temporary, output)
+    os.remove(temporary)
+
+
 def build(output: Path) -> None:
     """Build and atomically replace the GeoPackage artifact at ``output``."""
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -137,12 +163,22 @@ def build(output: Path) -> None:
     os.close(descriptor)
     temporary = Path(temporary_name)
     try:
-        with sqlite3.connect(temporary) as connection:
+        connection = sqlite3.connect(temporary)
+        try:
             register_spatial_functions(connection)
             create_schema(connection)
             _build(connection)
             connection.commit()
-        os.replace(temporary, output)
+        finally:
+            # sqlite3.Connection's own context manager only commits/rolls back on
+            # exit, it does not close the connection -- closing explicitly here
+            # releases the OS file handle before the rename below. On Windows
+            # (mandatory file locking) os.replace() fails on a still-open file;
+            # POSIX would silently tolerate the leak, which is why this only
+            # surfaces there.
+            connection.close()
+        gc.collect()  # drop any lingering cursor/statement refs holding the OS handle
+        _replace_with_retry(temporary, output)
     except Exception:
         temporary.unlink(missing_ok=True)
         raise

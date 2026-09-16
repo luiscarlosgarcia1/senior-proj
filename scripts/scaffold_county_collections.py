@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Give every RGV county the same collection layout as `data/hidalgo-county/`.
+"""Give every RGV county the same provenance-first collection layout: a
+`manifest.json`, its `schemas/`, a `records/` + `sources/` skeleton, and (for
+the flood-hazard source notes) county-specific provenance JSON.
 
-`data/hidalgo-county/` was built as a provenance-first collection scaffold
-(manifest + schemas + records/ + sources/). Cameron, Starr, and Willacy only had
-the `flood-hazard-layers/` folder added by `import_county_flood_data.py`. This
-script lays down the rest of the hidalgo-style structure for them, and adds
-source notes for the imported flood-hazard layers.
+`data/<county>-county/` is entirely build output — none of it is committed
+(see the repo `.gitignore` and README "Raw per-county data"). This script must
+therefore be able to lay it down from nothing on a bare clone, which is why the
+two schema files it copies into every county live in the tracked
+`pipeline/schemas/` template, not in any county's own (gitignored) directory.
 
 It never overwrites a hand-written `manifest.json`, `README.md`, or an existing
 source note — those are only created when missing. Schema files and `.gitkeep`
@@ -22,7 +24,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = REPO_ROOT / "data"
-TEMPLATE = DATA_DIR / "hidalgo-county"  # the reference layout
+SCHEMA_TEMPLATE_DIR = REPO_ROOT / "pipeline" / "schemas"  # tracked; see module docstring
 
 # slug -> (county name, GEOID, uses FEMA NFHL?  else HCDD1 legacy FIRM)
 COUNTIES = {
@@ -214,15 +216,16 @@ def _hcdd1_source_note() -> str:
 
 
 def main() -> None:
-    schema_files = list((TEMPLATE / "schemas").glob("*.schema.json"))
+    schema_files = list(SCHEMA_TEMPLATE_DIR.glob("*.schema.json"))
     if not schema_files:
-        raise SystemExit(f"no schema files under {TEMPLATE / 'schemas'}")
+        raise SystemExit(f"no schema files under {SCHEMA_TEMPLATE_DIR}")
 
     for slug, (name, geoid, uses_nfhl) in COUNTIES.items():
         root = DATA_DIR / f"{slug}-county"
         root.mkdir(parents=True, exist_ok=True)
 
-        # schemas/ (always refreshed - keep every county self-contained like hidalgo)
+        # schemas/ (always refreshed from the tracked template -- every county,
+        # Hidalgo included, is just a copy; none of them is itself the source)
         (root / "schemas").mkdir(exist_ok=True)
         for sf in schema_files:
             (root / "schemas" / sf.name).write_text(sf.read_text(encoding="utf-8"), encoding="utf-8")

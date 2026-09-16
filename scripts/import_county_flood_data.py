@@ -6,7 +6,7 @@ This does NOT re-download anything and does NOT touch the Flask app or the NOAA
 ingest scripts. It only reads GeoJSON from the sibling project and writes a
 `flood-hazard-layers/` folder under each `data/<county>-county/`.
 
-Source project (read-only):
+Source project (read-only), overridable with RGV_FLOOD_PROJECT_RAW_DIR:
     C:/Users/danny/Documents/Code Projects/Flood Project/data/raw/
 
 Layers per county:
@@ -23,12 +23,16 @@ Safe to re-run (overwrites the imported files; leaves everything else alone).
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_RAW = Path(
-    "C:/Users/danny/Documents/Code Projects/Flood Project/data/raw"
+    os.environ.get(
+        "RGV_FLOOD_PROJECT_RAW_DIR",
+        "C:/Users/danny/Documents/Code Projects/Flood Project/data/raw",
+    )
 ).resolve()
 DATA_DIR = REPO_ROOT / "data"
 

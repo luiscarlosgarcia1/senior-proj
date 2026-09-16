@@ -5,8 +5,26 @@ small files the Flask app serves from `src/rgv_flood/static/data/`. Not shipped
 with the app.
 
 Everything here is deterministic and re-runnable — it only overwrites its own
-outputs. All generated files except `layers.json` are gitignored, so both scripts
-must run after a clone.
+outputs. Every generated file, including `layers.json`, is gitignored, so both
+scripts must run after a clone before the app has anything to serve.
+
+`schemas/` in this directory is the one exception to "gitignored build output"
+in the whole `data/`-adjacent tree — it's the tracked template
+`scripts/scaffold_county_collections.py` copies into every county's own
+(gitignored) `schemas/`. Nothing generates these two files; they're hand-authored
+validation contracts, edit them directly if the record shape changes.
+
+## `build_all.py` — the whole thing, one command
+
+```bash
+uv run --group pipeline python pipeline/build_all.py
+```
+
+Runs every step below in order, for all four counties, from a bare clone:
+scaffold the county folders, download the raw NOAA files, ingest them, import
+the flood-hazard-layer GeoJSON (skipped with a warning if the sibling
+`Flood Project/` directory isn't found), then build the GeoPackage. See its
+docstring for the exact step list and how to run just one of them.
 
 ## `build_county_collections_geopackage.py` — local spatial query database
 
@@ -42,7 +60,7 @@ geometry.
 | `fema-nfhl.geojson` | FEMA NFHL — Cameron, Starr, Willacy |
 | `hidalgo-firm-1981.geojson` | Hidalgo County DD No. 1 digitized 1981 FIRM |
 | `twdb-cursory-1in100.geojson` / `-1in500.geojson` | TWDB 2025 cursory floodplain, all four |
-| `layers.json` | manifest (id, file, title, description, source, vintage, limitation) — **tracked** |
+| `layers.json` | manifest (id, file, title, description, source, vintage, limitation) |
 
 Needs `OGR_GEOJSON_MAX_OBJ_SIZE=0` (the script sets it) — a few FEMA polygons
 exceed GDAL's default per-feature size cap.

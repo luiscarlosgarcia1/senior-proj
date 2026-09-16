@@ -4,23 +4,66 @@ import { gunzipSync } from "node:zlib";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const [inputDirectory, outputFile, sourceNoteFile] = process.argv.slice(2);
+const [inputDirectory, outputFile, sourceNoteFile, countyArg] = process.argv.slice(2);
 if (!inputDirectory || !outputFile || !sourceNoteFile) {
-  throw new Error("Usage: node ingest-noaa-ghcn-daily.mjs <gzip-directory> <output.ndjson> <source-note.json>");
+  throw new Error(
+    "Usage: node ingest-noaa-ghcn-daily.mjs <gzip-directory> <output.ndjson> <source-note.json> [county]\n" +
+      "  <county> selects the station set: hidalgo (default), cameron, starr, or willacy.",
+  );
 }
 
 const SOURCE_BASE = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_station";
-const STATIONS = {
-  USW00012959: { name: "McAllen Miller International Airport", latitude: 26.1792, longitude: -98.2444, elevation_m: 30.2 },
-  USW00012987: { name: "Edinburg 17 NNE", latitude: 26.5258, longitude: -98.0633, elevation_m: 19.5 },
-  USC00412758: { name: "Edinburg", latitude: 26.2981, longitude: -98.1575, elevation_m: 29.3 },
-  USC00414139: { name: "Hidalgo", latitude: 26.1, longitude: -98.2667, elevation_m: 31.1 },
-  USC00415701: { name: "McAllen", latitude: 26.1922, longitude: -98.2503, elevation_m: 33.5 },
-  USC00415836: { name: "Mercedes 6 SSE", latitude: 26.0619, longitude: -97.8997, elevation_m: 22.9 },
-  USC00415972: { name: "Mission 4 W", latitude: 26.2167, longitude: -98.4, elevation_m: 40.5 },
-  USC00415973: { name: "Mission Pumping Station", latitude: 26.2, longitude: -98.3167, elevation_m: 39.9 },
-  USC00419588: { name: "Weslaco", latitude: 26.1781, longitude: -97.9708, elevation_m: 22.9 },
+
+// One station set per RGV county. Station IDs are official NOAA COOP ("USC00")
+// or WBAN airport ("USW00") stations only -- no CoCoRaHS/volunteer ("US1"...)
+// stations, to match the longer, more consistent 2000-2025 record the Hidalgo
+// set was originally picked for. Selected by checking NOAA's ghcnd-stations.txt
+// against each county's own TIGER boundary (+ ~5km buffer), then dropping any
+// station already claimed by another county's set.
+const STATIONS_BY_COUNTY = {
+  hidalgo: {
+    USW00012959: { name: "McAllen Miller International Airport", latitude: 26.1792, longitude: -98.2444, elevation_m: 30.2 },
+    USW00012987: { name: "Edinburg 17 NNE", latitude: 26.5258, longitude: -98.0633, elevation_m: 19.5 },
+    USC00412758: { name: "Edinburg", latitude: 26.2981, longitude: -98.1575, elevation_m: 29.3 },
+    USC00414139: { name: "Hidalgo", latitude: 26.1, longitude: -98.2667, elevation_m: 31.1 },
+    USC00415701: { name: "McAllen", latitude: 26.1922, longitude: -98.2503, elevation_m: 33.5 },
+    USC00415836: { name: "Mercedes 6 SSE", latitude: 26.0619, longitude: -97.8997, elevation_m: 22.9 },
+    USC00415972: { name: "Mission 4 W", latitude: 26.2167, longitude: -98.4, elevation_m: 40.5 },
+    USC00415973: { name: "Mission Pumping Station", latitude: 26.2, longitude: -98.3167, elevation_m: 39.9 },
+    USC00419588: { name: "Weslaco", latitude: 26.1781, longitude: -97.9708, elevation_m: 22.9 },
+  },
+  cameron: {
+    USW00012919: { name: "Brownsville", latitude: 25.9161, longitude: -97.4189, elevation_m: 26.8 },
+    USW00012904: { name: "Harlingen Rio Grande Valley Intl", latitude: 26.2303, longitude: -97.6556, elevation_m: 9.4 },
+    USW00012957: { name: "Port Isabel Cameron Co AP", latitude: 26.1597, longitude: -97.3378, elevation_m: 5.2 },
+    USC00411133: { name: "Brownsville", latitude: 25.9008, longitude: -97.5039, elevation_m: 5.5 },
+    USC00413943: { name: "Harlingen", latitude: 26.2028, longitude: -97.6728, elevation_m: 11.6 },
+    USC00417952: { name: "San Benito", latitude: 26.1333, longitude: -97.6333, elevation_m: 11.9 },
+    USC00410576: { name: "Bayview", latitude: 26.1167, longitude: -97.4, elevation_m: 6.1 },
+    USC00418060: { name: "Santa Rosa", latitude: 26.25, longitude: -97.8333, elevation_m: 14.9 },
+  },
+  starr: {
+    USC00417622: { name: "Rio Grande City", latitude: 26.3769, longitude: -98.8117, elevation_m: 52.4 },
+    USC00411349: { name: "Cameron Rch", latitude: 26.55, longitude: -98.5833, elevation_m: 139.9 },
+    USC00412879: { name: "El Sauz", latitude: 26.5747, longitude: -98.8708, elevation_m: 62.2 },
+    USC00413060: { name: "Falcon Dam", latitude: 26.5581, longitude: -99.1372, elevation_m: 97.5 },
+    USC00413444: { name: "Garciasville 2 ESE", latitude: 26.3231, longitude: -98.6778, elevation_m: 53.3 },
+  },
+  willacy: {
+    USC00417458: { name: "Raymondville", latitude: 26.4644, longitude: -97.7847, elevation_m: 9.4 },
+    USC00415444: { name: "Lyford", latitude: 26.4, longitude: -97.8, elevation_m: null },
+    USC00416017: { name: "Monte Alto", latitude: 26.55, longitude: -97.9667, elevation_m: 11.9 },
+    USC00417184: { name: "Port Mansfield", latitude: 26.5533, longitude: -97.4278, elevation_m: 1.8 },
+    USC00417990: { name: "San Perlita", latitude: 26.5, longitude: -97.6, elevation_m: 6.1 },
+  },
 };
+
+const TARGET_COUNTY = (countyArg || "hidalgo").trim().toLowerCase();
+const STATIONS = STATIONS_BY_COUNTY[TARGET_COUNTY];
+if (!STATIONS) {
+  throw new Error(`Unknown county "${countyArg}" -- expected one of: ${Object.keys(STATIONS_BY_COUNTY).join(", ")}`);
+}
+
 const RETAINED_ELEMENTS = new Set(["PRCP", "TMAX", "TMIN", "AWND"]);
 
 function attributesFor(element, value, measurementFlag, qualityFlag, sourceFlag, observationTimeFlag) {

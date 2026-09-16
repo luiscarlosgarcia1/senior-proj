@@ -1,18 +1,25 @@
 #!/usr/bin/env node
 
 import { createReadStream } from "node:fs";
-import { readdir, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { createGunzip } from "node:zlib";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 
-const [inputDirectory, outputFile, sourceNoteFile] = process.argv.slice(2);
+const [inputDirectory, outputFile, sourceNoteFile, countyArg] = process.argv.slice(2);
 
 if (!inputDirectory || !outputFile || !sourceNoteFile) {
   throw new Error(
-    "Usage: node ingest-noaa-storm-events.mjs <gzip-directory> <output.ndjson> <source-note.json>",
+    "Usage: node ingest-noaa-storm-events.mjs <gzip-directory> <output.ndjson> <source-note.json> [county]\n" +
+      "  <county> is a Texas CZ_NAME as NOAA spells it (default: HIDALGO). One of the four RGV\n" +
+      "  counties: HIDALGO, CAMERON, STARR, WILLACY.",
   );
 }
+
+// NOAA's CZ_NAME is the all-caps county/zone name. Default preserves the original
+// Hidalgo-only invocation exactly; pass e.g. "CAMERON" to ingest a different county.
+const TARGET_COUNTY = (countyArg || "HIDALGO").trim().toUpperCase();
+const TARGET_COUNTY_DISPLAY = TARGET_COUNTY.charAt(0) + TARGET_COUNTY.slice(1).toLowerCase();
 
 const SOURCE_BASE = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles";
 const INCLUDED_EVENT_TYPES = new Set([
@@ -82,7 +89,7 @@ async function parseDetailsFile(fileName, retrievedAt) {
     }
     const cells = parseCsvLine(line);
     const row = Object.fromEntries(header.map((column, index) => [column, cells[index] ?? ""]));
-    if (row.STATE?.trim() !== "TEXAS" || row.CZ_NAME?.trim() !== "HIDALGO") continue;
+    if (row.STATE?.trim() !== "TEXAS" || row.CZ_NAME?.trim() !== TARGET_COUNTY) continue;
     if (!INCLUDED_EVENT_TYPES.has(row.EVENT_TYPE?.trim())) continue;
 
     const latitude = finiteCoordinate(row.BEGIN_LAT);
@@ -97,7 +104,7 @@ async function parseDetailsFile(fileName, retrievedAt) {
     const episodeNarrative = row.EPISODE_NARRATIVE?.trim();
     const sourceUrl = `${SOURCE_BASE}/${fileName}`;
     const year = fileName.match(/_d(\d{4})_/)?.[1];
-    const summaryParts = [`NOAA Storm Events ${eventType.toLowerCase()} record${location ? ` near ${location}` : " in Hidalgo County"}.`];
+    const summaryParts = [`NOAA Storm Events ${eventType.toLowerCase()} record${location ? ` near ${location}` : ` in ${TARGET_COUNTY_DISPLAY} County`}.`];
     if (narrative) summaryParts.push(narrative);
 
     records.push({
@@ -108,7 +115,7 @@ async function parseDetailsFile(fileName, retrievedAt) {
       published_at: null,
       event_start: start,
       event_end: eventDate(row.END_DATE_TIME, row.END_YEARMONTH, row.END_DAY),
-      location_text: location ? `${location}, Hidalgo County, Texas` : "Hidalgo County, Texas",
+      location_text: location ? `${location}, ${TARGET_COUNTY_DISPLAY} County, Texas` : `${TARGET_COUNTY_DISPLAY} County, Texas`,
       geometry: hasGeometry ? { type: "Point", coordinates: [longitude, latitude] } : null,
       location_precision: hasGeometry ? "exact" : "county",
       ...(hasGeometry ? {} : { geometry_absence_reason: "NOAA Storm Events detail row has no usable beginning latitude/longitude." }),
@@ -123,11 +130,40 @@ async function parseDetailsFile(fileName, retrievedAt) {
   return records;
 }
 
+// This script only ever generates record_kind "flood_event" rows. A county file
+// can also carry hand-curated "public_report" rows (news/government reports,
+// added separately -- see e.g. Hidalgo's) that no script reproduces. Re-running
+// this must not silently delete them, so any non-flood_event rows already in
+// outputFile are read back and kept.
+async function existingNonGeneratedRecords() {
+  let text;
+  try {
+    text = await readFile(outputFile, "utf8");
+  } catch {
+    return [];
+  }
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .filter((record) => record.record_kind !== "flood_event");
+}
+
 const retrievedAt = new Date().toISOString();
 const files = (await readdir(inputDirectory))
   .filter((fileName) => /^StormEvents_details-ftp_v1\.0_d20\d{2}_c\d+\.csv\.gz$/.test(fileName))
   .sort();
-const records = (await Promise.all(files.map((fileName) => parseDetailsFile(fileName, retrievedAt)))).flat();
+const generatedRecords = (
+  await Promise.all(files.map((fileName) => parseDetailsFile(fileName, retrievedAt)))
+).flat();
+const preservedRecords = await existingNonGeneratedRecords();
+if (preservedRecords.length) {
+  console.log(
+    `[preserve] keeping ${preservedRecords.length} existing non-generated record(s) from ${outputFile}`,
+  );
+}
+const records = [...generatedRecords, ...preservedRecords];
 records.sort((left, right) => left.event_start.localeCompare(right.event_start) || left.record_id.localeCompare(right.record_id));
 
 await writeFile(outputFile, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
@@ -138,8 +174,8 @@ await writeFile(sourceNoteFile, `${JSON.stringify({
   annual_detail_files: files.map((fileName) => `${SOURCE_BASE}/${fileName}`),
   filter: {
     state: "TEXAS",
-    county: "HIDALGO",
-    county_or_zone_name: "HIDALGO",
+    county: TARGET_COUNTY,
+    county_or_zone_name: TARGET_COUNTY,
     event_types: [...INCLUDED_EVENT_TYPES].sort(),
   },
   retained_record_count: records.length,
