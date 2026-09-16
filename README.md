@@ -5,11 +5,13 @@ CSCI 4390 Senior Project — Danny McClain, Luis Garcia. Faculty adviser: Sergei
 A browser map that compares **best-available flood-hazard information** across the
 four Lower Rio Grande Valley counties — **Cameron, Hidalgo, Starr, Willacy** — with
 a browsable history of documented flood events, rainfall records, local news and
-government reports, and an address search.
+government reports, live National Weather Service alerts, and an address search.
 
 > Educational and comparative only. Not for flood-insurance, emergency-routing, or
 > engineering decisions. It does not compute flood depth, predict active flooding,
-> or certify a property's flood zone. Historical reports are not live conditions.
+> or certify a property's flood zone. Historical reports are not live conditions;
+> active weather alerts are live, but this is not a substitute for official
+> emergency guidance.
 
 ## Stack
 
@@ -17,9 +19,12 @@ government reports, and an address search.
 - **Frontend:** server-rendered HTML, HTMX for the side panels, Leaflet for the map
 - **Pipeline:** Python (`geopandas` / `shapely` / `pyproj`) for the spatial prep;
   the event/report/rainfall builder is standard-library only
-- **Runtime external call:** the header address search geocodes through
-  OpenStreetMap Nominatim, client-side from the browser. Everything else the app
-  serves is precomputed by the pipeline — the server makes no outbound requests.
+- **Runtime external calls, both client-side from the browser, no key needed:**
+  the header address search geocodes through OpenStreetMap Nominatim, and the
+  "Active weather alerts" panel polls `api.weather.gov/alerts/active` every
+  5 minutes, filtered to the four counties by matching NWS's `areaDesc` text.
+  Everything else the app serves is precomputed by the pipeline — the Flask
+  server itself makes no outbound requests.
 
 ## Requirements
 
@@ -252,7 +257,7 @@ src/rgv_flood/
   data_access.py      read-only access to the pipeline outputs
   templates/          index.html + partials/ (metadata, events, rainfall, reports)
   static/
-    js/map.js         Leaflet setup, layer toggles, event layer, address search
+    js/map.js         Leaflet setup, layer toggles, event layer, address search, NWS alerts
     css/app.css
     data/             pipeline outputs the app serves as-is (all gitignored)
 pipeline/

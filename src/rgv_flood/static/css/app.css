@@ -1,26 +1,26 @@
 :root {
-  --bg: #f5f6f8;
+  --bg: #f6f5f1;
   --panel: #ffffff;
-  --ink: #1b2a4a;
-  --text: #333a4d;
-  --muted: #565d72;
-  --muted-2: #8a90a3;
-  --faint: #9aa0b3;
-  --border: #e6e8ee;
-  --border-2: #dfe2ea;
-  --divider: #eef0f4;
-  --hover: #f7f8fb;
-  --accent: #e2624c;
-  --accent-hover: #c94f3a;
-  --radius: 2px;
+  --ink: #000000;
+  --text: #2c2f40;
+  --muted: #6c6a5f;
+  --muted-2: #9a9686;
+  --faint: #b3af9f;
+  --border: #eae7de;
+  --border-2: #e2ded2;
+  --divider: #f0eee5;
+  --hover: #f6f5f1;
+  --accent: #c0392b;
+  --accent-hover: #a3301f;
+  --radius: 4px;
 
-  --sev-high: #d64545;
-  --sev-moderate: #e0913a;
-  --sev-low: #5b8bd6;
-  --sev-uncategorized: #aeb3c2;
+  --sev-high: #c0392b;
+  --sev-moderate: #d98a2c;
+  --sev-low: #3b6fd1;
+  --sev-uncategorized: #9aa0a8;
 
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --display: "Manrope", var(--sans);
+  --display: "Manrope", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -41,7 +41,7 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); text-decoration: underline; }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #d3d7e0; }
+::-webkit-scrollbar-thumb { background: #d8d4c8; border-radius: 8px; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
@@ -181,32 +181,35 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 }
 
 .sidebar {
-  width: 300px;
+  width: 308px;
   flex-shrink: 0;
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  background: var(--bg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* each top-level sidebar section is a card; its <details class="collapse">
+   fills the card, so the card border/shadow doubles as the accordion item */
+.card {
   background: var(--panel);
-  border-right: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 3px rgba(30, 20, 10, 0.05);
+  overflow: hidden;
+  flex-shrink: 0;
 }
-
-.panel { padding: 16px 20px; }
-
-.panel h2 {
-  margin: 0 0 10px;
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink);
-}
+.card > .collapse { display: block; }
 
 .divider {
   height: 1px;
   border: 0;
   background: var(--divider);
-  margin: 0 20px;
+  margin: 12px 0;
 }
 
 .note {
@@ -316,34 +319,105 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 .swatch-low { background: var(--sev-low); }
 .swatch-uncategorized { background: var(--sev-uncategorized); }
 
-/* collapsible section */
+/* collapsible section = one card. The card provides the border/shadow; the
+   <details> inside it is the accordion unit (see map.js for the "only one
+   open at a time" behavior). */
 .collapse > summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
   list-style: none;
   cursor: pointer;
 }
 .collapse > summary::-webkit-details-marker { display: none; }
-.collapse > summary h2 { margin: 0; }
-.collapse .chev { color: var(--faint); font-size: 12px; transition: transform 0.15s; }
+.collapse > summary h2 {
+  margin: 0;
+  flex: 1;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+.collapse .chev { color: var(--muted-2); font-size: 11px; transition: transform 0.15s; flex-shrink: 0; }
 .collapse[open] .chev { transform: rotate(180deg); }
 .collapse .count {
   font-family: var(--sans);
-  font-weight: 500;
+  font-weight: 700;
   font-size: 11px;
-  color: var(--muted-2);
+  color: var(--muted);
   background: var(--bg);
   border-radius: 999px;
-  padding: 1px 7px;
-  margin-left: 4px;
+  padding: 1px 8px;
+  flex-shrink: 0;
 }
-#events-body, #rainfall-body, #reports-body { margin-top: 10px; }
+
+/* card body: the content revealed under a card's summary */
+.card-body { padding: 0 16px 16px; }
+.card-body h2 {
+  margin: 0 0 10px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+#events-body, #rainfall-body, #reports-body, #alerts-body { margin-top: 0; }
 .empty {
   background: var(--bg);
   padding: 10px 12px;
   font-size: 12.5px;
   color: var(--muted-2);
+}
+
+/* active weather alerts */
+#alerts-count:not([hidden]) { background: var(--sev-high); color: #fff; }
+.alert-list { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; }
+.alert-counties { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.alert-county-chip {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.alert { padding: 7px 0; border-bottom: 1px solid var(--divider); font-size: 12.5px; }
+.alert summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+}
+.alert summary::-webkit-details-marker { display: none; }
+.alert-summary-main { min-width: 0; }
+.alert-event { font-weight: 600; color: var(--ink); }
+.alert-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: #fff;
+}
+.alert-badge-extreme, .alert-badge-severe { background: var(--sev-high); }
+.alert-badge-moderate { background: var(--sev-moderate); }
+.alert-badge-minor, .alert-badge-unknown { background: var(--sev-uncategorized); }
+.alert-meta { margin-top: 3px; color: var(--muted-2); font-size: 11px; }
+.alert-desc, .alert-instruction { margin: 6px 0 0; color: var(--text); line-height: 1.5; white-space: pre-line; }
+.alert-instruction {
+  padding: 6px 8px;
+  background: var(--bg);
+  border-left: 2px solid var(--sev-high);
+  color: var(--muted);
 }
 
 /* address search (header) */
@@ -400,7 +474,7 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
   list-style: none;
   margin: 8px 0 0;
   padding: 0;
-  max-height: 260px;
+  max-height: 230px;
   overflow-y: auto;
 }
 .event-item {
@@ -417,7 +491,7 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 .event-unmapped { color: var(--faint); text-transform: none; font-style: italic; }
 
 /* rainfall records */
-.rainfall-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.rainfall-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 260px; overflow-y: auto; }
 .rainfall-list li {
   display: grid;
   grid-template-columns: 4.5em 6em 1fr;
@@ -433,7 +507,7 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 
 /* local reports */
 .reports p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.reports ul { list-style: none; margin: 0; padding: 0; }
+.reports ul { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
 .report {
   padding: 8px 0;
   border-bottom: 1px solid var(--divider);
@@ -444,8 +518,16 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 
 /* ---- map --------------------------------------------------------------- */
 
-.map-wrap { position: relative; flex: 1; min-height: 0; }
-#map { position: absolute; inset: 0; background: #e9ecef; }
+.map-wrap { position: relative; flex: 1; min-height: 0; padding: 14px 14px 14px 0; background: var(--bg); }
+#map {
+  position: absolute;
+  inset: 14px 14px 14px 0;
+  background: #e9ecef;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 3px rgba(30, 20, 10, 0.05);
+  overflow: hidden;
+}
 
 /* restyle Leaflet's default controls to match */
 .leaflet-container { font-family: var(--sans); }
