@@ -3,7 +3,8 @@
           name="year"
           hx-get="/partials/events"
           hx-target="#events-body"
-          hx-trigger="change">
+          hx-trigger="change"
+          hx-include="#county-select">
     <option value="">All years</option>
     {% for y in years %}
     <option value="{{ y }}" {{ 'selected' if y == selected_year }}>{{ y }}</option>
@@ -13,7 +14,7 @@
   {% if events %}
   <p class="note">
     {{ events | length }} event{{ 's' if events | length != 1 }}{% if selected_year %} in {{ selected_year }}{% endif %} ·
-    NOAA Storm Events, Hidalgo County
+    NOAA Storm Events{% if county %}, {{ county.name }}{% else %}, all four counties{% endif %}
   </p>
   <ul class="event-list">
     {% for e in events %}

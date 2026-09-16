@@ -71,14 +71,15 @@ exceed GDAL's default per-feature size cap.
 uv run python pipeline/build_events.py                       # ~1 s, stdlib only
 ```
 
-Reads the schema-validated NDJSON under `data/hidalgo-county/records/` (NOAA Storm
-Events + GHCN-Daily, collected via `scripts/*.mjs`).
+Reads the schema-validated NDJSON under `data/<county>-county/records/` for all
+four counties (NOAA Storm Events + GHCN-Daily, collected via `scripts/*.mjs`)
+and merges them, each event/report/day tagged with its own `county`.
 
 | Output | Contents |
 | --- | --- |
-| `flood-events.geojson` | Documented flood events as points; events whose source coordinate falls outside Hidalgo County are kept but not mapped (`geometry_note`) |
-| `flood-reports.json` | The 16 local-news / government reports tied to those events |
-| `rainfall-records.json` | The 15 wettest single gauge-days, 2000–2025 |
+| `flood-events.geojson` | Documented flood events as points, all four counties; an event whose source coordinate falls outside its own county's boundary is kept but not mapped (`geometry_note`) |
+| `flood-reports.json` | Local-news / government reports tied to those events — 16 so far, **Hidalgo only**; the other three counties have none because nobody's done that hand-curation pass for them yet, not because no script exists |
+| `rainfall-records.json` | The 15 wettest single gauge-days on record, ranked across every county's stations |
 
 ## Conventions
 

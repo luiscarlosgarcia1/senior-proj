@@ -225,10 +225,10 @@ node scripts/ingest-noaa-ghcn-daily.mjs \
 It keeps PRCP / TMAX / TMIN / AWND for 2000-01-01 through 2025-12-31 and drops
 rows with a nonblank NOAA quality flag.
 
-After re-ingesting, rebuild the overlays: `uv run python pipeline/build_events.py`
-(Hidalgo only — see "Data sources" below) and/or
+After re-ingesting, rebuild the overlays:
+`uv run python pipeline/build_events.py` and/or
 `uv run --group pipeline python pipeline/build_county_collections_geopackage.py`
-(all four counties).
+— both now cover all four counties.
 
 ## Data sources
 
@@ -238,8 +238,8 @@ After re-ingesting, rebuild the overlays: `uv run python pipeline/build_events.p
 | Flood hazard zones | Hidalgo County Drainage District No. 1 digitized 1981 FIRM (no FEMA digital data) | Hidalgo |
 | Modeled flood extent | TWDB 2025 cursory floodplain dataset (Fathom 3 m) — contextual, not regulatory | all four |
 | County boundaries | US Census TIGER/Line 2023 | all four |
-| Flood events + weather | NOAA NCEI Storm Events + GHCN-Daily, 2000–2025 | all four counties, in `data/` — the Flask app's map (`build_events.py`) still only serves Hidalgo |
-| Local reports | Hidalgo County / City of McAllen / KRGV, tied to documented events | Hidalgo only |
+| Flood events + weather | NOAA NCEI Storm Events + GHCN-Daily, 2000–2025 | all four counties — the map, event list, and rainfall records all merge them, filterable by the header county selector |
+| Local news / government reports | Hidalgo County / City of McAllen / KRGV, tied to documented events | **Hidalgo only.** These 16 are hand-curated — someone read the local coverage for each event window and picked out real reports. No script produces them; the other three counties don't have any yet, not because the data doesn't exist but because nobody's done that research pass for them |
 
 ## Layout
 

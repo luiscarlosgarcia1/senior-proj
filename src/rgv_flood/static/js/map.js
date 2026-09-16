@@ -39,9 +39,17 @@
 
   const loadedLayers = new Map(); // layerId -> L.GeoJSON
 
+  // Flood-event dots must stay clickable no matter what order layers are
+  // toggled in -- always render above every hazard layer. Call this right
+  // after adding any hazard layer to the map.
+  function keepEventsOnTop() {
+    if (eventsLayer && map.hasLayer(eventsLayer)) eventsLayer.bringToFront();
+  }
+
   async function showLayer(layerId) {
     if (loadedLayers.has(layerId)) {
       loadedLayers.get(layerId).addTo(map);
+      keepEventsOnTop();
       return;
     }
     const res = await fetch(`/api/layers/${layerId}.geojson`);
@@ -66,6 +74,7 @@
     });
     loadedLayers.set(layerId, gj);
     gj.addTo(map);
+    keepEventsOnTop();
   }
 
   function hideLayer(layerId) {
@@ -106,10 +115,10 @@
             pointToLayer: (f, latlng) =>
               L.circleMarker(latlng, {
                 radius: 5,
-                color: "#1e3a8a",
+                color: "#854d0e",
                 weight: 1,
-                fillColor: "#3b82f6",
-                fillOpacity: 0.75,
+                fillColor: "#eab308",
+                fillOpacity: 0.85,
               }),
             onEachFeature: (f, lyr) =>
               lyr.bindPopup(eventPopup(f.properties || {}), { maxHeight: 220 }),
@@ -123,8 +132,12 @@
   async function setEventsVisible(visible) {
     const layer = await ensureEventsLayer();
     if (!layer) return;
-    if (visible) layer.addTo(map);
-    else map.removeLayer(layer);
+    if (visible) {
+      layer.addTo(map);
+      layer.bringToFront();
+    } else {
+      map.removeLayer(layer);
+    }
   }
 
   // The checkbox lives outside the HTMX-swapped list, so a plain listener is fine.
@@ -195,12 +208,28 @@
     });
   }
 
-  // ---- county selector recenters the map (HTMX handles the reports panel) ---
+  // ---- county selector: recenters the map, and refreshes the events / rainfall
+  // panels (HTMX's own hx-get on this element already handles the reports panel) --
 
   const countySelect = document.getElementById("county-select");
   if (countySelect) {
     countySelect.addEventListener("change", async () => {
       const slug = countySelect.value;
+
+      const yearSelect = document.getElementById("event-year");
+      const year = yearSelect ? yearSelect.value : "";
+      const eventsQuery = new URLSearchParams();
+      if (year) eventsQuery.set("year", year);
+      if (slug) eventsQuery.set("county_slug", slug);
+      if (window.htmx) {
+        window.htmx.ajax("GET", `/partials/events?${eventsQuery}`, "#events-body");
+        window.htmx.ajax(
+          "GET",
+          slug ? `/partials/rainfall?county_slug=${slug}` : "/partials/rainfall",
+          "#rainfall-body"
+        );
+      }
+
       if (!slug) {
         map.flyTo(cfg.center, cfg.zoom);
         return;

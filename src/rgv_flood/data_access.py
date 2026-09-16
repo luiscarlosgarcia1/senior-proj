@@ -45,8 +45,8 @@ def flood_events_fc() -> dict | None:
     return _read_json("FLOOD_EVENTS_FILE")
 
 
-def flood_events(year: str | None = None) -> list[dict]:
-    """Event rows (newest first), optionally filtered to one year.
+def flood_events(year: str | None = None, county_slug: str | None = None) -> list[dict]:
+    """Event rows (newest first), optionally filtered to one year and/or county.
 
     Each row is the feature's properties plus ``lat`` / ``lon`` when the event
     has a point, so the sidebar list can fly the map to it.
@@ -63,11 +63,15 @@ def flood_events(year: str | None = None) -> list[dict]:
         rows.append(row)
     if year:
         rows = [r for r in rows if r.get("date", "").startswith(year)]
+    if county_slug:
+        rows = [r for r in rows if r.get("county") == county_slug]
     return rows
 
 
-def flood_event_years() -> list[str]:
-    return sorted({e["date"][:4] for e in flood_events() if e.get("date")}, reverse=True)
+def flood_event_years(county_slug: str | None = None) -> list[str]:
+    return sorted(
+        {e["date"][:4] for e in flood_events(county_slug=county_slug) if e.get("date")}, reverse=True
+    )
 
 
 def flood_reports(county_slug: str | None = None) -> list[dict]:
@@ -83,7 +87,10 @@ def flood_reports(county_slug: str | None = None) -> list[dict]:
     return reports
 
 
-def rainfall_records() -> list[dict]:
+def rainfall_records(county_slug: str | None = None) -> list[dict]:
     """The wettest single gauge-days on record (date, mm, inches, station)."""
     data = _read_json("RAINFALL_FILE")
-    return data.get("days", []) if data else []
+    days = data.get("days", []) if data else []
+    if county_slug:
+        days = [d for d in days if d.get("county") == county_slug]
+    return days

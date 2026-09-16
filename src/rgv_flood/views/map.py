@@ -51,17 +51,24 @@ def metadata_partial(layer_id: str):
 @bp.get("/partials/events")
 def events_partial():
     year = request.args.get("year") or None
+    county_slug = request.args.get("county_slug") or None
+    if county_slug is not None and not is_county(county_slug):
+        abort(404)
     return render_template(
         "partials/events.html",
-        events=data_access.flood_events(year),
-        years=data_access.flood_event_years(),
+        events=data_access.flood_events(year, county_slug),
+        years=data_access.flood_event_years(county_slug),
         selected_year=year,
+        county=COUNTIES.get(county_slug) if county_slug else None,
     )
 
 
 @bp.get("/partials/rainfall")
 def rainfall_partial():
-    return render_template("partials/rainfall.html", days=data_access.rainfall_records())
+    county_slug = request.args.get("county_slug") or None
+    if county_slug is not None and not is_county(county_slug):
+        abort(404)
+    return render_template("partials/rainfall.html", days=data_access.rainfall_records(county_slug))
 
 
 @bp.get("/partials/reports")
