@@ -29,15 +29,18 @@ government reports, live National Weather Service alerts, and an address search.
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/) (Python 3.13+, it manages the venv)
-- Node 18+ — to run the NOAA ingest scripts in `scripts/*.mjs`. Their output
-  (`data/<county>-county/records/`, `sources/`) is gitignored, so this is
-  needed for a genuinely fresh setup, not just to "re-run" them
+- Node 18+ — to run the NOAA ingest scripts in `scripts/*.mjs`. Most of their
+  output (`data/<county>-county/records/`, `sources/`) is gitignored build
+  output, so this is needed for a genuinely fresh setup, not just to "re-run"
+  them
 
 ## Setup (after a fresh clone)
 
-`data/` is entirely gitignored build output (see "Raw per-county data" below) —
-on a fresh clone it's empty folders and nothing else. Populate it and build the
-local database in one command:
+Most of `data/<county>-county/` is gitignored build output (see "Raw
+per-county data" below) — a fresh clone still has the `flood-hazard-layers/`
+geometry and Hidalgo's hand-curated reports (nothing else can reproduce
+those), but everything else starts as empty folders. Populate the rest and
+build the local database in one command:
 
 ```bash
 uv sync --group dev --group pipeline                 # install everything
@@ -46,12 +49,12 @@ uv run --group pipeline python pipeline/build_all.py  # data/ -> county-collecti
 ```
 
 That runs, in order: scaffold the per-county folders → download the raw NOAA
-files → ingest them for all four counties → import the flood-hazard-layer
-GeoJSON (skipped with a warning if the sibling `Flood Project/` directory isn't
-present — see below, it's the one piece with no public download) → build
-`data/generated/county-collections.gpkg`. Every step is idempotent, so re-run
-it any time; see `pipeline/build_all.py`'s docstring for the individual steps
-if you want to run just one.
+files → ingest them for all four counties → re-import the flood-hazard-layer
+GeoJSON if the sibling `Flood Project/` directory is present (it's already
+tracked in git either way, so this step is a refresh, not a first build) →
+build `data/generated/county-collections.gpkg`. Every step is idempotent, so
+re-run it any time; see `pipeline/build_all.py`'s docstring for the individual
+steps if you want to run just one.
 
 Then build what the *Flask app* serves (a separate, smaller pair of outputs
 under `src/rgv_flood/static/data/`, also gitignored):
@@ -127,31 +130,36 @@ uv sync --group pipeline      # + geopandas, shapely, pyproj, requests, beautifu
 (which calls the GeoPackage builder). The app, `build_events.py`, and the tests
 do not use it.
 
-## Raw per-county data (gitignored)
+## Raw per-county data (gitignored, with two exceptions)
 
-Nothing under `data/<county>-county/` is committed except `README.md` and
-`.gitkeep` placeholders (so the empty folders still exist). Everything a script
-produces — `manifest.json`, `schemas/*.schema.json`, `sources/**/*.json`,
-`flood-hazard-layers/*.geojson` + its `manifest.json`, `records/**/*.ndjson` —
-is build output now, per the project rule: if a script makes it, it isn't
-committed.
+`data/<county>-county/` is mostly gitignored build output — per the project
+rule, if a script can make it, it isn't committed. The two things no script
+can (re)produce from a bare clone are tracked anyway, everything else is not:
+
+| Tracked | Why |
+| --- | --- |
+| `flood-hazard-layers/*.geojson`, `flood-hazard-layers/manifest.json` (all four counties) | `scripts/import_county_flood_data.py` **needs the sibling `Flood Project/` working directory** (override the path with `RGV_FLOOD_PROJECT_RAW_DIR`), which is not itself a public, scripted download. Without these tracked, a fresh clone has no hazard layers at all unless it happens to sit next to that directory |
+| `hidalgo-county/records/events-and-public-reports/noaa-storm-events.ndjson` | Carries 16 hand-curated public reports alongside the NOAA-generated events. The ingest script only preserves hand-curated rows by reading back the file that's already there — a bare clone has nothing to read back from |
 
 | Ignored | Rebuilt by |
 | --- | --- |
 | `manifest.json`, `schemas/*.schema.json`, `sources/**/*.json` | `scripts/scaffold_county_collections.py`, from the tracked template at `pipeline/schemas/` |
-| `flood-hazard-layers/*.geojson`, `flood-hazard-layers/manifest.json` | `scripts/import_county_flood_data.py` — **needs the sibling `Flood Project/` working directory** (override the path with `RGV_FLOOD_PROJECT_RAW_DIR`), which is not itself a public, scripted download |
-| `records/**/*.ndjson` | `scripts/ingest-noaa-*.mjs` — reproducible from public NOAA URLs, see below |
+| `records/**/*.ndjson` (all counties except the Hidalgo file above) | `scripts/ingest-noaa-*.mjs` — reproducible from public NOAA URLs, see below |
 | `src/rgv_flood/static/data/*.json`, `*.geojson` | `pipeline/build_layers.py` and `pipeline/build_events.py` |
 
-`pipeline/build_all.py` runs the first three end to end. The one thing nothing
-here can produce without outside help is the `Flood Project/` directory itself
-— that was a separate, earlier, manual data-acquisition effort (FEMA/TWDB/Census
-downloads), not part of this repo. If you don't have it, `build_all.py` skips
-that step with a warning and everything else still builds.
+`pipeline/build_all.py` runs the ingest + GeoPackage steps end to end, and
+also re-imports the hazard-layer GeoJSON when the sibling `Flood Project/`
+directory is present — but since that GeoJSON is now tracked, a fresh clone
+already has it either way. `Flood Project/` itself — a separate, earlier,
+manual data-acquisition effort (FEMA/TWDB/Census downloads) — is still not
+part of this repo, so re-running that one step still needs it.
 
-`sources/public-reports/official-local-news-2018-2021.json` on Hidalgo is the
-other file with no generator — it documents a manual news-search pass, not a
-mechanical pull. It only exists in git history and on disk now.
+`sources/public-reports/official-local-news-2018-2021.json` on Hidalgo is
+**not** tracked despite also having no generator — it documents the manual
+news-search pass behind those 16 reports, but nothing in the pipeline reads
+it directly (the reports themselves live in the tracked `.ndjson` above). It
+only exists in git history and on disk right now; worth tracking too if it
+matters going forward.
 
 Everything here was previously committed; it was removed from tracking (`git rm
 --cached`, kept on disk, nothing deleted) once the four counties' combined data
@@ -267,8 +275,10 @@ pipeline/
   build_county_collections_geopackage.py  -> data/generated/county-collections.gpkg
   schemas/              tracked schema template scaffold_county_collections.py copies from
 data/
-  <county>-county/    entirely gitignored build output: manifest, schemas, sources,
-                      records, flood-hazard-layers/  (see data/hidalgo-county/README.md)
+  <county>-county/    mostly gitignored build output: manifest, schemas, sources,
+                      records  (see data/hidalgo-county/README.md). Tracked
+                      exceptions: flood-hazard-layers/ (all counties) and
+                      Hidalgo's records/events-and-public-reports/*.ndjson
 scripts/              data-acquisition scripts build_all.py runs, in order (see above)
 tests/
 ```

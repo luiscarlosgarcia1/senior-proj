@@ -12,24 +12,25 @@ pipeline/_work/
 /tmp/
 data/generated/*.gpkg
 
-# Per-county source data — everything under data/<county>-county/ that a script
-# produces is build output, not committed (see README "Setup" / "Raw per-county
-# data" / "One-off scripts"). Only README.md and .gitkeep placeholders (so the
-# empty folders still exist) stay tracked.
-#   flood-hazard-layers/*.geojson,     <- scripts/import_county_flood_data.py (needs
-#   flood-hazard-layers/manifest.json     the sibling Flood Project/ working directory)
-#   records/**/*.ndjson                <- scripts/ingest-noaa-*.mjs (public NOAA URLs).
-#                                          Hidalgo's storm-events file also carries 16
-#                                          hand-curated reports the script can't
-#                                          reproduce -- still in git history and on
-#                                          disk, just not tracked going forward.
+# Per-county source data — everything under data/<county>-county/ that
+# pipeline/build_all.py can (re)produce on its own is build output, not
+# committed (see README "Setup" / "Raw per-county data" / "One-off scripts").
+#   records/**/*.ndjson                <- scripts/ingest-noaa-*.mjs (public NOAA URLs)
 #   manifest.json, sources/**/*.json,  <- scripts/scaffold_county_collections.py
 #   schemas/*.schema.json                 (schemas are copied from the tracked
 #                                          template at pipeline/schemas/, not
 #                                          from any county's own directory)
-data/*-county/flood-hazard-layers/*.geojson
-data/*-county/flood-hazard-layers/manifest.json
+#
+# Two things build_all.py CANNOT reproduce from a bare clone stay tracked:
+#   flood-hazard-layers/*.geojson,manifest.json  -- scripts/import_county_flood_data.py
+#     needs the sibling Flood Project/ working directory, which has no public,
+#     scripted source (see build_all.py step 5 / README "Raw per-county data").
+#   hidalgo-county's events-and-public-reports ndjson -- carries 16 hand-curated
+#     reports alongside the NOAA-generated events; the ingest script only
+#     preserves them if the file already exists on disk to read back from, so a
+#     bare clone has nothing to preserve them from.
 data/*-county/records/**/*.ndjson
+!data/hidalgo-county/records/events-and-public-reports/noaa-storm-events.ndjson
 data/*-county/manifest.json
 data/*-county/schemas/*.schema.json
 data/*-county/sources/**/*.json
