@@ -1,0 +1,17 @@
+{% if signals %}
+<ul class="live-signal-list">
+  {% for signal in signals %}
+  <li class="live-signal">
+    <a href="{{ signal.source_url }}" target="_blank" rel="noopener">{{ signal.summary }}</a>
+    <div class="live-signal-meta">{{ signal.source_publisher }} · retrieved {{ signal.retrieved_at }}</div>
+    {% if signal.is_mappable %}
+    <div class="live-signal-meta">Shown on the map using source-supplied geometry.</div>
+    {% else %}
+    <div class="live-signal-meta">Notice only — {{ signal.geometry_absence_reason }}</div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="empty">No active official signals{% if county %} for {{ county.name }}{% endif %} right now.</div>
+{% endif %}

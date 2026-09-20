@@ -1,6 +1,8 @@
 import json
+from datetime import UTC, datetime
 
 import pytest
+from live_signals import LiveSignal, LiveSignalStore
 
 from rgv_flood import create_app
 
@@ -98,6 +100,85 @@ def test_flood_events_geojson(client):
 
 def test_missing_live_signals_is_404(client):
     assert client.get("/api/live-signals.geojson").status_code == 404
+
+
+def test_live_signals_endpoint_returns_only_mappable_official_signals(client, tmp_path):
+    database = tmp_path / "live-signals.sqlite3"
+    connection = __import__("sqlite3").connect(database)
+    connection.executescript(
+        """
+        create table live_signals (
+          source text, native_id text, source_url text, source_publisher text,
+          source_channel text, summary text, source_attributes_json text,
+          county_slugs_json text, inclusion_basis text, source_geometry_json text,
+          published_at text, effective_at text, source_updated_at text, expires_at text,
+          first_seen_at text, last_seen_at text, retrieved_at text, lifecycle_state text,
+          provenance text, is_mappable integer
+        );
+        insert into live_signals values
+          ('drivetexas:points', 'road-1', 'https://txdot.example/1', 'TxDOT', 'api',
+           'Road closed', '{}', '["hidalgo"]', 'source county field',
+           '{"type":"Point","coordinates":[-98.2,26.2]}', null, null, null, null,
+           '2026-09-20T10:00:00Z', '2026-09-20T10:00:00Z', '2026-09-20T10:00:00Z',
+           'active', 'official', 1),
+          ('hidalgo-rss', 'notice-1', 'https://county.example/1', 'Hidalgo County', 'rss',
+           'County notice', '{}', '["hidalgo"]', 'source feed scope', null,
+           null, null, null, null, '2026-09-20T10:00:00Z', '2026-09-20T10:00:00Z',
+           '2026-09-20T10:00:00Z', 'active', 'official', 0),
+          ('https://api.weather.gov/alerts/active?area=TX', 'nws-1', 'https://weather.example/1',
+           'National Weather Service', 'api', 'Flood warning', '{}', '["hidalgo"]',
+           'source geocode', '{"type":"Polygon","coordinates":[[[-98.3,26.1],[-98.2,26.1],[-98.2,26.2],[-98.3,26.1]]]}',
+           null, null, null, null, '2026-09-20T10:00:00Z', '2026-09-20T10:00:00Z',
+           '2026-09-20T10:00:00Z', 'active', 'official', 1),
+          ('community', 'report-1', 'https://example.test/1', 'Example', 'web',
+           'Not official', '{}', '["hidalgo"]', 'source',
+           '{"type":"Point","coordinates":[-98.2,26.2]}', null, null, null, null,
+           '2026-09-20T10:00:00Z', '2026-09-20T10:00:00Z', '2026-09-20T10:00:00Z',
+           'active', 'public-report', 1);
+        """
+    )
+    connection.commit()
+    connection.close()
+    client.application.config["LIVE_SIGNALS_DATABASE"] = database
+
+    response = client.get("/api/live-signals.geojson")
+
+    assert response.status_code == 200
+    assert {feature["properties"]["native_id"] for feature in response.json["features"]} == {"road-1", "nws-1"}
+
+
+def test_live_signals_partial_keeps_unmappable_notices_as_source_links(client, tmp_path):
+    database = tmp_path / "live-signals.sqlite3"
+    store = LiveSignalStore(database)
+    now = datetime(2026, 9, 20, 12, tzinfo=UTC)
+    store.ingest(
+        "hidalgo-rss",
+        [
+            LiveSignal(
+                source="hidalgo-rss",
+                native_id="notice-1",
+                provenance="official",
+                source_url="https://county.example/notices/1",
+                source_publisher="Hidalgo County",
+                source_channel="rss",
+                summary="Public meeting notice",
+                source_attributes={},
+                county_slugs=("hidalgo",),
+                inclusion_basis="feed_jurisdiction",
+                source_geometry=None,
+                geometry_absence_reason="The RSS item supplies no geometry.",
+            )
+        ],
+        retrieved_at=now,
+    )
+    client.application.config["LIVE_SIGNALS_DATABASE"] = database
+
+    response = client.get("/partials/live-signals?county_slug=hidalgo")
+
+    assert response.status_code == 200
+    assert b"Public meeting notice" in response.data
+    assert b"https://county.example/notices/1" in response.data
+    assert b"Notice only" in response.data
 
 
 def test_events_partial_lists_and_filters(client):

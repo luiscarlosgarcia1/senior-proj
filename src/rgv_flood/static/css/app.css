@@ -365,7 +365,7 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
   letter-spacing: 0.06em;
   color: var(--ink);
 }
-#events-body, #rainfall-body, #reports-body, #alerts-body { margin-top: 0; }
+#events-body, #rainfall-body, #reports-body, #live-signals-body { margin-top: 0; }
 .empty {
   background: var(--bg);
   padding: 10px 12px;
@@ -373,52 +373,11 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
   color: var(--muted-2);
 }
 
-/* active weather alerts */
-#alerts-count:not([hidden]) { background: var(--sev-high); color: #fff; }
-.alert-list { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; }
-.alert-counties { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.alert-county-chip {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 1px 7px;
-}
-.alert { padding: 7px 0; border-bottom: 1px solid var(--divider); font-size: 12.5px; }
-.alert summary {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  list-style: none;
-  cursor: pointer;
-}
-.alert summary::-webkit-details-marker { display: none; }
-.alert-summary-main { min-width: 0; }
-.alert-event { font-weight: 600; color: var(--ink); }
-.alert-badge {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 1px 7px;
-  border-radius: 999px;
-  color: #fff;
-}
-.alert-badge-extreme, .alert-badge-severe { background: var(--sev-high); }
-.alert-badge-moderate { background: var(--sev-moderate); }
-.alert-badge-minor, .alert-badge-unknown { background: var(--sev-uncategorized); }
-.alert-meta { margin-top: 3px; color: var(--muted-2); font-size: 11px; }
-.alert-desc, .alert-instruction { margin: 6px 0 0; color: var(--text); line-height: 1.5; white-space: pre-line; }
-.alert-instruction {
-  padding: 6px 8px;
-  background: var(--bg);
-  border-left: 2px solid var(--sev-high);
-  color: var(--muted);
-}
+/* live official source snapshots */
+.live-signal-list { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; }
+.live-signal { padding: 8px 0; border-bottom: 1px solid var(--divider); font-size: 12.5px; }
+.live-signal a { color: var(--ink); font-weight: 600; }
+.live-signal-meta { margin-top: 3px; color: var(--muted-2); font-size: 11px; }
 
 /* address search (header) */
 .addr-search { display: flex; align-items: center; }

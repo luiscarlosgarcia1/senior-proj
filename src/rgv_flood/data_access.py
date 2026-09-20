@@ -123,3 +123,36 @@ def active_official_signal_features(source_prefix: str | None = None) -> dict | 
         value["county_slugs"] = json.loads(value.pop("county_slugs_json"))
         features.append({"type": "Feature", "geometry": geometry, "properties": value})
     return {"type": "FeatureCollection", "features": features}
+
+
+def active_official_signals(county_slug: str | None = None) -> list[dict]:
+    """Return active official signals for the sidebar, including notices.
+
+    Signals without source geometry stay in this list so the UI can link to
+    them without inventing a map location.
+    """
+    database = Path(current_app.config["LIVE_SIGNALS_DATABASE"])
+    if not database.exists():
+        return []
+    query = (
+        "select source, native_id, source_url, source_publisher, source_channel, summary, "
+        "county_slugs_json, source_geometry_json, geometry_absence_reason, is_mappable, "
+        "published_at, effective_at, source_updated_at, expires_at, last_seen_at, retrieved_at "
+        "from live_signals where lifecycle_state='active' and provenance='official' "
+        "order by retrieved_at desc, source_publisher, summary"
+    )
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute(query).fetchall()
+    fields = (
+        "source", "native_id", "source_url", "source_publisher", "source_channel", "summary",
+        "county_slugs_json", "source_geometry_json", "geometry_absence_reason", "is_mappable",
+        "published_at", "effective_at", "source_updated_at", "expires_at", "last_seen_at", "retrieved_at",
+    )
+    signals = []
+    for row in rows:
+        signal = dict(zip(fields, row, strict=True))
+        signal["county_slugs"] = json.loads(signal.pop("county_slugs_json"))
+        signal["is_mappable"] = bool(signal["is_mappable"])
+        if county_slug is None or county_slug in signal["county_slugs"]:
+            signals.append(signal)
+    return signals

@@ -41,10 +41,22 @@ def flood_events_geojson():
 
 @bp.get("/api/live-signals.geojson")
 def live_signals_geojson():
-    fc = data_access.active_official_signal_features("drivetexas:")
+    fc = data_access.active_official_signal_features()
     if fc is None:
         abort(404)
     return jsonify(fc)
+
+
+@bp.get("/partials/live-signals")
+def live_signals_partial():
+    county_slug = request.args.get("county_slug") or None
+    if county_slug is not None and not is_county(county_slug):
+        abort(404)
+    return render_template(
+        "partials/live-signals.html",
+        signals=data_access.active_official_signals(county_slug),
+        county=COUNTIES.get(county_slug) if county_slug else None,
+    )
 
 
 @bp.get("/partials/metadata/<layer_id>")

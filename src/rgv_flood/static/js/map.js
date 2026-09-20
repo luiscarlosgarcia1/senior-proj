@@ -208,122 +208,42 @@
     });
   }
 
-  // ---- active weather alerts (NWS, client-side, no server round trip) ------
+  // ---- active official signals ---------------------------------------------
   //
-  // Fetched straight from the browser, like the address search -- the Flask
-  // server makes no outbound requests of its own (see README). NWS's alerts
-  // API needs no key and allows CORS from anywhere. Polled every 5 minutes;
-  // county filtering is done client-side against the already-fetched alerts,
-  // no refetch needed when the county selector changes.
-
-  const NWS_ALERTS_URL = "https://api.weather.gov/alerts/active?area=TX";
-  const ALERT_POLL_MS = 5 * 60 * 1000;
-  // Keep in sync with rgv_flood.counties.COUNTIES. NWS areaDesc spells these
-  // as forecast-zone names ("Southern Hidalgo", "Inland Cameron", ...), so a
-  // plain substring match against the county name is what actually works.
-  const RGV_COUNTY_NAMES = { cameron: "Cameron", hidalgo: "Hidalgo", starr: "Starr", willacy: "Willacy" };
-  let activeAlerts = [];
-
+  // The server projects only active, official signals with source-supplied
+  // geometry. Unmappable official notices stay in the sidebar as links.
   function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text == null ? "" : String(text);
     return div.innerHTML;
   }
 
-  function formatAlertTime(iso) {
-    if (!iso) return "unknown";
-    const parsed = new Date(iso);
-    if (Number.isNaN(parsed.getTime())) return "unknown";
-    return parsed.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+  let liveSignalsLayer = null;
+
+  function liveSignalStyle(feature) {
+    const source = feature.properties?.source || "";
+    if (source.startsWith("drivetexas:")) return { color: "#9a3412", weight: 4 };
+    return { color: "#7c3aed", weight: 2, fillColor: "#a78bfa", fillOpacity: 0.2 };
   }
 
-  function alertMatchesCounty(alertProps, countyName) {
-    return (alertProps.areaDesc || "").includes(countyName);
+  function liveSignalPopup(properties) {
+    const sourceUrl = properties.source_url ? ` <a href="${escapeHtml(properties.source_url)}" target="_blank" rel="noopener">Source</a>` : "";
+    const retrieved = properties.retrieved_at ? `<br>Retrieved ${escapeHtml(properties.retrieved_at)}` : "";
+    return `<strong>${escapeHtml(properties.summary)}</strong><br>${escapeHtml(properties.source_publisher)}${retrieved}${sourceUrl}`;
   }
 
-  function alertCounties(areaDesc) {
-    return Object.values(RGV_COUNTY_NAMES).filter((name) => (areaDesc || "").includes(name));
+  async function loadLiveSignals() {
+    const response = await fetch("/api/live-signals.geojson");
+    if (!response.ok) return;
+    liveSignalsLayer = L.geoJSON(await response.json(), {
+      style: liveSignalStyle,
+      pointToLayer: (feature, latlng) => L.circleMarker(latlng, { ...liveSignalStyle(feature), radius: 7, fillOpacity: 0.75 }),
+      onEachFeature: (feature, layer) => layer.bindPopup(liveSignalPopup(feature.properties || {})),
+    }).addTo(map);
+    liveSignalsLayer.bringToFront();
   }
 
-  function renderAlertItems(alerts, showCounties) {
-    return alerts
-      .map(({ properties: p }) => {
-        const severity = (p.severity || "unknown").toLowerCase();
-        const counties = showCounties ? alertCounties(p.areaDesc) : [];
-        return `<li class="alert">
-          <details>
-            <summary>
-              <div class="alert-summary-main">
-                <span class="alert-event">${escapeHtml(p.event)}</span>
-                ${
-                  counties.length
-                    ? `<div class="alert-counties">${counties
-                        .map((c) => `<span class="alert-county-chip">${escapeHtml(c)}</span>`)
-                        .join("")}</div>`
-                    : ""
-                }
-              </div>
-              <span class="alert-badge alert-badge-${severity}">${escapeHtml(p.severity || "Unknown")}</span>
-            </summary>
-            <div class="alert-meta">${escapeHtml(p.areaDesc)}</div>
-            <div class="alert-meta">Until ${formatAlertTime(p.expires)} &middot; ${escapeHtml(p.senderName)}</div>
-            ${p.description ? `<p class="alert-desc">${escapeHtml(p.description)}</p>` : ""}
-            ${p.instruction ? `<p class="alert-instruction">${escapeHtml(p.instruction)}</p>` : ""}
-          </details>
-        </li>`;
-      })
-      .join("");
-  }
-
-  function renderAlerts(countySlug) {
-    const body = document.getElementById("alerts-body");
-    const countEl = document.getElementById("alerts-count");
-    if (!body) return;
-
-    const names = countySlug ? [RGV_COUNTY_NAMES[countySlug]] : Object.values(RGV_COUNTY_NAMES);
-    const relevant = activeAlerts.filter((a) => names.some((name) => alertMatchesCounty(a.properties, name)));
-
-    if (countEl) {
-      countEl.hidden = relevant.length === 0;
-      countEl.textContent = String(relevant.length);
-    }
-
-    if (!relevant.length) {
-      const scope = countySlug ? `${names[0]} County` : "the RGV";
-      body.innerHTML = `<div class="empty">No active NWS alerts for ${scope} right now.</div>`;
-      return;
-    }
-
-    // Each alert appears once, tagged with the RGV counties its forecast zone
-    // covers — an alert issued for a shared zone (e.g. "Cameron; Willacy")
-    // gets one card with both chips, not a duplicate card per county.
-    body.innerHTML = `<ul class="alert-list">${renderAlertItems(relevant, !countySlug)}</ul>`;
-  }
-
-  async function fetchAlerts() {
-    try {
-      const res = await fetch(NWS_ALERTS_URL, { headers: { Accept: "application/geo+json" } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      activeAlerts = data.features || [];
-    } catch (error) {
-      console.error("NWS alerts fetch failed", error);
-      const body = document.getElementById("alerts-body");
-      if (body && !activeAlerts.length) {
-        body.innerHTML = '<div class="empty">Couldn’t reach the National Weather Service right now.</div>';
-      }
-      return;
-    }
-    renderAlerts(document.getElementById("county-select")?.value || null);
-  }
-
-  fetchAlerts();
-  setInterval(fetchAlerts, ALERT_POLL_MS);
+  loadLiveSignals().catch((error) => console.error("live signal fetch failed", error));
 
   // ---- sidebar accordion: opening one card's <details> closes the others ----
 
@@ -344,8 +264,6 @@
     countySelect.addEventListener("change", async () => {
       const slug = countySelect.value;
 
-      renderAlerts(slug || null);
-
       const yearSelect = document.getElementById("event-year");
       const year = yearSelect ? yearSelect.value : "";
       const eventsQuery = new URLSearchParams();
@@ -357,6 +275,11 @@
           "GET",
           slug ? `/partials/rainfall?county_slug=${slug}` : "/partials/rainfall",
           "#rainfall-body"
+        );
+        window.htmx.ajax(
+          "GET",
+          slug ? `/partials/live-signals?county_slug=${slug}` : "/partials/live-signals",
+          "#live-signals-body"
         );
       }
 
