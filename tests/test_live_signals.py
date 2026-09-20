@@ -1,8 +1,10 @@
+import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from hidalgo_rss import HIDALGO_PUBLIC_NOTICE_FEED, ingest_hidalgo_public_notices
 from live_signals import LiveSignal, LiveSignalStore, SignalValidationError
 
 NOW = datetime(2026, 9, 20, 12, tzinfo=UTC)
@@ -173,3 +175,79 @@ def test_terminal_records_are_purged_to_minimal_tombstones_after_30_days(
             "alert-123",
             "absent_from_two_successful_polls",
         )
+
+
+def test_hidalgo_public_notice_rss_run_persists_source_faithful_official_notices(
+    tmp_path: Path,
+) -> None:
+    store = LiveSignalStore(tmp_path / "live-signals.sqlite3")
+    feed = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel><title>Public Notice</title>
+      <item>
+        <guid isPermaLink="false">notice-2026-09-20</guid>
+        <title>Road maintenance advisory</title>
+        <link>https://www.hidalgocounty.us/AlertCenter.aspx?AID=99</link>
+        <description>County crews will perform maintenance.</description>
+        <pubDate>Sun, 20 Sep 2026 10:30:00 GMT</pubDate>
+      </item>
+    </channel></rss>"""
+
+    result = ingest_hidalgo_public_notices(store, feed, retrieved_at=NOW)
+
+    assert result.inserted == 1
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute(
+            "select source, native_id, provenance, source_url, source_channel, "
+            "published_at, is_mappable, geometry_absence_reason "
+            "from live_signals"
+        ).fetchone() == (
+            HIDALGO_PUBLIC_NOTICE_FEED,
+            "notice-2026-09-20",
+            "official",
+            "https://www.hidalgocounty.us/AlertCenter.aspx?AID=99",
+            "rss",
+            "2026-09-20T10:30:00Z",
+            0,
+            "The RSS item supplies no geometry.",
+        )
+        attributes = connection.execute(
+            "select source_attributes_json from live_signals"
+        ).fetchone()[0]
+    assert json.loads(attributes) == {
+        "description": "County crews will perform maintenance.",
+        "feed_url": HIDALGO_PUBLIC_NOTICE_FEED,
+        "guid": "notice-2026-09-20",
+        "title": "Road maintenance advisory",
+    }
+
+
+def test_hidalgo_rss_notice_uses_source_provided_georss_geometry(tmp_path: Path) -> None:
+    store = LiveSignalStore(tmp_path / "live-signals.sqlite3")
+    feed = """<rss xmlns:georss="http://www.georss.org/georss"><channel><item>
+      <guid>notice-with-geometry</guid><title>Flood advisory</title>
+      <link>https://www.hidalgocounty.us/AlertCenter.aspx?AID=100</link>
+      <pubDate>Sun, 20 Sep 2026 10:30:00 GMT</pubDate>
+      <georss:point>26.12 -98.24</georss:point>
+    </item></channel></rss>"""
+
+    ingest_hidalgo_public_notices(store, feed, retrieved_at=NOW)
+
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute(
+            "select source_geometry_json, is_mappable, geometry_absence_reason "
+            "from live_signals"
+        ).fetchone() == ('{"coordinates":[-98.24,26.12],"type":"Point"}', 1, None)
+
+
+def test_hidalgo_rss_skips_items_without_a_source_publication_timestamp(
+    tmp_path: Path,
+) -> None:
+    store = LiveSignalStore(tmp_path / "live-signals.sqlite3")
+    feed = """<rss><channel><item><guid>undated-notice</guid>
+      <title>Undated notice</title>
+      <link>https://www.hidalgocounty.us/AlertCenter.aspx?AID=101</link>
+    </item></channel></rss>"""
+
+    result = ingest_hidalgo_public_notices(store, feed, retrieved_at=NOW)
+
+    assert result.inserted == 0
