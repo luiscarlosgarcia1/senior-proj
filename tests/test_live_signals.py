@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from hidalgo_rss import HIDALGO_PUBLIC_NOTICE_FEED, ingest_hidalgo_public_notices
 from live_signals import LiveSignal, LiveSignalStore, SignalValidationError
+from nws import NWS_ACTIVE_ALERTS_URL, ingest_nws_active_alerts
 
 NOW = datetime(2026, 9, 20, 12, tzinfo=UTC)
 
@@ -251,3 +252,98 @@ def test_hidalgo_rss_skips_items_without_a_source_publication_timestamp(
     result = ingest_hidalgo_public_notices(store, feed, retrieved_at=NOW)
 
     assert result.inserted == 0
+
+
+def test_nws_alert_run_preserves_source_geometry_and_nws_identity(tmp_path: Path) -> None:
+    store = LiveSignalStore(tmp_path / "live-signals.sqlite3")
+    feed = {
+        "type": "FeatureCollection",
+        "features": [{
+            "id": "https://api.weather.gov/alerts/NWS-ID-1",
+            "type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": [[[-98.4, 26.1], [-98.3, 26.1], [-98.3, 26.2], [-98.4, 26.1]]]},
+            "properties": {
+                "id": "NWS-ID-1", "@id": "https://api.weather.gov/alerts/NWS-ID-1",
+                "event": "Flood Warning", "headline": "Flood Warning issued",
+                "senderName": "NWS Brownsville/Rio Grande Valley TX",
+                "sent": "2026-09-20T10:00:00Z", "effective": "2026-09-20T10:00:00Z",
+                "onset": "2026-09-20T10:10:00Z", "expires": "2026-09-20T18:00:00Z",
+                "ends": "2026-09-20T18:00:00Z", "status": "Actual",
+                "messageType": "Alert", "severity": "Severe", "urgency": "Immediate",
+                "certainty": "Likely", "geocode": {"UGC": ["TXC215"]},
+            },
+        }],
+    }
+
+    result = ingest_nws_active_alerts(store, feed, retrieved_at=NOW)
+
+    assert result.inserted == 1
+    with sqlite3.connect(store.path) as connection:
+        row = connection.execute(
+            "select source, native_id, source_url, source_publisher, source_channel, "
+            "published_at, effective_at, expires_at, source_geometry_json, "
+            "inclusion_basis, is_mappable from live_signals"
+        ).fetchone()
+    assert row == (
+        NWS_ACTIVE_ALERTS_URL, "NWS-ID-1", "https://api.weather.gov/alerts/NWS-ID-1",
+        "NWS Brownsville/Rio Grande Valley TX", "api", "2026-09-20T10:00:00Z",
+        "2026-09-20T10:00:00Z", "2026-09-20T18:00:00Z",
+        '{"coordinates":[[[-98.4,26.1],[-98.3,26.1],[-98.3,26.2],[-98.4,26.1]]],"type":"Polygon"}',
+        "source_county_claim", 1,
+    )
+
+
+def test_nws_alert_without_geometry_remains_an_official_notice(tmp_path: Path) -> None:
+    store = LiveSignalStore(tmp_path / "live-signals.sqlite3")
+    feed = {"type": "FeatureCollection", "features": [{
+        "id": "https://api.weather.gov/alerts/NWS-ID-2", "type": "Feature", "geometry": None,
+        "properties": {"id": "NWS-ID-2", "@id": "https://api.weather.gov/alerts/NWS-ID-2",
+                       "event": "Heat Advisory", "sent": "2026-09-20T10:00:00Z",
+                       "geocode": {"SAME": ["048489"]}},
+    }]}
+
+    ingest_nws_active_alerts(store, feed, retrieved_at=NOW)
+
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute(
+            "select county_slugs_json, source_geometry_json, geometry_absence_reason, is_mappable "
+            "from live_signals"
+        ).fetchone() == (
+            '["willacy"]', None, "The NWS alert supplies no geometry.", 0
+        )
+
+
+def test_nws_ignores_alerts_without_an_rgv_source_claim(tmp_path: Path) -> None:
+    store = LiveSignalStore(tmp_path / "live-signals.sqlite3")
+    feed = {"type": "FeatureCollection", "features": [{
+        "id": "https://api.weather.gov/alerts/NWS-OUTSIDE", "type": "Feature", "geometry": None,
+        "properties": {"id": "NWS-OUTSIDE", "event": "Wind Advisory",
+                       "geocode": {"UGC": ["TXC201"]}},
+    }]}
+
+    result = ingest_nws_active_alerts(store, feed, retrieved_at=NOW)
+
+    assert result.inserted == 0
+
+
+def test_nws_snapshots_reconcile_only_nws_alerts(tmp_path: Path) -> None:
+    store = LiveSignalStore(tmp_path / "live-signals.sqlite3")
+    nws_payload = {"type": "FeatureCollection", "features": [{
+        "id": "https://api.weather.gov/alerts/NWS-ID-3", "type": "Feature", "geometry": None,
+        "properties": {"id": "NWS-ID-3", "event": "Flood Warning",
+                       "geocode": {"UGC": ["TXC061"]}},
+    }]}
+    store.ingest("another-official-source", [_signal(source="another-official-source")], retrieved_at=NOW)
+    ingest_nws_active_alerts(store, nws_payload, retrieved_at=NOW)
+
+    empty_payload = {"type": "FeatureCollection", "features": []}
+    ingest_nws_active_alerts(store, empty_payload, retrieved_at=NOW + timedelta(minutes=15))
+    ingest_nws_active_alerts(store, empty_payload, retrieved_at=NOW + timedelta(minutes=30))
+
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute(
+            "select lifecycle_state from live_signals where source=?", (NWS_ACTIVE_ALERTS_URL,)
+        ).fetchone() == ("inactive",)
+        assert connection.execute(
+            "select lifecycle_state from live_signals where source='another-official-source'"
+        ).fetchone() == ("active",)
