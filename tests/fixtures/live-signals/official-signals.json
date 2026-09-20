@@ -1,0 +1,35 @@
+{
+  "source": "fixture-run",
+  "signals": [
+    {
+      "source": "fixture-nws",
+      "native_id": "alert-123",
+      "provenance": "official",
+      "source_url": "https://example.test/alerts/123",
+      "source_publisher": "National Weather Service",
+      "source_channel": "api",
+      "summary": "Flood warning for Hidalgo County.",
+      "source_attributes": {"event": "Flood Warning"},
+      "county_slugs": ["hidalgo"],
+      "inclusion_basis": "source_geometry_intersection",
+      "source_geometry": {"type": "Polygon", "coordinates": []},
+      "published_at": "2026-09-20T11:00:00Z",
+      "expires_at": "2026-09-20T18:00:00Z"
+    },
+    {
+      "source": "fixture-hidalgo-rss",
+      "native_id": "hidalgo-notice-1",
+      "provenance": "official",
+      "source_url": "https://example.test/notices/1",
+      "source_publisher": "Hidalgo County",
+      "source_channel": "rss",
+      "summary": "Road advisory",
+      "source_attributes": {"guid": "hidalgo-notice-1", "title": "Road advisory"},
+      "county_slugs": ["hidalgo"],
+      "inclusion_basis": "feed_jurisdiction",
+      "source_geometry": null,
+      "geometry_absence_reason": "The RSS item supplies no geometry.",
+      "published_at": "2026-09-20T11:00:00Z"
+    }
+  ]
+}
