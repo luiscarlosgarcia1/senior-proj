@@ -96,6 +96,10 @@ def test_flood_events_geojson(client):
     assert len(res.json["features"]) == 2
 
 
+def test_missing_live_signals_is_404(client):
+    assert client.get("/api/live-signals.geojson").status_code == 404
+
+
 def test_events_partial_lists_and_filters(client):
     res = client.get("/partials/events")
     assert res.status_code == 200

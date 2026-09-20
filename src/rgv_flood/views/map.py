@@ -39,6 +39,14 @@ def flood_events_geojson():
     return jsonify(fc)
 
 
+@bp.get("/api/live-signals.geojson")
+def live_signals_geojson():
+    fc = data_access.active_official_signal_features("drivetexas:")
+    if fc is None:
+        abort(404)
+    return jsonify(fc)
+
+
 @bp.get("/partials/metadata/<layer_id>")
 def metadata_partial(layer_id: str):
     """Source card shown when a layer or zone is selected."""

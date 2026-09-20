@@ -7,6 +7,7 @@ TWDB, Census, or news sites at request time.
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 from flask import current_app
@@ -94,3 +95,31 @@ def rainfall_records(county_slug: str | None = None) -> list[dict]:
     if county_slug:
         days = [d for d in days if d.get("county") == county_slug]
     return days
+
+
+def active_official_signal_features(source_prefix: str | None = None) -> dict | None:
+    """Project active, source-geometric official signals for map consumers."""
+    database = Path(current_app.config["LIVE_SIGNALS_DATABASE"])
+    if not database.exists():
+        return None
+    query = (
+        "select source, native_id, source_url, source_publisher, source_channel, summary, "
+        "source_attributes_json, county_slugs_json, inclusion_basis, source_geometry_json, "
+        "published_at, effective_at, source_updated_at, expires_at, first_seen_at, last_seen_at, retrieved_at "
+        "from live_signals where lifecycle_state='active' and provenance='official' and is_mappable=1"
+    )
+    parameters: tuple[str, ...] = ()
+    if source_prefix:
+        query += " and source like ?"
+        parameters = (f"{source_prefix}%",)
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute(query, parameters).fetchall()
+    fields = ("source", "native_id", "source_url", "source_publisher", "source_channel", "summary", "source_attributes_json", "county_slugs_json", "inclusion_basis", "source_geometry_json", "published_at", "effective_at", "source_updated_at", "expires_at", "first_seen_at", "last_seen_at", "retrieved_at")
+    features = []
+    for row in rows:
+        value = dict(zip(fields, row, strict=True))
+        geometry = json.loads(value.pop("source_geometry_json"))
+        value["source_attributes"] = json.loads(value.pop("source_attributes_json"))
+        value["county_slugs"] = json.loads(value.pop("county_slugs_json"))
+        features.append({"type": "Feature", "geometry": geometry, "properties": value})
+    return {"type": "FeatureCollection", "features": features}
