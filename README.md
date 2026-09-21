@@ -68,6 +68,31 @@ uv run flask --app rgv_flood run --debug                  # http://127.0.0.1:500
 
 Without those two, the map loads but shows no layers.
 
+### Refreshing official live signals
+
+Starting Flask does **not** contact live sources or refresh their data. Despite
+the "live" label, this is not continuously live yet: no scheduler is configured
+to refresh the sources during a demo. Run the commands below separately when you
+want a new snapshot (or schedule them every 15 minutes for a future live demo).
+They all update `data/generated/live-signals.sqlite3`, which the running app
+reads.
+
+```bash
+# Fetch Hidalgo County's official public-notice RSS feed.
+uv run python pipeline/run_hidalgo_rss.py
+
+# Fetch active National Weather Service alerts relevant to the four RGV counties.
+uv run --group pipeline python pipeline/run_nws.py
+
+# Fetch current DriveTexas road closures and flood-related roadway conditions.
+# This command automatically skips a completed poll less than 15 minutes old.
+uv run --group pipeline python pipeline/run_drivetexas.py
+```
+
+You do not need to re-run these commands merely because you restarted the web
+server. `build_all.py` builds the historical/baseline data and does not fetch
+these live sources.
+
 ## Everyday commands
 
 | Command | What it does |

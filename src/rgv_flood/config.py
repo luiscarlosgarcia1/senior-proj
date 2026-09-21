@@ -22,6 +22,9 @@ class Default:
     FLOOD_EVENTS_FILE = MAP_DATA_DIR / "flood-events.geojson"
     FLOOD_REPORTS_FILE = MAP_DATA_DIR / "flood-reports.json"
     RAINFALL_FILE = MAP_DATA_DIR / "rainfall-records.json"
+    LIVE_SIGNALS_DATABASE = Path(
+        os.environ.get("RGV_LIVE_SIGNALS_DATABASE", _PACKAGE_ROOT.parents[1] / "data" / "generated" / "live-signals.sqlite3")
+    )
 
     # Initial Leaflet view: centered on the Lower Rio Grande Valley.
     MAP_CENTER = (26.3, -98.15)

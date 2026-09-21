@@ -37,8 +37,8 @@
           <p>
             Educational and comparative only. Not for flood-insurance,
             emergency-routing, or engineering decisions. Historical reports are
-            not live conditions. Active weather alerts are pulled live from the
-            National Weather Service, but this page is not a substitute for
+            not live conditions. Official live signals are source-attributed
+            snapshots, but this page is not a substitute for
             official emergency guidance — during a real event, follow your
             county's emergency management and NWS Brownsville directly. For an
             authoritative property-level determination, contact FEMA or your
@@ -98,12 +98,13 @@
       <div class="card">
         <details class="collapse" open>
           <summary>
-            <h2>Active weather alerts <span id="alerts-count" class="count" hidden>0</span></h2>
+            <h2>Live official signals</h2>
             <span class="chev" aria-hidden="true">&#9662;</span>
           </summary>
           <div class="card-body">
-            <div id="alerts-body">
-              <p class="note">Loading current NWS alerts…</p>
+            <p class="note">Source-published conditions and notices; map geometry appears only when supplied by the source.</p>
+            <div id="live-signals-body" hx-get="/partials/live-signals" hx-trigger="load">
+              <p class="note">Loading current official signals…</p>
             </div>
           </div>
         </details>
