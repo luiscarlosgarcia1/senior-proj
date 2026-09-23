@@ -1,312 +1,88 @@
 # RGV Flood Impact Visualizer
 
-CSCI 4390 Senior Project — Danny McClain, Luis Garcia. Faculty adviser: Sergei Chuprov.
+CSCI 4390 Senior Project by Danny McClain and Luis Garcia. Faculty adviser:
+Sergei Chuprov.
 
-A browser map that compares **best-available flood-hazard information** across the
-four Lower Rio Grande Valley counties — **Cameron, Hidalgo, Starr, Willacy** — with
-a browsable history of documented flood events, rainfall records, local news and
-government reports, live National Weather Service alerts, and an address search.
+## Overview
 
-> Educational and comparative only. Not for flood-insurance, emergency-routing, or
-> engineering decisions. It does not compute flood depth, predict active flooding,
-> or certify a property's flood zone. Historical reports are not live conditions;
-> active weather alerts are live, but this is not a substitute for official
-> emergency guidance.
+A browser map for comparing flood-hazard information across Cameron, Hidalgo,
+Starr, and Willacy counties. Includes hazard layers, documented flood events,
+rainfall, local reports, official live signals, and address search.
 
-## Stack
+Educational and comparative only. Not for emergency routing, engineering,
+insurance, flood-depth estimates, or flood-zone certification. Follow official
+emergency guidance.
 
-- **Backend:** Flask + `jinja-partials`
-- **Frontend:** server-rendered HTML, HTMX for the side panels, Leaflet for the map
-- **Pipeline:** Python (`geopandas` / `shapely` / `pyproj`) for the spatial prep;
-  the event/report/rainfall builder is standard-library only
-- **Runtime external calls, both client-side from the browser, no key needed:**
-  the header address search geocodes through OpenStreetMap Nominatim, and the
-  "Active weather alerts" panel polls `api.weather.gov/alerts/active` every
-  5 minutes, filtered to the four counties by matching NWS's `areaDesc` text.
-  Everything else the app serves is precomputed by the pipeline — the Flask
-  server itself makes no outbound requests.
+## Technology Stack
 
-## Requirements
+- Flask, Jinja templates, HTMX, Leaflet
+- Python data pipeline; SQLite live-signal snapshots
+- NOAA, FEMA, TWDB, Census, NWS, TxDOT, and local government sources
 
-- [uv](https://docs.astral.sh/uv/) (Python 3.13+, it manages the venv)
-- Node 18+ — to run the NOAA ingest scripts in `scripts/*.mjs`. Most of their
-  output (`data/<county>-county/records/`, `sources/`) is gitignored build
-  output, so this is needed for a genuinely fresh setup, not just to "re-run"
-  them
+Requires Python 3.13+, [uv](https://docs.astral.sh/uv/), and Node 18+ for a
+fresh historical-data build.
 
-## Setup (after a fresh clone)
+## Quick Start
 
-Most of `data/<county>-county/` is gitignored build output (see "Raw
-per-county data" below) — a fresh clone still has the `flood-hazard-layers/`
-geometry and Hidalgo's hand-curated reports (nothing else can reproduce
-those), but everything else starts as empty folders. Populate the rest and
-build the local database in one command:
+From the repository root:
 
 ```bash
-uv sync --group dev --group pipeline                 # install everything
-
-uv run --group pipeline python pipeline/build_all.py  # data/ -> county-collections.gpkg  (~2-3 min)
+uv sync --group dev --group pipeline
+uv run --group pipeline python pipeline/build_all.py
+uv run --group pipeline python pipeline/build_layers.py
+uv run python pipeline/build_events.py
+uv run flask --app rgv_flood run --debug
 ```
 
-That runs, in order: scaffold the per-county folders → download the raw NOAA
-files → ingest them for all four counties → re-import the flood-hazard-layer
-GeoJSON if the sibling `Flood Project/` directory is present (it's already
-tracked in git either way, so this step is a refresh, not a first build) →
-build `data/generated/county-collections.gpkg`. Every step is idempotent, so
-re-run it any time; see `pipeline/build_all.py`'s docstring for the individual
-steps if you want to run just one.
+Open <http://127.0.0.1:5000>.
 
-Then build what the *Flask app* serves (a separate, smaller pair of outputs
-under `src/rgv_flood/static/data/`, also gitignored):
+`build_all.py` prepares the historical source data and local GeoPackage.
+`build_layers.py` and `build_events.py` create the smaller files the Flask app
+serves. Re-run the build steps after changing pipeline inputs or rules.
+
+Flask refreshes official live signals at startup and every 15 minutes. Set
+`RGV_LIVE_SIGNALS_SCHEDULER_ENABLED=false` to disable it, or set
+`RGV_LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS` to change the interval.
+
+## Troubleshooting
+
+- `uv` errors: run `uv sync --group dev --group pipeline` again.
+- Map has no layers: run `build_layers.py` and `build_events.py`.
+- Fresh data build fails: confirm Node 18+ and network access to source data.
+- Live signals unavailable: source outages are logged; the app remains usable.
+
+## Data Pipeline and Outputs
+
+`pipeline/build_all.py` is the normal historical-data entry point. It scaffolds
+county data, downloads and ingests reproducible NOAA records, and builds
+`data/generated/county-collections.gpkg`.
+
+The Flask app reads precomputed layers and summaries from
+`src/rgv_flood/static/data/`. Live-source snapshots are separate in
+`data/generated/live-signals.sqlite3`. Generated outputs are mostly ignored by
+Git; tracked source geometry and curated Hidalgo reports remain available after
+a fresh clone.
+
+## Development and Testing
 
 ```bash
-uv run --group pipeline python pipeline/build_layers.py   # hazard layers  (~90 s)
-uv run python pipeline/build_events.py                    # events, reports, rainfall  (~1 s)
-
-uv run flask --app rgv_flood run --debug                  # http://127.0.0.1:5000
+uv run pytest
+uv run ruff check .
 ```
 
-Without those two, the map loads but shows no layers.
+Core areas: `src/rgv_flood/` for the app, `pipeline/` for builds, `data/` for
+county collections, and `tests/` for verification. Keep source attribution and
+source-supplied geometry intact; do not infer live conditions.
 
-### Refreshing official live signals
+## Sources, Contributing, License, and Acknowledgments
 
-Starting Flask does **not** contact live sources or refresh their data. Despite
-the "live" label, this is not continuously live yet: no scheduler is configured
-to refresh the sources during a demo. Run the commands below separately when you
-want a new snapshot (or schedule them every 15 minutes for a future live demo).
-They all update `data/generated/live-signals.sqlite3`, which the running app
-reads.
+Source coverage is documented in the data and pipeline artifacts. Hazard data
+comes from FEMA, Hidalgo County Drainage District No. 1, and TWDB; boundaries
+from Census TIGER/Line; events and weather from NOAA; live signals from NWS,
+TxDOT, and Hidalgo County. Local reports currently cover Hidalgo County only.
 
-```bash
-# Fetch Hidalgo County's official public-notice RSS feed.
-uv run python pipeline/run_hidalgo_rss.py
+Contributions should preserve source attribution, include focused tests, and
+avoid presenting this tool as emergency or regulatory guidance.
 
-# Fetch active National Weather Service alerts relevant to the four RGV counties.
-uv run --group pipeline python pipeline/run_nws.py
-
-# Fetch current DriveTexas road closures and flood-related roadway conditions.
-# This command automatically skips a completed poll less than 15 minutes old.
-uv run --group pipeline python pipeline/run_drivetexas.py
-```
-
-You do not need to re-run these commands merely because you restarted the web
-server. `build_all.py` builds the historical/baseline data and does not fetch
-these live sources.
-
-## Everyday commands
-
-| Command | What it does |
-| --- | --- |
-| `uv run flask --app rgv_flood run --debug` | Dev server with autoreload at `:5000` |
-| `uv run pytest` | Run the test suite |
-| `uv run ruff check .` | Lint |
-| `uv run ruff format .` | Format |
-| `uv run --group pipeline python pipeline/build_layers.py` | Rebuild the hazard-layer GeoJSON + `layers.json` |
-| `uv run python pipeline/build_events.py` | Rebuild `flood-events.geojson`, `flood-reports.json`, `rainfall-records.json` |
-| `uv run --group pipeline python pipeline/build_all.py` | Scaffold + download + ingest + build the GeoPackage, all four counties, one command |
-| `uv run --group pipeline python pipeline/build_county_collections_geopackage.py` | Just the last step above — build the GeoPackage from whatever's already in `data/` |
-
-Rebuild after changing anything the pipeline reads (`data/**`), the severity rules
-in `src/rgv_flood/severity.py`, or the pipeline scripts themselves.
-
-### Local county-collections GeoPackage
-
-`pipeline/build_all.py` (see Setup, above) ends by building
-`data/generated/county-collections.gpkg` from the canonical files in
-`data/<county>-county/` — a queryable local relational/spatial database
-covering all four counties. To rebuild just that last step, once `data/` is
-already populated:
-
-```bash
-uv run --group pipeline python pipeline/build_county_collections_geopackage.py
-```
-
-`--output path/to/file.gpkg` places the artifact elsewhere. The build validates
-GeoJSON geometry and canonical record identities, stores usable geometry as
-native EPSG:4326 GeoPackage geometry, and writes atomically: a failed build
-leaves an existing output untouched. This artifact is a local developer query
-boundary; the app continues to read its precomputed static data as before.
-
-The GeoPackage is organized as related tables rather than one generic data dump:
-
-| Table | Purpose |
-| --- | --- |
-| `counties` | One row per canonical county collection. |
-| `source_artifacts` | Every canonical input file's path, SHA-256, size, and artifact type. |
-| `records` | Documented flood events and public reports, linked to a county and source artifact. |
-| `weather_observations` | Weather-specific fields linked to their canonical record. |
-| `spatial_layers` | Metadata for county flood-hazard and reference layers. |
-| `layer_features` | Individual native-geometry features belonging to a spatial layer. |
-| `records_fts` | Full-text search index for user-relevant record descriptions and source context. |
-| `rtree_records_geometry` | Spatial bounding-box index for non-null record geometries. |
-| `rtree_weather_observations_geometry` | Spatial bounding-box index for non-null weather geometries. |
-| `rtree_layer_features_geometry` | Spatial bounding-box index for non-null layer-feature geometries. |
-
-## Dependency groups
-
-```bash
-uv sync                       # app only (Flask + jinja-partials)
-uv sync --group dev           # + pytest, ruff
-uv sync --group pipeline      # + geopandas, shapely, pyproj, requests, beautifulsoup4
-```
-
-`--group pipeline` is needed for `pipeline/build_layers.py`,
-`pipeline/build_county_collections_geopackage.py`, and `pipeline/build_all.py`
-(which calls the GeoPackage builder). The app, `build_events.py`, and the tests
-do not use it.
-
-## Raw per-county data (gitignored, with two exceptions)
-
-`data/<county>-county/` is mostly gitignored build output — per the project
-rule, if a script can make it, it isn't committed. The two things no script
-can (re)produce from a bare clone are tracked anyway, everything else is not:
-
-| Tracked | Why |
-| --- | --- |
-| `flood-hazard-layers/*.geojson`, `flood-hazard-layers/manifest.json` (all four counties) | `scripts/import_county_flood_data.py` **needs the sibling `Flood Project/` working directory** (override the path with `RGV_FLOOD_PROJECT_RAW_DIR`), which is not itself a public, scripted download. Without these tracked, a fresh clone has no hazard layers at all unless it happens to sit next to that directory |
-| `hidalgo-county/records/events-and-public-reports/noaa-storm-events.ndjson` | Carries 16 hand-curated public reports alongside the NOAA-generated events. The ingest script only preserves hand-curated rows by reading back the file that's already there — a bare clone has nothing to read back from |
-
-| Ignored | Rebuilt by |
-| --- | --- |
-| `manifest.json`, `schemas/*.schema.json`, `sources/**/*.json` | `scripts/scaffold_county_collections.py`, from the tracked template at `pipeline/schemas/` |
-| `records/**/*.ndjson` (all counties except the Hidalgo file above) | `scripts/ingest-noaa-*.mjs` — reproducible from public NOAA URLs, see below |
-| `src/rgv_flood/static/data/*.json`, `*.geojson` | `pipeline/build_layers.py` and `pipeline/build_events.py` |
-
-`pipeline/build_all.py` runs the ingest + GeoPackage steps end to end, and
-also re-imports the hazard-layer GeoJSON when the sibling `Flood Project/`
-directory is present — but since that GeoJSON is now tracked, a fresh clone
-already has it either way. `Flood Project/` itself — a separate, earlier,
-manual data-acquisition effort (FEMA/TWDB/Census downloads) — is still not
-part of this repo, so re-running that one step still needs it.
-
-`sources/public-reports/official-local-news-2018-2021.json` on Hidalgo is
-**not** tracked despite also having no generator — it documents the manual
-news-search pass behind those 16 reports, but nothing in the pipeline reads
-it directly (the reports themselves live in the tracked `.ndjson` above). It
-only exists in git history and on disk right now; worth tracking too if it
-matters going forward.
-
-Everything here was previously committed; it was removed from tracking (`git rm
---cached`, kept on disk, nothing deleted) once the four counties' combined data
-pushed `data/` past 200 MB. Older commits still contain it in history.
-
-## One-off / data-acquisition scripts
-
-`pipeline/build_all.py` runs all of these for you, in the right order, for all
-four counties. Run one directly only if you want a single step in isolation.
-No `uv` deps beyond stdlib; the `.mjs` scripts are plain Node with no packages.
-
-| Script | Purpose |
-| --- | --- |
-| `scripts/scaffold_county_collections.py` | Creates/refreshes each `data/<county>-county/` folder: `manifest.json`, `schemas/` (copied from `pipeline/schemas/`), `sources/*.json` notes, `records/` + `sources/` skeleton |
-| `scripts/download-noaa-source-files.mjs` | Downloads the raw Storm Events + GHCN-Daily `.csv.gz` files the two ingest scripts below need, into `tmp/noaa/` by default |
-| `scripts/ingest-noaa-storm-events.mjs` | NOAA Storm Events → flood-event NDJSON, one county at a time |
-| `scripts/ingest-noaa-ghcn-daily.mjs` | NOAA GHCN-Daily → weather-observation NDJSON, one county at a time |
-| `scripts/import_county_flood_data.py` | Copies processed hazard GeoJSON in from the sibling `Flood Project/` dir, split per county |
-
-```bash
-uv run python scripts/scaffold_county_collections.py
-node scripts/download-noaa-source-files.mjs              # -> tmp/noaa/
-uv run python scripts/import_county_flood_data.py         # needs ../Flood Project/ (or $RGV_FLOOD_PROJECT_RAW_DIR)
-```
-
-### Re-ingesting the NOAA records (Node)
-
-Both ingest scripts take a directory of downloaded `.csv.gz` files, write an
-NDJSON file plus a JSON source note, and take a 4th argument selecting the
-county (default is Hidalgo, so the original invocation still works unchanged):
-
-```
-node scripts/<script>.mjs  <gzip-directory>  <output.ndjson>  <source-note.json>  [county]
-```
-
-`scripts/download-noaa-source-files.mjs` fetches the raw files for all four
-counties in one shot and prints the exact ingest commands to run afterward —
-use that instead of downloading by hand. Manually, for reference:
-
-**Storm events** — every annual detail file for 2000–2025 from
-<https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/>
-(`StormEvents_details-ftp_v1.0_d{YEAR}_c*.csv.gz`) go in one shared folder (all
-counties are in the same national file, split by NOAA's `CZ_NAME`:
-`HIDALGO`, `CAMERON`, `STARR`, or `WILLACY`):
-
-```bash
-node scripts/ingest-noaa-storm-events.mjs \
-  tmp/noaa/storm-events \
-  data/hidalgo-county/records/events-and-public-reports/noaa-storm-events.ndjson \
-  data/hidalgo-county/sources/official-events/noaa-storm-events-2000-2025.json \
-  HIDALGO
-```
-
-It filters to `STATE=TEXAS` and flood-type events, and **never deletes rows it
-didn't generate**: Hidalgo's NDJSON also has 16 local-news / government reports
-added by hand, and re-running the script reads them back out of the existing
-file and keeps them (`[preserve] keeping 16 existing...`) rather than
-overwriting the file wholesale.
-
-**GHCN-Daily weather** — each county has its own hardcoded station set in
-`ingest-noaa-ghcn-daily.mjs` (`STATIONS_BY_COUNTY`, picked by checking NOAA's
-station list against that county's own TIGER boundary; the same IDs are
-duplicated in `download-noaa-source-files.mjs` — keep both in sync if a station
-set changes). Station files come from
-<https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_station/>, one folder per
-county:
-
-```bash
-node scripts/ingest-noaa-ghcn-daily.mjs \
-  tmp/noaa/ghcn-hidalgo \
-  data/hidalgo-county/records/layers-and-weather/noaa-ghcn-daily-2000-2025.ndjson \
-  data/hidalgo-county/sources/weather/noaa-ghcn-daily-2000-2025.json \
-  hidalgo
-```
-
-It keeps PRCP / TMAX / TMIN / AWND for 2000-01-01 through 2025-12-31 and drops
-rows with a nonblank NOAA quality flag.
-
-After re-ingesting, rebuild the overlays:
-`uv run python pipeline/build_events.py` and/or
-`uv run --group pipeline python pipeline/build_county_collections_geopackage.py`
-— both now cover all four counties.
-
-## Data sources
-
-| Layer | Source | Coverage |
-| --- | --- | --- |
-| Flood hazard zones | FEMA National Flood Hazard Layer (NFHL) | Cameron, Starr, Willacy |
-| Flood hazard zones | Hidalgo County Drainage District No. 1 digitized 1981 FIRM (no FEMA digital data) | Hidalgo |
-| Modeled flood extent | TWDB 2025 cursory floodplain dataset (Fathom 3 m) — contextual, not regulatory | all four |
-| County boundaries | US Census TIGER/Line 2023 | all four |
-| Flood events + weather | NOAA NCEI Storm Events + GHCN-Daily, 2000–2025 | all four counties — the map, event list, and rainfall records all merge them, filterable by the header county selector |
-| Local news / government reports | Hidalgo County / City of McAllen / KRGV, tied to documented events | **Hidalgo only.** These 16 are hand-curated — someone read the local coverage for each event window and picked out real reports. No script produces them; the other three counties don't have any yet, not because the data doesn't exist but because nobody's done that research pass for them |
-
-## Layout
-
-```
-src/rgv_flood/
-  __init__.py         app factory
-  config.py           paths + map defaults (override via RGV_* env vars)
-  severity.py         the ONLY place source categories become a relative class
-  views/map.py        routes: page, /api/layers, /api/flood-events, /partials/*
-  data_access.py      read-only access to the pipeline outputs
-  templates/          index.html + partials/ (metadata, events, rainfall, reports)
-  static/
-    js/map.js         Leaflet setup, layer toggles, event layer, address search, NWS alerts
-    css/app.css
-    data/             pipeline outputs the app serves as-is (all gitignored)
-pipeline/
-  build_all.py         one-command fresh-clone build: scaffold -> download -> ingest -> gpkg
-  build_layers.py      hazard layers  -> static/data/*.geojson + layers.json
-  build_events.py      NOAA records   -> flood-events / flood-reports / rainfall
-  build_county_collections_geopackage.py  -> data/generated/county-collections.gpkg
-  schemas/              tracked schema template scaffold_county_collections.py copies from
-data/
-  <county>-county/    mostly gitignored build output: manifest, schemas, sources,
-                      records  (see data/hidalgo-county/README.md). Tracked
-                      exceptions: flood-hazard-layers/ (all counties) and
-                      Hidalgo's records/events-and-public-reports/*.ndjson
-scripts/              data-acquisition scripts build_all.py runs, in order (see above)
-tests/
-```
-
-Config is overridable from the environment — e.g. `RGV_MAP_DATA_DIR` to point the
-app at a different `static/data` directory (the test suite uses this).
+No separate license is currently declared. Built by Danny McClain and Luis
+Garcia with guidance from Sergei Chuprov.

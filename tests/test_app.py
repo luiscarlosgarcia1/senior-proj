@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import pytest
 from live_signals import LiveSignal, LiveSignalStore
 
+import rgv_flood
 from rgv_flood import create_app
 
 EVENTS_FC = {
@@ -56,6 +57,7 @@ def client(tmp_path):
             "FLOOD_EVENTS_FILE": data_dir / "flood-events.geojson",
             "FLOOD_REPORTS_FILE": data_dir / "flood-reports.json",
             "RAINFALL_FILE": data_dir / "rainfall-records.json",
+            "LIVE_SIGNALS_SCHEDULER_ENABLED": False,
         }
     )
     return app.test_client()
@@ -63,6 +65,52 @@ def client(tmp_path):
 
 def test_health(client):
     assert client.get("/health").json == {"status": "ok"}
+
+
+def test_app_starts_live_signal_scheduler_when_enabled(tmp_path, monkeypatch):
+    captured: dict[str, object] = {}
+
+    class Scheduler:
+        def __init__(self, commands, *, interval_seconds, lock_file):
+            captured.update(
+                commands=commands,
+                interval_seconds=interval_seconds,
+                lock_file=lock_file,
+            )
+
+        def start(self):
+            return True
+
+    monkeypatch.setattr(rgv_flood, "LiveSignalScheduler", Scheduler)
+    database = tmp_path / "signals.sqlite3"
+    lock_file = tmp_path / "scheduler.lock"
+
+    app = create_app(
+        {
+            "LIVE_SIGNALS_SCHEDULER_ENABLED": True,
+            "LIVE_SIGNALS_DATABASE": database,
+            "LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS": 30,
+            "LIVE_SIGNALS_SCHEDULER_LOCK_FILE": lock_file,
+        }
+    )
+
+    assert app.extensions["live_signals_scheduler"].__class__ is Scheduler
+    assert captured["interval_seconds"] == 30
+    assert captured["lock_file"] == lock_file
+    assert captured["commands"][0][-2:] == ("--output", str(database))
+
+
+def test_debug_reloader_parent_does_not_start_live_signal_scheduler(monkeypatch):
+    class Scheduler:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("the reloader parent must not create a scheduler")
+
+    monkeypatch.delenv("WERKZEUG_RUN_MAIN", raising=False)
+    monkeypatch.setattr(rgv_flood, "LiveSignalScheduler", Scheduler)
+
+    app = create_app({"DEBUG": True, "LIVE_SIGNALS_SCHEDULER_ENABLED": True})
+
+    assert "live_signals_scheduler" not in app.extensions
 
 
 def test_index_renders(client):

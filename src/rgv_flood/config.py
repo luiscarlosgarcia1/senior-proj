@@ -23,7 +23,22 @@ class Default:
     FLOOD_REPORTS_FILE = MAP_DATA_DIR / "flood-reports.json"
     RAINFALL_FILE = MAP_DATA_DIR / "rainfall-records.json"
     LIVE_SIGNALS_DATABASE = Path(
-        os.environ.get("RGV_LIVE_SIGNALS_DATABASE", _PACKAGE_ROOT.parents[1] / "data" / "generated" / "live-signals.sqlite3")
+        os.environ.get(
+            "RGV_LIVE_SIGNALS_DATABASE",
+            _PACKAGE_ROOT.parents[1] / "data" / "generated" / "live-signals.sqlite3",
+        )
+    )
+    LIVE_SIGNALS_SCHEDULER_ENABLED = (
+        os.environ.get("RGV_LIVE_SIGNALS_SCHEDULER_ENABLED", "true").lower() == "true"
+    )
+    LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS = int(
+        os.environ.get("RGV_LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS", "900")
+    )
+    LIVE_SIGNALS_SCHEDULER_LOCK_FILE = Path(
+        os.environ.get(
+            "RGV_LIVE_SIGNALS_SCHEDULER_LOCK_FILE",
+            LIVE_SIGNALS_DATABASE.parent / ".live-signals-scheduler.lock",
+        )
     )
 
     # Initial Leaflet view: centered on the Lower Rio Grande Valley.

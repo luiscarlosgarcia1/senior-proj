@@ -11,6 +11,8 @@ pipeline/_work/
 *.tmp
 /tmp/
 data/generated/*.gpkg
+data/generated/*.sqlite3
+data/generated/.live-signals-scheduler.lock
 
 # Per-county source data — everything under data/<county>-county/ that
 # pipeline/build_all.py can (re)produce on its own is build output, not

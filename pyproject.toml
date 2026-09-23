@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "flask>=3.1.3",
     "jinja-partials>=0.3.2",
+    "shapely>=2.1.2",
 ]
 
 [build-system]
@@ -27,7 +28,6 @@ pipeline = [
     "jsonschema>=4.23.0",
     "pyproj>=3.8.0",
     "requests>=2.34.2",
-    "shapely>=2.1.2",
 ]
 
 [tool.pytest.ini_options]
