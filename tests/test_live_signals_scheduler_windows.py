@@ -6,9 +6,9 @@ from threading import Event
 
 import pytest
 
-pytest.importorskip("fcntl", reason="POSIX-only lock; see test_live_signals_scheduler_windows.py")
+pytest.importorskip("msvcrt", reason="Windows-only lock; see test_live_signals_scheduler.py")
 
-from rgv_flood.live_signals_scheduler import LiveSignalScheduler
+from rgv_flood.live_signals_scheduler_windows import LiveSignalScheduler
 
 
 def test_refresh_runs_each_live_signal_command(tmp_path: Path):

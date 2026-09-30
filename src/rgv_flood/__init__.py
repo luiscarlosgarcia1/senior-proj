@@ -3,11 +3,24 @@
 from __future__ import annotations
 
 import os
+import sys
 
 import jinja_partials
 from flask import Flask
 
-from rgv_flood.live_signals_scheduler import LiveSignalScheduler, build_refresh_commands
+# live_signals_scheduler.py's advisory lock uses fcntl, POSIX-only (that's
+# what runs it on Mac/Linux); Windows gets the msvcrt-based counterpart. Same
+# public API either way, so nothing past this import needs to care which.
+if sys.platform == "win32":
+    from rgv_flood.live_signals_scheduler_windows import (
+        LiveSignalScheduler,
+        build_refresh_commands,
+    )
+else:
+    from rgv_flood.live_signals_scheduler import (
+        LiveSignalScheduler,
+        build_refresh_commands,
+    )
 
 
 def create_app(config: dict | None = None) -> Flask:
