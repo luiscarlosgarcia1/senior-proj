@@ -19,6 +19,9 @@
   --sev-low: #3b6fd1;
   --sev-uncategorized: #9aa0a8;
 
+  --infra-bridge: #7c3aed;
+  --infra-dam: #0d9488;
+
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --display: "Manrope", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -318,6 +321,8 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 .swatch-moderate { background: var(--sev-moderate); }
 .swatch-low { background: var(--sev-low); }
 .swatch-uncategorized { background: var(--sev-uncategorized); }
+.swatch-bridge { background: var(--infra-bridge); }
+.swatch-dam { background: var(--infra-dam); }
 
 /* collapsible section = one card. The card provides the border/shadow; the
    <details> inside it is the accordion unit (see map.js for the "only one
@@ -508,3 +513,4 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 .leaflet-popup-content-wrapper { border-radius: var(--radius); }
 .leaflet-popup-content { font-size: 12.5px; line-height: 1.5; }
 .leaflet-popup-content strong { font-family: var(--display); color: var(--ink); }
+.popup-note { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--faint); }

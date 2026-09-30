@@ -37,6 +37,11 @@ data/*-county/manifest.json
 data/*-county/schemas/*.schema.json
 data/*-county/sources/**/*.json
 
+# Overture Maps bridges/dams: same folder as the tracked FEMA/TWDB layers, but
+# unlike those, fully public and reproducible -- scripts/import_overture_infrastructure.py
+data/*-county/flood-hazard-layers/overture-*.geojson
+data/*-county/flood-hazard-layers/overture-manifest.json
+
 # Generated overlays — rebuilt by the pipeline scripts, not committed.
 #   pipeline/build_layers.py            -> static/data/*.geojson, layers.json
 #   pipeline/build_events.py            -> flood-events.geojson, flood-reports.json, rainfall-records.json

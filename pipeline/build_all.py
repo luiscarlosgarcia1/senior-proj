@@ -7,20 +7,24 @@ GeoPackage.
 README, "Raw per-county data") -- on a bare clone this is the script that
 produces it. Steps, in order:
 
-  1. scripts/scaffold_county_collections.py   manifest, schemas, folder skeleton
-  2. scripts/download-noaa-source-files.mjs   raw Storm Events + GHCN-Daily .csv.gz
-  3. scripts/ingest-noaa-storm-events.mjs     x4 (one per county)
-  4. scripts/ingest-noaa-ghcn-daily.mjs       x4 (one per county)
-  5. scripts/import_county_flood_data.py      flood-hazard-layers geometry --
-                                               only if the sibling `Flood Project/`
-                                               directory is present; see below
-  6. pipeline/build_county_collections_geopackage.py
+  1. scripts/scaffold_county_collections.py       manifest, schemas, folder skeleton
+  2. scripts/download-noaa-source-files.mjs       raw Storm Events + GHCN-Daily .csv.gz
+  3. scripts/ingest-noaa-storm-events.mjs         x4 (one per county)
+  4. scripts/ingest-noaa-ghcn-daily.mjs           x4 (one per county)
+  5. scripts/import_county_flood_data.py          flood-hazard-layers geometry --
+                                                   only if the sibling `Flood Project/`
+                                                   directory is present; see below
+  6. scripts/import_overture_infrastructure.py    bridges + dams, public source
+  7. pipeline/build_county_collections_geopackage.py
 
 Step 5 is the one piece this cannot fully self-serve: the hazard-layer GeoJSON
 has no public, scripted source, only the sibling `Flood Project/` working
 directory. If that directory isn't next to this repo, step 5 is skipped with a
 warning and the GeoPackage still builds -- just without flood-hazard-layers
 content for counties that don't already have it on disk from a previous run.
+Step 6 needs nothing from Flood Project (Overture Maps is public), so it
+always runs, using each county's boundary.geojson to keep results to the four
+counties and out of Mexico.
 
 Run:  uv run --group pipeline python pipeline/build_all.py
 Safe to re-run: every step it calls is independently idempotent.
@@ -61,13 +65,13 @@ def run_python(script: str, *args: str) -> None:
 
 
 def main() -> None:
-    print("== 1/6 scaffold county collections ==")
+    print("== 1/7 scaffold county collections ==")
     run_python("scripts/scaffold_county_collections.py")
 
-    print("\n== 2/6 download raw NOAA files ==")
+    print("\n== 2/7 download raw NOAA files ==")
     run("node", "scripts/download-noaa-source-files.mjs", str(NOAA_RAW_DIR.relative_to(REPO_ROOT)))
 
-    print("\n== 3/6 + 4/6 ingest NOAA records, per county ==")
+    print("\n== 3/7 + 4/7 ingest NOAA records, per county ==")
     for slug, cz_name in COUNTY_CZ_NAMES.items():
         run(
             "node",
@@ -86,7 +90,7 @@ def main() -> None:
             slug,
         )
 
-    print("\n== 5/6 import flood-hazard-layers geometry ==")
+    print("\n== 5/7 import flood-hazard-layers geometry ==")
     if FLOOD_PROJECT_DIR.is_dir():
         run_python("scripts/import_county_flood_data.py")
     else:
@@ -96,7 +100,10 @@ def main() -> None:
             "       See README 'Raw per-county data' for how to get it."
         )
 
-    print("\n== 6/6 build the GeoPackage ==")
+    print("\n== 6/7 import Overture bridges + dams ==")
+    run_python("scripts/import_overture_infrastructure.py")
+
+    print("\n== 7/7 build the GeoPackage ==")
     run_python("pipeline/build_county_collections_geopackage.py")
 
     print("\nDone: data/generated/county-collections.gpkg is up to date.")

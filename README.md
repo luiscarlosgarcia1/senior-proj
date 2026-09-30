@@ -6,8 +6,9 @@ Sergei Chuprov.
 ## Overview
 
 A browser map for comparing flood-hazard information across Cameron, Hidalgo,
-Starr, and Willacy counties. Includes hazard layers, documented flood events,
-rainfall, local reports, official live signals, and address search.
+Starr, and Willacy counties. Includes hazard layers, at-risk infrastructure
+(bridges, dams), documented flood events, rainfall, local reports, official
+live signals, and address search.
 
 Educational and comparative only. Not for emergency routing, engineering,
 insurance, flood-depth estimates, or flood-zone certification. Follow official
@@ -54,7 +55,9 @@ Flask refreshes official live signals at startup and every 15 minutes. Set
 ## Data Pipeline and Outputs
 
 `pipeline/build_all.py` is the normal historical-data entry point. It scaffolds
-county data, downloads and ingests reproducible NOAA records, and builds
+county data, downloads and ingests reproducible NOAA records, imports Overture
+Maps bridges and dams (clipped to each county's real boundary, not just a
+bounding box — the RGV box also covers a strip of Mexico), and builds
 `data/generated/county-collections.gpkg`.
 
 The Flask app reads precomputed layers and summaries from
@@ -78,8 +81,9 @@ source-supplied geometry intact; do not infer live conditions.
 
 Source coverage is documented in the data and pipeline artifacts. Hazard data
 comes from FEMA, Hidalgo County Drainage District No. 1, and TWDB; boundaries
-from Census TIGER/Line; events and weather from NOAA; live signals from NWS,
-TxDOT, and Hidalgo County. Local reports currently cover Hidalgo County only.
+from Census TIGER/Line; events and weather from NOAA; bridges and dams from
+Overture Maps Foundation; live signals from NWS, TxDOT, and Hidalgo County.
+Local reports currently cover Hidalgo County only.
 
 Contributions should preserve source attribution, include focused tests, and
 avoid presenting this tool as emergency or regulatory guidance.

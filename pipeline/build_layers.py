@@ -126,6 +126,42 @@ def build_hidalgo_firm() -> int:
     return _finish(g, "hidalgo-firm-1981.geojson")
 
 
+def _infra_name(gdf: gpd.GeoDataFrame) -> pd.Series:
+    if "names" not in gdf.columns:
+        return pd.Series([None] * len(gdf), index=gdf.index)
+    return gdf["names"].apply(lambda v: v.get("primary") if isinstance(v, dict) else None)
+
+
+def build_overture_infrastructure(kind: str, filename: str) -> int:
+    """Bridges/dams: kept as individual features (no dissolve, no severity --
+    these are discrete structures at risk, not hazard zones)."""
+    parts = []
+    for slug, name in COUNTIES.items():
+        path = _src(slug, filename)
+        if not path.exists():
+            continue
+        g = _read(path)
+        if g.empty:
+            continue
+        names = _infra_name(g)
+        g = g[["geometry"]].copy()
+        g["county_slug"] = slug
+        g["county"] = name
+        g["name"] = names
+        parts.append(g)
+    if not parts:
+        return 0
+    out = gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), crs=4326)
+    out["source"] = "Overture Maps Foundation"
+    out["infrastructure_type"] = kind
+    out = out[~out.geometry.is_empty & out.geometry.notna()]
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / filename).write_text(out.to_json(drop_id=True), encoding="utf-8")
+    kb = (OUT_DIR / filename).stat().st_size / 1024
+    print(f"  {filename}: {len(out)} features, {kb:,.0f} KB")
+    return len(out)
+
+
 def build_twdb(freq: str, chance: str) -> int:
     parts = []
     for slug, name in COUNTIES.items():
@@ -218,6 +254,38 @@ LAYER_META: dict[str, dict] = {
         "limitation": "Modeled estimate, not an effective FEMA map or regulatory determination.",
         "source_url": "https://www.twdb.texas.gov/flood/science/floodplain-dataset.asp",
     },
+    "overture-bridges": {
+        "title": "Bridges",
+        "description": (
+            "Bridges across the four counties — exactly what becomes impassable "
+            "when a waterway floods. Not a hazard rating of its own."
+        ),
+        "source": "Overture Maps Foundation — infrastructure theme (OpenStreetMap)",
+        "vintage": "current Overture release",
+        "hazard_type": "n/a — infrastructure at risk, not a hazard zone",
+        "coverage": "all four counties",
+        "limitation": (
+            "Crowd-sourced (OpenStreetMap); coverage and names vary by area. "
+            "Not an official inventory of flood-prone crossings."
+        ),
+        "source_url": "https://overturemaps.org/",
+    },
+    "overture-dams": {
+        "title": "Dams",
+        "description": (
+            "Dams and levees — flood-control infrastructure, relevant to both "
+            "flood risk and flood mitigation depending on the structure."
+        ),
+        "source": "Overture Maps Foundation — infrastructure theme (OpenStreetMap)",
+        "vintage": "current Overture release",
+        "hazard_type": "n/a — infrastructure, not a hazard zone",
+        "coverage": "all four counties",
+        "limitation": (
+            "Crowd-sourced (OpenStreetMap); coverage and names vary by area. "
+            "Not an official inventory."
+        ),
+        "source_url": "https://overturemaps.org/",
+    },
 }
 
 
@@ -229,6 +297,8 @@ def main() -> None:
         "hidalgo-firm-1981": build_hidalgo_firm(),
         "twdb-cursory-1in100": build_twdb("1in100", "1% annual chance"),
         "twdb-cursory-1in500": build_twdb("1in500", "0.2% annual chance"),
+        "overture-bridges": build_overture_infrastructure("bridge", "overture-bridges.geojson"),
+        "overture-dams": build_overture_infrastructure("dam", "overture-dams.geojson"),
     }
 
     layers = []

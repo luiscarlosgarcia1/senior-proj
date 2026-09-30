@@ -31,10 +31,24 @@
   };
   const BOUNDARY_STYLE = { color: "#1b2a4a", weight: 1.5, fill: false, dashArray: "3 3" };
 
+  // Infrastructure (bridges/dams) isn't a hazard rating, so it gets its own
+  // colors, distinct from the severity palette above (see app.css --infra-*).
+  const INFRA_STYLE = {
+    bridge: { color: "#7c3aed", weight: 2, fillColor: "#7c3aed", fillOpacity: 0.35 },
+    dam: { color: "#0d9488", weight: 1, fillColor: "#0d9488", fillOpacity: 0.45 },
+  };
+
   function styleFor(feature) {
     const p = feature.properties || {};
     if (p.original_category === "county boundary") return BOUNDARY_STYLE;
+    if (p.infrastructure_type) return INFRA_STYLE[p.infrastructure_type] || INFRA_STYLE.bridge;
     return SEVERITY_STYLE[p.relative_class] || SEVERITY_STYLE.uncategorized;
+  }
+
+  function infraPointToLayer(feature, latlng) {
+    const p = feature.properties || {};
+    const style = INFRA_STYLE[p.infrastructure_type] || INFRA_STYLE.bridge;
+    return L.circleMarker(latlng, { radius: 5, ...style });
   }
 
   const loadedLayers = new Map(); // layerId -> L.GeoJSON
@@ -59,10 +73,20 @@
     }
     const gj = L.geoJSON(await res.json(), {
       style: styleFor,
+      pointToLayer: infraPointToLayer,
       onEachFeature: (feature, lyr) => {
         const p = feature.properties || {};
         if (p.original_category === "county boundary") {
           lyr.bindPopup(`<strong>${p.county || "County"}</strong>`);
+          return;
+        }
+        if (p.infrastructure_type) {
+          const kind = p.infrastructure_type === "dam" ? "Dam" : "Bridge";
+          lyr.bindPopup(
+            `<strong>${p.name || kind}</strong><br>` +
+              `${kind} · ${p.county || "—"} County<br>` +
+              `<span class="popup-note">Source: Overture Maps Foundation (OpenStreetMap)</span>`
+          );
           return;
         }
         lyr.bindPopup(
