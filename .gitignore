@@ -24,24 +24,16 @@ data/generated/.live-signals-scheduler.lock
 #                                          from any county's own directory)
 #
 # Two things build_all.py CANNOT reproduce from a bare clone stay tracked:
-#   flood-hazard-layers/*.geojson  -- scripts/import_county_flood_data.py needs
-#     the sibling Flood Project/ working directory, which has no public,
+#   flood-hazard-layers/*.geojson,manifest.json  -- scripts/import_county_flood_data.py
+#     needs the sibling Flood Project/ working directory, which has no public,
 #     scripted source (see build_all.py step 5 / README "Raw per-county data").
 #   hidalgo-county's events-and-public-reports ndjson -- carries 16 hand-curated
 #     reports alongside the NOAA-generated events; the ingest script only
 #     preserves them if the file already exists on disk to read back from, so a
 #     bare clone has nothing to preserve them from.
-#
-# flood-hazard-layers/manifest.json is NOT one of those two: the app never
-# reads it (its "source" popups come from build_layers.py's LAYER_META, via
-# the gitignored layers.json below) -- it's just human documentation of the
-# geojson above, already duplicated in import_county_flood_data.py's tracked
-# source. Ignored so its imported_at/feature_count fields stop diffing on
-# every re-run for no functional reason.
 data/*-county/records/**/*.ndjson
 !data/hidalgo-county/records/events-and-public-reports/noaa-storm-events.ndjson
 data/*-county/manifest.json
-data/*-county/flood-hazard-layers/manifest.json
 data/*-county/schemas/*.schema.json
 data/*-county/sources/**/*.json
 
