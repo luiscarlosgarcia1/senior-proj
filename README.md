@@ -160,27 +160,6 @@ verified to still load.
 | HCDD1 District Projects | <https://www.arcgis.com/home/item.html?id=40da5a923154485cac2256bf3daec571> |
 | HCDD1 Master Dashboard | <https://www.arcgis.com/home/item.html?id=8abf134d9c83476fbe57f923e03028c6> |
 
-**Maintenance and operations**
-
-| Name | Link |
-| --- | --- |
-| Shredding Operations / Pull-Slope Ditch Maintenance Dashboard | <https://hcdd1.maps.arcgis.com/apps/opsdashboard/index.html#/4ebe2d5ed2e8491e809c4628c77edb02> |
-| Dredge/Shred/Spray Ditch Maintenance Dashboard | <https://www.arcgis.com/home/item.html?id=a71ec981d66e46ddb7545098531e4119> |
-| M&O Ditch Maintenance Dashboard | <https://www.arcgis.com/home/item.html?id=9e05e9dedc4d40f38b221e20128fe21d> |
-| Ditch Inspection Log Map | <https://www.arcgis.com/home/item.html?id=ddbfb541fdcc4767aab3da97bf8a0b3f> |
-| Dirt Surplus Map | <https://hcdd1.maps.arcgis.com/apps/webappviewer/index.html?id=b36e99233c7044daa706a2ed368144eb> |
-| Illegal Dumping (Experience) | <https://experience.arcgis.com/experience/79e9c3f216e1457aa8a8ea1c3005071f> |
-
-**Other**
-
-| Name | Link |
-| --- | --- |
-| HCDD1 Right of Way | <https://www.arcgis.com/home/item.html?id=8c66e94ce8cf421fa6a9c18e190e4581> |
-| Access Gate Map | <https://www.arcgis.com/home/item.html?id=4b74eaea08f740ccadf508cb3492c9ce> |
-| Precinct 4 (map and dashboard) | <https://www.arcgis.com/home/item.html?id=159a19b6223a4901a2fe37d692d01628>, <https://www.arcgis.com/home/item.html?id=66c933d1d85a457bb5aa43529bf7aff8> |
-| Survey Request Map | <https://www.arcgis.com/home/item.html?id=7d8c5e5462054f128905cfe6651c596c> |
-| Hidalgo County Sanitation Department | <https://www.arcgis.com/home/item.html?id=53697f4296da46aca8f7dd49c24aabbb> |
-
 The district's data terms of use were not found; the overlays here credit
 "Hidalgo County Drainage District No. 1". Confirm reuse with the district before
 publishing this project outside the course.
