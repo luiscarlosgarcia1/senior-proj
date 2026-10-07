@@ -298,6 +298,10 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
   line-height: 1.5;
 }
 .source-card .agency { margin: 8px 0 0; }
+.source-card .viz { margin-top: 10px; }
+.source-card .viz-title { margin: 0 0 4px; font-size: 11px; color: var(--muted-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.source-card .viz ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.source-card .viz li { font-size: 12px; }
 
 /* legend */
 .legend {

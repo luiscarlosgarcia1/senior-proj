@@ -254,3 +254,31 @@ def test_rainfall_partial(client):
 
 def test_event_count_in_index(client):
     assert b'<span class="count">2</span>' in client.get("/").data
+
+
+def test_source_card_lists_original_visualizations(client):
+    data_dir = client.application.config["MAP_DATA_DIR"]
+    layer = {
+        "id": "demo",
+        "file": "demo.geojson",
+        "title": "Demo layer",
+        "source": "Somewhere",
+        "visualizations": [{"title": "Publisher's own map", "url": "https://example.test/map"}],
+    }
+    (data_dir / "layers.json").write_text(json.dumps({"layers": [layer]}))
+
+    html = client.get("/partials/metadata/demo").get_data(as_text=True)
+
+    assert "Original visualizations" in html
+    assert 'href="https://example.test/map"' in html
+    assert "Publisher&#39;s own map" in html
+
+
+def test_source_card_omits_visualizations_when_none(client):
+    data_dir = client.application.config["MAP_DATA_DIR"]
+    layer = {"id": "plain", "file": "plain.geojson", "title": "Plain", "source": "Somewhere"}
+    (data_dir / "layers.json").write_text(json.dumps({"layers": [layer]}))
+
+    html = client.get("/partials/metadata/plain").get_data(as_text=True)
+
+    assert "Original visualizations" not in html

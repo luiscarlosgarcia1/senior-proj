@@ -467,6 +467,31 @@ def build_twdb(freq: str, chance: str) -> int:
     return _finish(out, f"twdb-cursory-{freq}.geojson", tolerance=TOLERANCE_MODELED)
 
 
+# The publishers' own maps/dashboards for these layers, shown as "Original
+# visualizations" links on each layer's source card.
+ARCGIS_ITEM = "https://www.arcgis.com/home/item.html?id="
+HCDD1_APPS = "https://hcdd1.maps.arcgis.com/apps/dashboards/"
+HCDD1_FLOOD_WEB_MAP = {
+    "title": "HCDD1 Flood Web Map",
+    "url": ARCGIS_ITEM + "e98554156b5e4bcd84bbe0e2d10c2764",
+}
+HCDD1_FLOOD_ZONE_MAP = {
+    "title": "HCDD1 Flood Zone Map",
+    "url": "https://experience.arcgis.com/experience/bcb86ca21dc14729bb5c1a5814ca91ad",
+}
+HCDD1_STORM_EVENT_MAP = {
+    "title": "HCDD1 Storm Event Map",
+    "url": ARCGIS_ITEM + "bdfd390479054ca0943275bc4e0662ec",
+}
+HCDD1_SYSTEM_MAP = {
+    "title": "HCDD1 System Map",
+    "url": "https://experience.arcgis.com/experience/73feb7978e4c4a518787e6a9dc1f1d69",
+}
+HCDD1_MASTER_MAP = {
+    "title": "HCDD1 Master Web Map",
+    "url": ARCGIS_ITEM + "43d4be942e7e4e66b35f8220da82cb89",
+}
+
 LAYER_META: dict[str, dict] = {
     "county-boundaries": {
         "title": "County boundaries",
@@ -495,6 +520,7 @@ LAYER_META: dict[str, dict] = {
         "coverage": "Cameron, Starr, Willacy",
         "limitation": "No digital NFHL coverage for Hidalgo County. Clipped to county boundary; not a property-level determination.",
         "source_url": "https://msc.fema.gov/portal/home",
+        "visualizations": [{"title": "FEMA National Flood Hazard Layer viewer", "url": "https://hazards-fema.maps.arcgis.com/apps/webappviewer/index.html?id=8b0adb51996444d4879338b5529aa9cd"}],
     },
     "hidalgo-firm-1981": {
         "title": "Hidalgo County historic flood zones (1981 FIRM)",
@@ -510,6 +536,7 @@ LAYER_META: dict[str, dict] = {
         "coverage": "Hidalgo",
         "limitation": "44 years old; urban core largely undrawn. Legacy B/C zones shown as shaded-X / minimal by long-standing FEMA equivalence, but this is not current effective data.",
         "source_url": "https://www.hcdd1.org/page/floodplains",
+        "visualizations": [HCDD1_FLOOD_ZONE_MAP, HCDD1_FLOOD_WEB_MAP],
     },
     "twdb-cursory-1in100": {
         "title": "TWDB modeled flood extent — 1% annual chance",
@@ -555,6 +582,7 @@ LAYER_META: dict[str, dict] = {
             "Not an official inventory of flood-prone crossings."
         ),
         "source_url": "https://overturemaps.org/",
+        "visualizations": [{"title": "Overture Maps Explorer", "url": "https://explore.overturemaps.org/"}],
     },
     "overture-dams": {
         "title": "Dams",
@@ -571,6 +599,7 @@ LAYER_META: dict[str, dict] = {
             "Not an official inventory."
         ),
         "source_url": "https://overturemaps.org/",
+        "visualizations": [{"title": "Overture Maps Explorer", "url": "https://explore.overturemaps.org/"}],
     },
     "hcdd1-flood-extents": {
         "title": "Mapped flooding, 2008–2020 (Hidalgo)",
@@ -589,6 +618,8 @@ LAYER_META: dict[str, dict] = {
             "whether it is rainfall or flood depth is not stated."
         ),
         "source_url": "https://www.hcdd1.org/",
+        "visualizations": [HCDD1_FLOOD_WEB_MAP, HCDD1_STORM_EVENT_MAP,
+            {"title": "HCDD1 Flood Damages, June 2018", "url": ARCGIS_ITEM + "f9a644ef576943549ac75382d0ba56e2"}],
     },
     "hcdd1-flood-photos": {
         "title": "Flood response photos (Hidalgo)",
@@ -606,6 +637,7 @@ LAYER_META: dict[str, dict] = {
             "reproduced here; GPS tags outside the valley are dropped."
         ),
         "source_url": "https://www.hcdd1.org/",
+        "visualizations": [HCDD1_FLOOD_WEB_MAP, HCDD1_STORM_EVENT_MAP],
     },
     "hcdd1-drainage": {
         "title": "Drainage network (Hidalgo)",
@@ -619,6 +651,8 @@ LAYER_META: dict[str, dict] = {
         "coverage": "Hidalgo County Drainage District No. 1 area",
         "limitation": "Reflects what the district publishes; other districts' systems may be missing.",
         "source_url": "https://www.hcdd1.org/",
+        "visualizations": [HCDD1_SYSTEM_MAP, HCDD1_MASTER_MAP,
+            {"title": "HCDD1 Working System Map", "url": ARCGIS_ITEM + "a3dd6fddb57846168ed9e1a9f13782b0"}],
     },
     "hcdd1-bond-projects": {
         "title": "Drainage improvement projects (Hidalgo)",
@@ -632,6 +666,10 @@ LAYER_META: dict[str, dict] = {
         "coverage": "Hidalgo",
         "limitation": "Status is as last published by the district; the 2012 program has no status field.",
         "source_url": "https://www.hcdd1.org/",
+        "visualizations": [{"title": "2018 Bond dashboard", "url": HCDD1_APPS + "d3c9a895241a49e1a28a762674131994"},
+            {"title": "2023 Bond dashboard", "url": HCDD1_APPS + "f7722aadbef74bf29d76d144d49390e8"},
+            {"title": "2012 Bond dashboard", "url": ARCGIS_ITEM + "4bbb6b3959124f62bf7b30389a6dddce"},
+            {"title": "HCDD1 District Projects", "url": ARCGIS_ITEM + "40da5a923154485cac2256bf3daec571"}],
     },
     "nfip-claims-by-tract": {
         "title": "Flood insurance claims by tract",

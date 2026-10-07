@@ -16,4 +16,14 @@
   {% if layer.source_url %}
   <p class="agency"><a href="{{ layer.source_url }}" target="_blank" rel="noopener">Originating agency &rarr;</a></p>
   {% endif %}
+  {% if layer.visualizations %}
+  <div class="viz">
+    <p class="viz-title">Original visualizations</p>
+    <ul>
+      {% for viz in layer.visualizations %}
+      <li><a href="{{ viz.url }}" target="_blank" rel="noopener">{{ viz.title }} &rarr;</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 </article>
