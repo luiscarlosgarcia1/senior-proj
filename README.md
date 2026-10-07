@@ -41,6 +41,10 @@ Open <http://127.0.0.1:5000>.
 `build_layers.py` and `build_events.py` create the smaller files the Flask app
 serves. Re-run the build steps after changing pipeline inputs or rules.
 
+For the Hidalgo flood-evidence, drainage, bond-project and insurance-claims
+overlays, run `uv run --group pipeline python scripts/fetch_ml_inputs.py --only hcdd1,nfip,tracts`
+before `build_layers.py`; without those downloads the layers are simply skipped.
+
 Flask refreshes official live signals at startup and every 15 minutes. Set
 `RGV_LIVE_SIGNALS_SCHEDULER_ENABLED=false` to disable it, or set
 `RGV_LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS` to change the interval.
@@ -59,6 +63,11 @@ county data, downloads and ingests reproducible NOAA records, imports Overture
 Maps bridges and dams (clipped to each county's real boundary, not just a
 bounding box — the RGV box also covers a strip of Mexico), and builds
 `data/generated/county-collections.gpkg`.
+
+`scripts/fetch_ml_inputs.py` gathers the public inputs for the planned Hidalgo
+flood-susceptibility model (elevation, NLCD, soils, Atlas 14 rainfall, Overture
+buildings/roads, NFIP claims and policies, Hidalgo drainage-district flood
+photos and infrastructure) into the gitignored `data/ml/raw/`.
 
 The Flask app reads precomputed layers and summaries from
 `src/rgv_flood/static/data/`. Live-source snapshots are separate in

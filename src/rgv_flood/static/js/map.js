@@ -38,15 +38,177 @@
     dam: { color: "#0d9488", weight: 1, fillColor: "#0d9488", fillOpacity: 0.45 },
   };
 
+  // Stacking order is fixed by pane, not by toggle order: hazard polygons
+  // (overlay pane, 400) < flood-response photos (430) < flood-event dots (480).
+  map.createPane("evidence").style.zIndex = 430;
+  map.createPane("events").style.zIndex = 480;
+  // ~18k photo points: canvas, not SVG, or panning would crawl.
+  const evidenceCanvas = L.canvas({ pane: "evidence", padding: 0.5 });
+
+  // Flood evidence, drainage and claims overlays (Hidalgo drainage district,
+  // FEMA NFIP). Colors are chosen to stay apart from the severity palette.
+  const OVERLAY = {
+    extent: { color: "#14518c", weight: 1, fillColor: "#1e6bb8", fillOpacity: 0.5 },
+    photo: { radius: 3, color: "#ffffff", weight: 0.6, fillColor: "#0f172a", fillOpacity: 0.85 },
+    channel: { color: "#475569", weight: 1.5 },
+    planned_channel: { color: "#475569", weight: 1.5, dashArray: "5 4" },
+    detention_pond: { color: "#0369a1", weight: 1, fillColor: "#38bdf8", fillOpacity: 0.45 },
+    gate: { radius: 4, color: "#0e7490", weight: 1.5, fillColor: "#ffffff", fillOpacity: 1 },
+    pump: { radius: 4, color: "#ffffff", weight: 1, fillColor: "#be123c", fillOpacity: 1 },
+  };
+  const BOND_STATUS_COLORS = {
+    "Pre-design": "#94a3b8",
+    Design: "#8b5cf6",
+    Construction: "#f97316",
+    Complete: "#16a34a",
+  };
+  const CLAIMS_RAMP = ["#ffffff", "#fce7f3", "#f9a8d4", "#ec4899", "#be185d", "#831843"];
+
+  const OVERLAY_LEGENDS = {
+    "hcdd1-flood-extents": [{ shape: "square", color: "#1e6bb8", label: "Mapped flooding" }],
+    "hcdd1-flood-photos": [{ shape: "dot", color: "#0f172a", label: "Flood response photo" }],
+    "hcdd1-drainage": [
+      { shape: "line", color: "#475569", label: "Channel" },
+      { shape: "dash", color: "#475569", label: "Planned channel" },
+      { shape: "square", color: "#38bdf8", label: "Detention pond" },
+      { shape: "ring", color: "#0e7490", label: "Gate" },
+      { shape: "dot", color: "#be123c", label: "Pump" },
+    ],
+    "hcdd1-bond-projects": Object.entries(BOND_STATUS_COLORS).map(([label, color]) => ({
+      shape: "square",
+      color,
+      label: `Project: ${label.toLowerCase()}`,
+    })),
+    "nfip-claims-by-tract": [
+      { ramp: CLAIMS_RAMP.slice(1), label: "Insurance claims per tract (fewer → more)" },
+    ],
+  };
+
+  function legendRow(item) {
+    if (item.ramp) {
+      const cells = item.ramp
+        .map((c) => `<span class="lg lg-ramp" style="background:${c}"></span>`)
+        .join("");
+      return `<li class="lg-ramp-row"><span class="lg-ramp-cells">${cells}</span>${escapeHtml(item.label)}</li>`;
+    }
+    const style =
+      item.shape === "line" || item.shape === "dash"
+        ? `border-top-color:${item.color}`
+        : item.shape === "ring"
+          ? `border-color:${item.color}`
+          : `background:${item.color}`;
+    return `<li><span class="lg lg-${item.shape}" style="${style}"></span>${escapeHtml(item.label)}</li>`;
+  }
+
+  function renderOverlayLegend() {
+    const box = document.getElementById("overlay-legend");
+    if (!box) return;
+    const rows = [];
+    document.querySelectorAll(".layer-toggle:checked").forEach((input) => {
+      (OVERLAY_LEGENDS[input.value] || []).forEach((item) => rows.push(legendRow(item)));
+    });
+    box.hidden = rows.length === 0;
+    box.innerHTML = rows.length ? `<ul class="overlay-legend-list">${rows.join("")}</ul>` : "";
+  }
+
+  function overlayPopup(p) {
+    const county = p.county ? ` · ${escapeHtml(p.county)} County` : "";
+    switch (p.overlay_type) {
+      case "flood_extent":
+        return (
+          `<strong>Mapped flooding — ${escapeHtml(p.year)}</strong><br>` +
+          `District label for this event: ${escapeHtml(p.hcdd1_label)}<br>` +
+          `<span class="popup-note">${escapeHtml(p.source)}. The label is the district's own; ` +
+          `whether it is rainfall or flood depth isn't stated.</span>`
+        );
+      case "flood_photo":
+        return (
+          `<strong>Flood response photo</strong><br>${escapeHtml(p.event)}<br>` +
+          (p.taken ? `Taken ${escapeHtml(p.taken)}<br>` : "") +
+          `<span class="popup-note">Hidalgo County Drainage District No. 1. Shows where crews ` +
+          `documented conditions, not necessarily standing water.</span>`
+        );
+      case "drainage": {
+        const kinds = {
+          channel: "Drainage channel",
+          planned_channel: "Planned channel",
+          detention_pond: "Detention pond",
+          gate: "Gate",
+          pump: "Pump",
+        };
+        const extra = p.acres ? `${p.acres} acres` : p.owner ? escapeHtml(p.owner) : "";
+        return (
+          `<strong>${escapeHtml(p.name)}</strong><br>${kinds[p.kind] || "Drainage"}` +
+          (extra ? ` · ${extra}` : "") +
+          `<br><span class="popup-note">Hidalgo County Drainage District No. 1</span>`
+        );
+      }
+      case "bond_project": {
+        const years =
+          p.start_year && p.end_year
+            ? `${p.start_year}–${p.end_year}`
+            : p.start_year
+              ? `started ${p.start_year}`
+              : "";
+        return (
+          `<strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.program)}` +
+          (p.status ? ` · ${escapeHtml(p.status)}` : "") +
+          (years ? ` · ${years}` : "") +
+          (p.description ? `<br><br>${escapeHtml(p.description)}` : "") +
+          `<br><span class="popup-note">Hidalgo County Drainage District No. 1</span>`
+        );
+      }
+      case "claims": {
+        const years =
+          p.first_year && p.last_year ? `${p.first_year}–${p.last_year}` : "none on record";
+        return (
+          `<strong>${p.claims.toLocaleString()} flood insurance claim${p.claims === 1 ? "" : "s"}</strong>` +
+          `<br>Tract ${escapeHtml(p.geoid)}${county}<br>` +
+          `Paid: $${Number(p.paid).toLocaleString()} · years: ${years}` +
+          (p.top_event ? `<br>Most common event: ${escapeHtml(p.top_event)}` : "") +
+          `<br><span class="popup-note">FEMA NFIP claims. Raw counts, not adjusted for how many ` +
+          `homes are insured.` +
+          (p.from_old_tracts
+            ? ` About ${p.from_old_tracts.toLocaleString()} were filed under older tract ` +
+              `boundaries and are spread across the tracts that replaced them.`
+            : "") +
+          `</span>`
+        );
+      }
+      default:
+        return null;
+    }
+  }
+
   function styleFor(feature) {
     const p = feature.properties || {};
     if (p.original_category === "county boundary") return BOUNDARY_STYLE;
     if (p.infrastructure_type) return INFRA_STYLE[p.infrastructure_type] || INFRA_STYLE.bridge;
+    switch (p.overlay_type) {
+      case "flood_extent":
+        return OVERLAY.extent;
+      case "drainage":
+        return OVERLAY[p.kind] || OVERLAY.channel;
+      case "bond_project": {
+        const c = BOND_STATUS_COLORS[p.status] || "#94a3b8";
+        return { color: c, weight: 1.2, fillColor: c, fillOpacity: 0.35 };
+      }
+      case "claims": {
+        const cls = p.claims_class || 0;
+        return { color: "#b08aa0", weight: 0.6, fillColor: CLAIMS_RAMP[cls], fillOpacity: cls ? 0.5 : 0 };
+      }
+    }
     return SEVERITY_STYLE[p.relative_class] || SEVERITY_STYLE.uncategorized;
   }
 
   function infraPointToLayer(feature, latlng) {
     const p = feature.properties || {};
+    if (p.overlay_type === "flood_photo") {
+      return L.circleMarker(latlng, { ...OVERLAY.photo, pane: "evidence", renderer: evidenceCanvas });
+    }
+    if (p.overlay_type === "drainage") {
+      return L.circleMarker(latlng, OVERLAY[p.kind] || OVERLAY.gate);
+    }
     const style = INFRA_STYLE[p.infrastructure_type] || INFRA_STYLE.bridge;
     return L.circleMarker(latlng, { radius: 5, ...style });
   }
@@ -80,6 +242,15 @@
           lyr.bindPopup(`<strong>${p.county || "County"}</strong>`);
           return;
         }
+        if (p.overlay_type) {
+          const html = overlayPopup(p);
+          if (p.overlay_type === "flood_photo") {
+            lyr.on("click", (e) => L.popup().setLatLng(e.latlng).setContent(html).openOn(map));
+          } else if (html) {
+            lyr.bindPopup(html, { maxHeight: 240 });
+          }
+          return;
+        }
         if (p.infrastructure_type) {
           const kind = p.infrastructure_type === "dam" ? "Dam" : "Bridge";
           lyr.bindPopup(
@@ -109,6 +280,7 @@
     box.addEventListener("change", (e) => {
       if (e.target.checked) showLayer(e.target.value);
       else hideLayer(e.target.value);
+      renderOverlayLegend();
     });
   });
 
@@ -138,6 +310,7 @@
           eventsLayer = L.geoJSON(fc, {
             pointToLayer: (f, latlng) =>
               L.circleMarker(latlng, {
+                pane: "events",
                 radius: 5,
                 color: "#854d0e",
                 weight: 1,

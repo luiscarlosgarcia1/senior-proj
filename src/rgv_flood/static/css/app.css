@@ -322,6 +322,19 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 .swatch-low { background: var(--sev-low); }
 .swatch-uncategorized { background: var(--sev-uncategorized); }
 .swatch-bridge { background: var(--infra-bridge); }
+/* dynamic legend for the evidence / drainage / claims overlays (see map.js) */
+.overlay-legend { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider); }
+.overlay-legend-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.overlay-legend-list li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.lg { width: 12px; height: 12px; flex-shrink: 0; display: inline-block; border-radius: 2px; }
+.lg-dot { border-radius: 50%; }
+.lg-ring { border-radius: 50%; border: 2px solid; background: #fff; }
+.lg-line, .lg-dash { height: 0; border-radius: 0; border-top: 2px solid; align-self: center; width: 16px; }
+.lg-dash { border-top-style: dashed; }
+.lg-ramp-row { align-items: center; }
+.lg-ramp-cells { display: inline-flex; flex-shrink: 0; }
+.lg-ramp { width: 12px; height: 12px; border-radius: 0; border: 1px solid rgba(0, 0, 0, 0.08); }
+
 .swatch-dam { background: var(--infra-dam); }
 
 /* collapsible section = one card. The card provides the border/shadow; the
