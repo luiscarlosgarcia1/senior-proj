@@ -26,12 +26,11 @@ import gzip
 import json
 import math
 import re
-import shutil
 import sys
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
+from net import download, get_text
 from noaa_stations import STATIONS_BY_COUNTY
 
 from rgv_flood.counties import SHORT_NAMES
@@ -42,7 +41,6 @@ PUBLISHER = "NOAA National Centers for Environmental Information"
 STORM_EVENTS_BASE = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles"
 GHCN_BASE = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_station"
 FIRST_YEAR, LAST_YEAR = 2000, 2025
-USER_AGENT = {"User-Agent": "RGV-Flood-Impact-Visualizer/1.0 (student research)"}
 
 # Some Storm Events narratives are longer than the csv module's default field limit.
 csv.field_size_limit(sys.maxsize)
@@ -100,24 +98,9 @@ def _county_paths(data_dir: Path, slug: str) -> dict[str, Path]:
 # ---- download ---------------------------------------------------------------
 
 
-def _download(url: str, dest: Path) -> None:
-    if dest.exists() and dest.stat().st_size > 0:
-        print(f"  [skip] {dest} already present")
-        return
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    part = dest.with_suffix(dest.suffix + ".part")
-    request = urllib.request.Request(url, headers=USER_AGENT)
-    with urllib.request.urlopen(request, timeout=300) as response, part.open("wb") as out:
-        shutil.copyfileobj(response, out)
-    part.replace(dest)
-    print(f"  [ok]   {dest}")
-
-
 def _storm_event_file_names() -> list[str]:
     """The newest detail file for each year, read from NOAA's directory listing."""
-    request = urllib.request.Request(f"{STORM_EVENTS_BASE}/", headers=USER_AGENT)
-    with urllib.request.urlopen(request, timeout=60) as response:
-        html = response.read().decode("utf-8", errors="replace")
+    html = get_text(f"{STORM_EVENTS_BASE}/")
     by_year = {}
     for match in re.finditer(r"StormEvents_details-ftp_v1\.0_d(20\d{2})_c\d+\.csv\.gz", html):
         year = int(match.group(1))
@@ -129,14 +112,14 @@ def _storm_event_file_names() -> list[str]:
     return list(by_year.values())
 
 
-def download(raw_dir: Path, counties: list[str]) -> None:
+def download_raw_files(raw_dir: Path, counties: list[str]) -> None:
     print(f"Storm Events -> {raw_dir / 'storm-events'}")
     for name in _storm_event_file_names():
-        _download(f"{STORM_EVENTS_BASE}/{name}", raw_dir / "storm-events" / name)
+        download(f"{STORM_EVENTS_BASE}/{name}", raw_dir / "storm-events" / name)
     for slug in counties:
         print(f"GHCN-Daily ({slug}) -> {raw_dir / f'ghcn-{slug}'}")
         for station_id in STATIONS_BY_COUNTY[slug]:
-            _download(f"{GHCN_BASE}/{station_id}.csv.gz", raw_dir / f"ghcn-{slug}" / f"{station_id}.csv.gz")
+            download(f"{GHCN_BASE}/{station_id}.csv.gz", raw_dir / f"ghcn-{slug}" / f"{station_id}.csv.gz")
 
 
 # ---- Storm Events -----------------------------------------------------------
@@ -373,7 +356,7 @@ def main() -> None:
 
     counties = [args.county] if args.county else sorted(SHORT_NAMES)
     if args.step in (None, "download"):
-        download(args.raw_dir, counties)
+        download_raw_files(args.raw_dir, counties)
     if args.step in (None, "ingest"):
         ingest_storm_events(args.raw_dir, args.data_dir, counties)
         ingest_ghcn_daily(args.raw_dir, args.data_dir, counties)

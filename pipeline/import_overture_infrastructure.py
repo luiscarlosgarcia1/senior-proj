@@ -22,7 +22,7 @@ event coordinates in pipeline/build_events.py, applied here at the source.
 Output is gitignored build output, not the tracked flood-hazard-layers files:
 this source is fully public and scripted, unlike the FEMA/TWDB import.
 
-Run:  uv run --group pipeline python scripts/import_overture_infrastructure.py
+Run:  uv run --group pipeline python pipeline/import_overture_infrastructure.py
 Safe to re-run: re-downloads and overwrites just its own output files.
 """
 
@@ -135,7 +135,7 @@ def main() -> None:
             "county_slug": slug,
             "source": "Overture Maps Foundation -- infrastructure theme",
             "retrieved_at": RETRIEVED_AT,
-            "importer": "scripts/import_overture_infrastructure.py",
+            "importer": "pipeline/import_overture_infrastructure.py",
             "layers": layers,
         }
         (out_dir / "overture-manifest.json").write_text(

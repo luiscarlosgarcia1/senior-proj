@@ -2,7 +2,7 @@
 FEMA NFIP claims: recorded flooding, flood photos, the drainage network, bond
 projects, and insurance claims per census tract.
 
-Inputs live in data/ml/raw/ (fetched by scripts/fetch_ml_inputs.py, gitignored).
+Inputs live in data/ml/raw/ (fetched by pipeline/fetch_ml_inputs.py, gitignored).
 Every builder returns 0 and writes nothing when its inputs are missing, so a
 clone that hasn't run the fetch script still builds the other layers.
 """

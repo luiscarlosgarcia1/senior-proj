@@ -13,7 +13,7 @@ It never overwrites a hand-written `manifest.json`, `README.md`, or an existing
 source note — those are only created when missing. Schema files and `.gitkeep`
 placeholders are always refreshed. Does not touch the Flask app.
 
-Run:  uv run python scripts/scaffold_county_collections.py
+Run:  uv run python pipeline/scaffold_county_collections.py
 Safe to re-run.
 """
 

@@ -10,7 +10,7 @@ scripts must run after a clone before the app has anything to serve.
 
 `schemas/` in this directory is the one exception to "gitignored build output"
 in the whole `data/`-adjacent tree — it's the tracked template
-`scripts/scaffold_county_collections.py` copies into every county's own
+`pipeline/scaffold_county_collections.py` copies into every county's own
 (gitignored) `schemas/`. Nothing generates these two files; they're hand-authored
 validation contracts, edit them directly if the record shape changes.
 

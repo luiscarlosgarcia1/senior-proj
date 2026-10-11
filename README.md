@@ -41,7 +41,7 @@ Open <http://127.0.0.1:5000>.
 serves. Re-run the build steps after changing pipeline inputs or rules.
 
 For the Hidalgo flood-evidence, drainage, bond-project and insurance-claims
-overlays, run `uv run --group pipeline python scripts/fetch_ml_inputs.py --only hcdd1,nfip,tracts`
+overlays, run `uv run --group pipeline python pipeline/fetch_ml_inputs.py --only hcdd1,nfip,tracts`
 before `build_layers.py`; without those downloads the layers are simply skipped.
 
 Flask refreshes official live signals at startup and every 15 minutes. Set
@@ -63,7 +63,7 @@ Maps bridges and dams (clipped to each county's real boundary, not just a
 bounding box — the RGV box also covers a strip of Mexico), and builds
 `data/generated/county-collections.gpkg`.
 
-`scripts/fetch_ml_inputs.py` gathers the public inputs for the planned Hidalgo
+`pipeline/fetch_ml_inputs.py` gathers the public inputs for the planned Hidalgo
 flood-susceptibility model (elevation, NLCD, soils, Atlas 14 rainfall, Overture
 buildings/roads, NFIP claims and policies, Hidalgo drainage-district flood
 photos and infrastructure) into the gitignored `data/ml/raw/`.
@@ -97,13 +97,13 @@ https://services7.arcgis.com/JSUhwVSJhyVkcN3Q/arcgis/rest/services
 | Download as GeoJSON | `<base>/<Service>/FeatureServer/<layer>/query?where=1=1&outFields=*&outSR=4326&f=geojson&resultOffset=0&resultRecordCount=1000` |
 
 Servers cap how many features one response can return, so the script asks for
-1,000 at a time and advances `resultOffset` until a page comes back empty. `scripts/fetch_ml_inputs.py` does this for every
+1,000 at a time and advances `resultOffset` until a page comes back empty. `pipeline/fetch_ml_inputs.py` does this for every
 layer listed in its `HCDD1_LAYERS` table and writes GeoJSON to
 `data/ml/raw/hcdd1/`; `pipeline/build_layers.py` turns those into the map
 overlays:
 
 ```bash
-uv run --group pipeline python scripts/fetch_ml_inputs.py --only hcdd1
+uv run --group pipeline python pipeline/fetch_ml_inputs.py --only hcdd1
 uv run --group pipeline python pipeline/build_layers.py
 ```
 

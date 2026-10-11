@@ -18,13 +18,13 @@ data/generated/.live-signals-scheduler.lock
 # pipeline/build_all.py can (re)produce on its own is build output, not
 # committed (see README "Setup" / "Raw per-county data" / "One-off scripts").
 #   records/**/*.ndjson                <- pipeline/noaa_ingest.py (public NOAA URLs)
-#   manifest.json, sources/**/*.json,  <- scripts/scaffold_county_collections.py
+#   manifest.json, sources/**/*.json,  <- pipeline/scaffold_county_collections.py
 #   schemas/*.schema.json                 (schemas are copied from the tracked
 #                                          template at pipeline/schemas/, not
 #                                          from any county's own directory)
 #
 # Two things build_all.py CANNOT reproduce from a bare clone stay tracked:
-#   flood-hazard-layers/*.geojson,manifest.json  -- scripts/import_county_flood_data.py
+#   flood-hazard-layers/*.geojson,manifest.json  -- pipeline/import_county_flood_data.py
 #     needs the sibling Flood Project/ working directory, which has no public,
 #     scripted source (see build_all.py step 5 / README "Raw per-county data").
 #   hidalgo-county's events-and-public-reports ndjson -- carries 16 hand-curated
@@ -38,11 +38,11 @@ data/*-county/schemas/*.schema.json
 data/*-county/sources/**/*.json
 
 # Overture Maps bridges/dams: same folder as the tracked FEMA/TWDB layers, but
-# unlike those, fully public and reproducible -- scripts/import_overture_infrastructure.py
+# unlike those, fully public and reproducible -- pipeline/import_overture_infrastructure.py
 data/*-county/flood-hazard-layers/overture-*.geojson
 data/*-county/flood-hazard-layers/overture-manifest.json
 
-# ML inputs/outputs: all public downloads (scripts/fetch_ml_inputs.py) or
+# ML inputs/outputs: all public downloads (pipeline/fetch_ml_inputs.py) or
 # derived from them, so none of it is committed.
 data/ml/
 
