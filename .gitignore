@@ -17,7 +17,7 @@ data/generated/.live-signals-scheduler.lock
 # Per-county source data — everything under data/<county>-county/ that
 # pipeline/build_all.py can (re)produce on its own is build output, not
 # committed (see README "Setup" / "Raw per-county data" / "One-off scripts").
-#   records/**/*.ndjson                <- scripts/ingest-noaa-*.mjs (public NOAA URLs)
+#   records/**/*.ndjson                <- pipeline/noaa_ingest.py (public NOAA URLs)
 #   manifest.json, sources/**/*.json,  <- scripts/scaffold_county_collections.py
 #   schemas/*.schema.json                 (schemas are copied from the tracked
 #                                          template at pipeline/schemas/, not

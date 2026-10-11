@@ -72,7 +72,7 @@ uv run python pipeline/build_events.py                       # ~1 s, stdlib only
 ```
 
 Reads the schema-validated NDJSON under `data/<county>-county/records/` for all
-four counties (NOAA Storm Events + GHCN-Daily, collected via `scripts/*.mjs`)
+four counties (NOAA Storm Events + GHCN-Daily, collected via `pipeline/noaa_ingest.py`)
 and merges them, each event/report/day tagged with its own `county`.
 
 | Output | Contents |

@@ -20,8 +20,7 @@ emergency guidance.
 - Python data pipeline; SQLite live-signal snapshots
 - NOAA, FEMA, TWDB, Census, NWS, TxDOT, and local government sources
 
-Requires Python 3.13+, [uv](https://docs.astral.sh/uv/), and Node 18+ for a
-fresh historical-data build.
+Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
 
 ## Quick Start
 
@@ -53,7 +52,7 @@ Flask refreshes official live signals at startup and every 15 minutes. Set
 
 - `uv` errors: run `uv sync --group dev --group pipeline` again.
 - Map has no layers: run `build_layers.py` and `build_events.py`.
-- Fresh data build fails: confirm Node 18+ and network access to source data.
+- Fresh data build fails: confirm network access to NOAA, Overture and FEMA.
 - Live signals unavailable: source outages are logged; the app remains usable.
 
 ## Data Pipeline and Outputs
