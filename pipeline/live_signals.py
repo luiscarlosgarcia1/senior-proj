@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -120,8 +121,15 @@ class LiveSignalStore:
                 """
             )
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.path)
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """A connection that commits (or rolls back) and then actually closes.
+
+        sqlite3's own context manager only commits; the file would stay open
+        until garbage collection.
+        """
+        with closing(sqlite3.connect(self.path)) as connection, connection:
+            yield connection
 
     def ingest_fixture(self, path: Path, *, retrieved_at: datetime) -> IngestionResult:
         """Load a controlled fixture through the same validation path as adapters."""

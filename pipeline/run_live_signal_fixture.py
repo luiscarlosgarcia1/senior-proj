@@ -9,19 +9,18 @@ import argparse
 from datetime import UTC, datetime
 from pathlib import Path
 
+from layer_io import LIVE_SIGNALS_DB, REPO_ROOT
 from live_signals import LiveSignalStore
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = (
     REPO_ROOT / "tests" / "fixtures" / "live-signals" / "official-signals.json"
 )
-DEFAULT_OUTPUT = REPO_ROOT / "data" / "generated" / "live-signals.sqlite3"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=LIVE_SIGNALS_DB)
     arguments = parser.parse_args()
     store = LiveSignalStore(arguments.output)
     result = store.ingest_fixture(arguments.fixture, retrieved_at=datetime.now(UTC))

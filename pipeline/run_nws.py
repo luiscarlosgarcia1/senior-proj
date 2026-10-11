@@ -9,16 +9,14 @@ import argparse
 from datetime import UTC, datetime
 from pathlib import Path
 
+from layer_io import LIVE_SIGNALS_DB
 from live_signals import LiveSignalStore
 from nws import run_nws_active_alert_ingestion
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = REPO_ROOT / "data" / "generated" / "live-signals.sqlite3"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=LIVE_SIGNALS_DB)
     arguments = parser.parse_args()
     result = run_nws_active_alert_ingestion(
         LiveSignalStore(arguments.output), retrieved_at=datetime.now(UTC)

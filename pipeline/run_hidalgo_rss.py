@@ -11,15 +11,13 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from hidalgo_rss import HIDALGO_PUBLIC_NOTICE_FEED, ingest_hidalgo_public_notices
+from layer_io import LIVE_SIGNALS_DB
 from live_signals import LiveSignalStore
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = REPO_ROOT / "data" / "generated" / "live-signals.sqlite3"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=LIVE_SIGNALS_DB)
     arguments = parser.parse_args()
     request = Request(
         HIDALGO_PUBLIC_NOTICE_FEED,
