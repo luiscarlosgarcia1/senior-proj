@@ -5,9 +5,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Pipeline scratch — raw downloads and intermediates are not committed
+# Pipeline scratch and build outputs are not committed (see README
+# "Repository Layout").
 data/**/raw/
-pipeline/_work/
 *.tmp
 /tmp/
 data/generated/*.gpkg
@@ -16,7 +16,7 @@ data/generated/.live-signals-scheduler.lock
 
 # Per-county source data — everything under data/<county>-county/ that
 # pipeline/build_all.py can (re)produce on its own is build output, not
-# committed (see README "Setup" / "Raw per-county data" / "One-off scripts").
+# committed.
 #   records/**/*.ndjson                <- pipeline/noaa_ingest.py (public NOAA URLs)
 #   manifest.json, sources/**/*.json,  <- pipeline/scaffold_county_collections.py
 #   schemas/*.schema.json                 (schemas are copied from the tracked
@@ -26,7 +26,7 @@ data/generated/.live-signals-scheduler.lock
 # Two things build_all.py CANNOT reproduce from a bare clone stay tracked:
 #   flood-hazard-layers/*.geojson,manifest.json  -- pipeline/import_county_flood_data.py
 #     needs the sibling Flood Project/ working directory, which has no public,
-#     scripted source (see build_all.py step 5 / README "Raw per-county data").
+#     scripted source (see build_all.py step 3).
 #   hidalgo-county's events-and-public-reports ndjson -- carries 16 hand-curated
 #     reports alongside the NOAA-generated events; the ingest script only
 #     preserves them if the file already exists on disk to read back from, so a

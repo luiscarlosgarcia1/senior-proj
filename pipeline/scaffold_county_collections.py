@@ -3,9 +3,9 @@
 `manifest.json`, its `schemas/`, a `records/` + `sources/` skeleton, and (for
 the flood-hazard source notes) county-specific provenance JSON.
 
-`data/<county>-county/` is entirely build output — none of it is committed
-(see the repo `.gitignore` and README "Raw per-county data"). This script must
-therefore be able to lay it down from nothing on a bare clone, which is why the
+Almost all of `data/<county>-county/` is build output and not committed (see the
+repo `.gitignore` and README "Repository Layout"). This script must therefore be
+able to lay it down from nothing on a bare clone, which is why the
 two schema files it copies into every county live in the tracked
 `pipeline/schemas/` template, not in any county's own (gitignored) directory.
 

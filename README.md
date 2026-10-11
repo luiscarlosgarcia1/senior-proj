@@ -172,6 +172,23 @@ The district's data terms of use were not found; the overlays here credit
 "Hidalgo County Drainage District No. 1". Confirm reuse with the district before
 publishing this project outside the course.
 
+## Repository Layout
+
+| Path | What it is | In Git |
+| --- | --- | --- |
+| `src/rgv_flood/` | The Flask app: `views/`, `data_access.py` (every database query), templates, and the map's ES modules in `static/js/` | yes |
+| `pipeline/` | The build scripts and the live-signal pollers; see [pipeline/README.md](pipeline/README.md) | yes |
+| `tests/` | Tests for the app and the pipeline | yes |
+| `data/<county>-county/flood-hazard-layers/` | FEMA, TWDB and county-boundary GeoJSON: source data with no public scripted download | yes, except the `overture-*` files |
+| `data/hidalgo-county/records/events-and-public-reports/` | Hidalgo's 16 hand-curated local reports, alongside its NOAA events | yes |
+| the rest of `data/<county>-county/` | NOAA records, source notes, schemas and manifests written by `build_all.py` | no |
+| `data/generated/` | The app database, the live-signals database and the archive GeoPackage | no |
+| `data/ml/raw/` | Downloads from `fetch_ml_inputs.py` | no |
+| `tmp/noaa/` | Cache of NOAA's raw files, so a rebuild does not download them again | no |
+
+Nothing generated is committed and the app reads no loose data files, so after a
+fresh clone `build_all.py` has to run once before the map has anything to show.
+
 ## Development and Testing
 
 ```bash
@@ -179,10 +196,8 @@ uv run pytest
 uv run ruff check .
 ```
 
-Core areas: `src/rgv_flood/` for the app (`views/`, `data_access.py`, and the
-map's ES modules in `static/js/`), `pipeline/` for builds and live-signal
-polling, `data/` for county collections, and `tests/` for verification. Keep source attribution and
-source-supplied geometry intact; do not infer live conditions.
+Keep source attribution and source-supplied geometry intact; do not infer live
+conditions.
 
 ## Sources, Contributing, License, and Acknowledgments
 
