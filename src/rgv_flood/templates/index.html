@@ -15,11 +15,7 @@
 
       <div class="county-field">
         <span class="county-label">County</span>
-        <select id="county-select"
-                name="county_slug"
-                hx-get="/partials/reports"
-                hx-target="#reports-body"
-                hx-trigger="change">
+        <select id="county-select" name="county_slug">
           <option value="">All four counties</option>
           {% for slug, county in counties.items() %}
           <option value="{{ slug }}">{{ county.name }}</option>
@@ -116,7 +112,8 @@
           </summary>
           <div class="card-body">
             <p class="note">Source-published conditions and notices; map geometry appears only when supplied by the source.</p>
-            <div id="live-signals-body" hx-get="/partials/live-signals" hx-trigger="load">
+            <div id="live-signals-body" hx-get="/partials/live-signals" hx-trigger="load, change from:#county-select"
+                 hx-include="#county-select">
               <p class="note">Loading current official signals…</p>
             </div>
           </div>
@@ -134,7 +131,8 @@
               <input type="checkbox" id="events-toggle">
               <span>Show event points on the map</span>
             </label>
-            <div id="events-body" hx-get="/partials/events" hx-trigger="load">
+            <div id="events-body" hx-get="/partials/events" hx-trigger="load, change from:#county-select"
+                 hx-include="#county-select, #event-year">
               <p class="note">Loading…</p>
             </div>
           </div>
@@ -145,7 +143,8 @@
         <details class="collapse">
           <summary><h2>Rainfall records</h2><span class="chev" aria-hidden="true">&#9662;</span></summary>
           <div class="card-body">
-            <div id="rainfall-body" hx-get="/partials/rainfall" hx-trigger="load">
+            <div id="rainfall-body" hx-get="/partials/rainfall" hx-trigger="load, change from:#county-select"
+                 hx-include="#county-select">
               <p class="note">Loading…</p>
             </div>
           </div>
@@ -156,7 +155,8 @@
         <details class="collapse">
           <summary><h2>Local reports</h2><span class="chev" aria-hidden="true">&#9662;</span></summary>
           <div class="card-body">
-            <div id="reports-body" hx-get="/partials/reports" hx-trigger="load">
+            <div id="reports-body" hx-get="/partials/reports" hx-trigger="load, change from:#county-select"
+                 hx-include="#county-select">
               <p class="note">Loading…</p>
             </div>
           </div>

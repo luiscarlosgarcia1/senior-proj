@@ -116,15 +116,6 @@ MAPPING: list[dict[str, str]] = [
         "relative_class": "moderate",
         "rationale": "Modeled 0.2% annual-chance extent; contextual, not regulatory.",
     },
-    {
-        "source": "Hidalgo County DD No. 1 digitized 1981 map",
-        "original_category": "Flood zone",
-        "relative_class": "uncategorized",
-        "rationale": (
-            "Historic (1981) local reference. Zone semantics are not confirmed "
-            "equivalent to current FEMA classes; shown under its own label only."
-        ),
-    },
 ]
 
 

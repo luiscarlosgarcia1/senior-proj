@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from flask import current_app
@@ -32,12 +33,12 @@ def available_layers() -> list[dict]:
     return json.loads(manifest.read_text(encoding="utf-8")).get("layers", [])
 
 
-def layer_geojson(layer_id: str) -> dict | None:
+def layer_path(layer_id: str) -> Path | None:
+    """The built GeoJSON file for a layer, if it is listed and exists."""
     for layer in available_layers():
         if layer["id"] == layer_id:
             path = _map_data_dir() / layer["file"]
-            if path.exists():
-                return json.loads(path.read_text(encoding="utf-8"))
+            return path if path.exists() else None
     return None
 
 
@@ -97,62 +98,66 @@ def rainfall_records(county_slug: str | None = None) -> list[dict]:
     return days
 
 
-def active_official_signal_features(source_prefix: str | None = None) -> dict | None:
-    """Project active, source-geometric official signals for map consumers."""
+# Columns of the live_signals table that each consumer needs.
+MAP_SIGNAL_COLUMNS = (
+    "source", "native_id", "source_url", "source_publisher", "source_channel", "summary",
+    "source_attributes_json", "county_slugs_json", "inclusion_basis", "source_geometry_json",
+    "published_at", "effective_at", "source_updated_at", "expires_at", "first_seen_at",
+    "last_seen_at", "retrieved_at",
+)
+SIDEBAR_SIGNAL_COLUMNS = (
+    "source", "native_id", "source_url", "source_publisher", "source_channel", "summary",
+    "county_slugs_json", "source_geometry_json", "geometry_absence_reason", "is_mappable",
+    "published_at", "effective_at", "source_updated_at", "expires_at", "last_seen_at", "retrieved_at",
+)
+
+
+def _active_official_signals(
+    columns: tuple[str, ...], *, only_mappable: bool, order_by: str = ""
+) -> list[dict] | None:
+    """Active, official rows of the live-signals database (None if it doesn't exist yet)."""
     database = Path(current_app.config["LIVE_SIGNALS_DATABASE"])
     if not database.exists():
         return None
     query = (
-        "select source, native_id, source_url, source_publisher, source_channel, summary, "
-        "source_attributes_json, county_slugs_json, inclusion_basis, source_geometry_json, "
-        "published_at, effective_at, source_updated_at, expires_at, first_seen_at, last_seen_at, retrieved_at "
-        "from live_signals where lifecycle_state='active' and provenance='official' and is_mappable=1"
+        f"select {', '.join(columns)} from live_signals "
+        "where lifecycle_state = 'active' and provenance = 'official'"
+        + (" and is_mappable = 1" if only_mappable else "")
+        + (f" order by {order_by}" if order_by else "")
     )
-    parameters: tuple[str, ...] = ()
-    if source_prefix:
-        query += " and source like ?"
-        parameters = (f"{source_prefix}%",)
-    with sqlite3.connect(database) as connection:
-        rows = connection.execute(query, parameters).fetchall()
-    fields = ("source", "native_id", "source_url", "source_publisher", "source_channel", "summary", "source_attributes_json", "county_slugs_json", "inclusion_basis", "source_geometry_json", "published_at", "effective_at", "source_updated_at", "expires_at", "first_seen_at", "last_seen_at", "retrieved_at")
+    # closing(): sqlite3's own context manager commits but never closes the file.
+    with closing(sqlite3.connect(database)) as connection:
+        connection.row_factory = sqlite3.Row
+        return [dict(row) for row in connection.execute(query)]
+
+
+def active_official_signal_features() -> dict | None:
+    """Active official signals that carry source geometry, as GeoJSON for the map."""
+    rows = _active_official_signals(MAP_SIGNAL_COLUMNS, only_mappable=True)
+    if rows is None:
+        return None
     features = []
     for row in rows:
-        value = dict(zip(fields, row, strict=True))
-        geometry = json.loads(value.pop("source_geometry_json"))
-        value["source_attributes"] = json.loads(value.pop("source_attributes_json"))
-        value["county_slugs"] = json.loads(value.pop("county_slugs_json"))
-        features.append({"type": "Feature", "geometry": geometry, "properties": value})
+        geometry = json.loads(row.pop("source_geometry_json"))
+        row["source_attributes"] = json.loads(row.pop("source_attributes_json"))
+        row["county_slugs"] = json.loads(row.pop("county_slugs_json"))
+        features.append({"type": "Feature", "geometry": geometry, "properties": row})
     return {"type": "FeatureCollection", "features": features}
 
 
 def active_official_signals(county_slug: str | None = None) -> list[dict]:
-    """Return active official signals for the sidebar, including notices.
+    """Active official signals for the sidebar, including notices.
 
     Signals without source geometry stay in this list so the UI can link to
     them without inventing a map location.
     """
-    database = Path(current_app.config["LIVE_SIGNALS_DATABASE"])
-    if not database.exists():
-        return []
-    query = (
-        "select source, native_id, source_url, source_publisher, source_channel, summary, "
-        "county_slugs_json, source_geometry_json, geometry_absence_reason, is_mappable, "
-        "published_at, effective_at, source_updated_at, expires_at, last_seen_at, retrieved_at "
-        "from live_signals where lifecycle_state='active' and provenance='official' "
-        "order by retrieved_at desc, source_publisher, summary"
-    )
-    with sqlite3.connect(database) as connection:
-        rows = connection.execute(query).fetchall()
-    fields = (
-        "source", "native_id", "source_url", "source_publisher", "source_channel", "summary",
-        "county_slugs_json", "source_geometry_json", "geometry_absence_reason", "is_mappable",
-        "published_at", "effective_at", "source_updated_at", "expires_at", "last_seen_at", "retrieved_at",
+    rows = _active_official_signals(
+        SIDEBAR_SIGNAL_COLUMNS, only_mappable=False, order_by="retrieved_at desc, source_publisher, summary"
     )
     signals = []
-    for row in rows:
-        signal = dict(zip(fields, row, strict=True))
-        signal["county_slugs"] = json.loads(signal.pop("county_slugs_json"))
-        signal["is_mappable"] = bool(signal["is_mappable"])
-        if county_slug is None or county_slug in signal["county_slugs"]:
-            signals.append(signal)
+    for row in rows or []:
+        row["county_slugs"] = json.loads(row.pop("county_slugs_json"))
+        row["is_mappable"] = bool(row["is_mappable"])
+        if county_slug is None or county_slug in row["county_slugs"]:
+            signals.append(row)
     return signals

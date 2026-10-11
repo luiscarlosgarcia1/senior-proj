@@ -1,15 +1,6 @@
-/* Sidebar behavior: one open card at a time, and the county selector, which
- * recenters the map and refreshes the county-scoped panels. (HTMX already
- * refreshes the reports panel through hx-get on the select itself.) */
-
-/** Reload one sidebar panel from a server partial. */
-function refreshPanel(target, path, params) {
-  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value)).toString();
-  // `source` gives each panel its own HTMX request queue. Without it every call
-  // shares the page body's queue, which keeps only the last of several requests
-  // fired together, silently dropping the others.
-  htmx.ajax("GET", query ? `${path}?${query}` : path, { target, source: target });
-}
+/* Sidebar behavior: one open card at a time, and the county selector's map
+ * movement. The county-scoped panels refresh themselves: each one listens for
+ * the selector's change event (hx-trigger in index.html). */
 
 export function initAccordion() {
   const cards = document.querySelectorAll(".sidebar details.collapse");
@@ -36,17 +27,11 @@ export function initCountySelect(map, { center, zoom }) {
   }
 
   select.addEventListener("change", async () => {
-    const county_slug = select.value;
-    const year = document.getElementById("event-year")?.value;
-    refreshPanel("#events-body", "/partials/events", { year, county_slug });
-    refreshPanel("#rainfall-body", "/partials/rainfall", { county_slug });
-    refreshPanel("#live-signals-body", "/partials/live-signals", { county_slug });
-
-    if (!county_slug) {
+    if (!select.value) {
       map.flyTo(center, zoom);
       return;
     }
-    const bounds = await countyBounds(county_slug);
+    const bounds = await countyBounds(select.value);
     if (bounds) map.flyToBounds(bounds);
   });
 }

@@ -23,13 +23,6 @@ def test_unmapped_category_falls_back_to_uncategorized():
     assert relative_class_for("unknown source", "AE") == "uncategorized"
 
 
-def test_historic_hidalgo_map_is_never_force_compared():
-    assert (
-        relative_class_for("Hidalgo County DD No. 1 digitized 1981 map", "Flood zone")
-        == "uncategorized"
-    )
-
-
 @pytest.mark.parametrize(
     ("zone", "subty", "expected"),
     [

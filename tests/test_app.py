@@ -282,3 +282,16 @@ def test_source_card_omits_visualizations_when_none(client):
     html = client.get("/partials/metadata/plain").get_data(as_text=True)
 
     assert "Original visualizations" not in html
+
+
+def test_layer_file_is_served_as_is_and_revalidates(client):
+    data_dir = client.application.config["MAP_DATA_DIR"]
+    (data_dir / "layers.json").write_text(json.dumps({"layers": [{"id": "demo", "file": "demo.geojson"}]}))
+    (data_dir / "demo.geojson").write_text('{"type":"FeatureCollection","features":[]}')
+
+    response = client.get("/api/layers/demo.geojson")
+    assert response.json["type"] == "FeatureCollection"
+
+    repeat = client.get("/api/layers/demo.geojson", headers={"If-None-Match": response.headers["ETag"]})
+    assert repeat.status_code == 304
+    assert client.get("/api/layers/missing.geojson").status_code == 404

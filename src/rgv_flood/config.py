@@ -44,5 +44,3 @@ class Default:
     # Initial Leaflet view: centered on the Lower Rio Grande Valley.
     MAP_CENTER = (26.3, -98.15)
     MAP_ZOOM = 9
-
-    JSON_SORT_KEYS = False
