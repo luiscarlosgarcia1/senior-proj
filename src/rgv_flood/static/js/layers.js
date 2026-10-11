@@ -1,6 +1,7 @@
 /* Hazard, infrastructure, evidence and claims layers: load on first toggle,
  * show/hide on later toggles, and keep the overlay legend in sync. */
 
+import { fetchJson } from "./fetch-json.js";
 import { escapeHtml } from "./html.js";
 import { LEGENDS, pointStyleFor, styleFor } from "./layer-styles.js";
 import { popupHtml } from "./popups.js";
@@ -52,12 +53,12 @@ export function initLayers(map) {
 
   async function show(layerId) {
     if (!loaded.has(layerId)) {
-      const response = await fetch(`/api/layers/${layerId}.geojson`);
-      if (!response.ok) {
-        console.error("layer fetch failed", layerId, response.status);
+      const collection = await fetchJson(`/api/layers/${layerId}.geojson`);
+      if (!collection) {
+        console.error("layer fetch failed", layerId);
         return;
       }
-      loaded.set(layerId, L.geoJSON(await response.json(), { style: styleFor, pointToLayer, onEachFeature }));
+      loaded.set(layerId, L.geoJSON(collection, { style: styleFor, pointToLayer, onEachFeature }));
     }
     loaded.get(layerId).addTo(map);
   }

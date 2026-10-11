@@ -23,13 +23,10 @@ from layer_io import write_layer
 from paths import ML_RAW
 from shapely.geometry import mapping, shape
 
-from rgv_flood.counties import FIPS_TO_SLUG, SHORT_NAMES
+from rgv_flood.counties import FIPS_TO_SLUG, RGV_BBOX, SHORT_NAMES
 
 HCDD1_DIR = ML_RAW / "hcdd1"
 HCDD1_NAME = "Hidalgo County Drainage District No. 1"
-# West, south, east, north around the four counties; drops photos with stray GPS tags.
-RGV_AREA = (-99.3, 25.8, -97.0, 26.9)
-
 # Degrees; ~0.00002 is about 2 m, enough to shrink files without visible change.
 FINE = 0.00002
 
@@ -132,7 +129,7 @@ def _exif_to_text(exif_datetime: str) -> str:
 def build_hcdd1_flood_photos() -> int:
     """Where and when the district photographed four floods. File paths and
     camera headings in the source are deliberately dropped."""
-    west, south, east, north = RGV_AREA
+    west, south, east, north = RGV_BBOX  # drops photos with stray GPS tags
     features = []
     for layer, event in FLOOD_PHOTOS:
         for f in _hcdd1(layer):

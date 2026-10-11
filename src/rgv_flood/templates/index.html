@@ -1,5 +1,25 @@
 {% extends "base.html" %}
 
+{# A collapsible sidebar card whose body is fetched from `url`, and fetched again
+   whenever the county selector changes. Anything in the call block sits above it. #}
+{% macro county_panel(title, body_id, url, count=none, open=false, include="#county-select", loading="Loading…") %}
+<div class="card">
+  <details class="collapse"{{ " open" if open }}>
+    <summary>
+      <h2>{{ title }}{% if count %} <span class="count">{{ count }}</span>{% endif %}</h2>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </summary>
+    <div class="card-body">
+      {{- caller() if caller is defined }}
+      <div id="{{ body_id }}" hx-get="{{ url }}" hx-trigger="load, change from:#county-select"
+           hx-include="{{ include }}">
+        <p class="note">{{ loading }}</p>
+      </div>
+    </div>
+  </details>
+</div>
+{% endmacro %}
+
 {% block content %}
 <div class="app">
 
@@ -85,8 +105,8 @@
               {% endfor %}
             </ul>
             <p class="note">
-              A documented mapping table assigns these classes only to comparable
-              source categories. Others keep their original label.
+              These classes are assigned only to source categories that can be
+              fairly compared. Others keep their original label.
             </p>
 
             <hr class="divider">
@@ -104,64 +124,21 @@
         </details>
       </div>
 
-      <div class="card">
-        <details class="collapse" open>
-          <summary>
-            <h2>Live official signals</h2>
-            <span class="chev" aria-hidden="true">&#9662;</span>
-          </summary>
-          <div class="card-body">
-            <p class="note">Source-published conditions and notices; map geometry appears only when supplied by the source.</p>
-            <div id="live-signals-body" hx-get="/partials/live-signals" hx-trigger="load, change from:#county-select"
-                 hx-include="#county-select">
-              <p class="note">Loading current official signals…</p>
-            </div>
-          </div>
-        </details>
-      </div>
+      {% call county_panel("Live official signals", "live-signals-body", "/partials/live-signals",
+                           open=true, loading="Loading current official signals…") %}
+      <p class="note">Source-published conditions and notices; map geometry appears only when supplied by the source.</p>
+      {% endcall %}
 
-      <div class="card">
-        <details class="collapse">
-          <summary>
-            <h2>Flood events{% if event_count %} <span class="count">{{ event_count }}</span>{% endif %}</h2>
-            <span class="chev" aria-hidden="true">&#9662;</span>
-          </summary>
-          <div class="card-body">
-            <label class="event-map-toggle">
-              <input type="checkbox" id="events-toggle">
-              <span>Show event points on the map</span>
-            </label>
-            <div id="events-body" hx-get="/partials/events" hx-trigger="load, change from:#county-select"
-                 hx-include="#county-select, #event-year">
-              <p class="note">Loading…</p>
-            </div>
-          </div>
-        </details>
-      </div>
+      {% call county_panel("Flood events", "events-body", "/partials/events",
+                           count=event_count, include="#county-select, #event-year") %}
+      <label class="event-map-toggle">
+        <input type="checkbox" id="events-toggle">
+        <span>Show event points on the map</span>
+      </label>
+      {% endcall %}
 
-      <div class="card">
-        <details class="collapse">
-          <summary><h2>Rainfall records</h2><span class="chev" aria-hidden="true">&#9662;</span></summary>
-          <div class="card-body">
-            <div id="rainfall-body" hx-get="/partials/rainfall" hx-trigger="load, change from:#county-select"
-                 hx-include="#county-select">
-              <p class="note">Loading…</p>
-            </div>
-          </div>
-        </details>
-      </div>
-
-      <div class="card">
-        <details class="collapse">
-          <summary><h2>Local reports</h2><span class="chev" aria-hidden="true">&#9662;</span></summary>
-          <div class="card-body">
-            <div id="reports-body" hx-get="/partials/reports" hx-trigger="load, change from:#county-select"
-                 hx-include="#county-select">
-              <p class="note">Loading…</p>
-            </div>
-          </div>
-        </details>
-      </div>
+      {{ county_panel("Rainfall records", "rainfall-body", "/partials/rainfall") }}
+      {{ county_panel("Local reports", "reports-body", "/partials/reports") }}
 
     </aside>
 
@@ -177,6 +154,7 @@
   window.RGV_CONFIG = {
     center: {{ config.MAP_CENTER | tojson }},
     zoom: {{ config.MAP_ZOOM }},
+    bbox: {{ bbox | tojson }},
   };
 </script>
 <script type="module" src="{{ url_for('static', filename='js/map.js') }}"></script>

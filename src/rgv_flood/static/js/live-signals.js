@@ -4,6 +4,7 @@
  * geometry; unmappable notices stay in the sidebar as links.
  */
 
+import { fetchJson } from "./fetch-json.js";
 import { escapeHtml as esc } from "./html.js";
 
 function signalStyle(feature) {
@@ -19,9 +20,9 @@ function signalPopup(p) {
 }
 
 export async function initLiveSignals(map) {
-  const response = await fetch("/api/live-signals.geojson");
-  if (!response.ok) return;
-  L.geoJSON(await response.json(), {
+  const collection = await fetchJson("/api/live-signals.geojson");
+  if (!collection) return;
+  L.geoJSON(collection, {
     pane: "signals",
     style: signalStyle,
     pointToLayer: (feature, latlng) =>

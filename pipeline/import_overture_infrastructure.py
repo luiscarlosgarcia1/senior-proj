@@ -37,12 +37,7 @@ from overturemaps import record_batch_reader
 from paths import county_boundary, hazard_layers_dir
 from shapely.geometry import shape
 
-from rgv_flood.counties import COUNTIES
-
-# west, south, east, north -- a generous box around the four counties. This
-# alone is NOT the exclusion boundary: every feature is also tested against
-# each county's real polygon below, which is what actually keeps Mexico out.
-RGV_BBOX = (-99.7, 25.6, -96.9, 27.1)
+from rgv_flood.counties import COUNTIES, RGV_BBOX
 
 # Overture `infrastructure`-theme class -> output filename
 KEPT_CLASSES = {
@@ -61,7 +56,11 @@ def _county_polygons() -> dict[str, shapely.Geometry]:
 
 
 def _bridges_and_dams() -> Iterator[tuple[shapely.Geometry, dict]]:
-    """Stream the `infrastructure` theme for the RGV bbox, yielding only bridges and dams."""
+    """Stream the `infrastructure` theme for the RGV bbox, yielding only bridges and dams.
+
+    The bbox alone is not the exclusion boundary: every feature is also tested
+    against each county's real polygon, which is what actually keeps Mexico out.
+    """
     reader = record_batch_reader("infrastructure", bbox=RGV_BBOX, stac=True)
     if reader is None:
         raise SystemExit("Overture returned no data for the RGV bounding box")

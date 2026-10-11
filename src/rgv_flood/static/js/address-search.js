@@ -1,29 +1,26 @@
 /* Header address search, geocoded client-side through OpenStreetMap Nominatim
  * (the Flask server makes no outbound requests). */
 
+import { fetchJson } from "./fetch-json.js";
 import { escapeHtml } from "./html.js";
 
-// West, south, east, north around the four counties, to bound the search.
-const VIEWBOX = "-99.7,25.6,-96.9,27.1";
-
-async function geocode(query) {
+/** The best match inside `bbox` (west, south, east, north), or null. */
+async function geocode(query, bbox) {
   const params = new URLSearchParams({
     format: "jsonv2",
     limit: "1",
     countrycodes: "us",
-    viewbox: VIEWBOX,
+    viewbox: bbox.join(","),
     bounded: "1",
     q: query,
   });
-  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+  const hits = await fetchJson(`https://nominatim.openstreetmap.org/search?${params}`, {
     headers: { Accept: "application/json" },
   });
-  if (!response.ok) return null;
-  const [hit] = await response.json();
-  return hit ?? null;
+  return hits?.[0] ?? null;
 }
 
-export function initAddressSearch(map) {
+export function initAddressSearch(map, { bbox }) {
   const form = document.getElementById("addr-search");
   let marker = null;
 
@@ -33,7 +30,7 @@ export function initAddressSearch(map) {
     if (!query) return;
 
     form.classList.remove("not-found");
-    const hit = await geocode(query);
+    const hit = await geocode(query, bbox);
     if (!hit) {
       form.classList.add("not-found");
       return;

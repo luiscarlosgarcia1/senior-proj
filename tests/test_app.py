@@ -54,9 +54,6 @@ def client(tmp_path):
         {
             "TESTING": True,
             "MAP_DATA_DIR": data_dir,
-            "FLOOD_EVENTS_FILE": data_dir / "flood-events.geojson",
-            "FLOOD_REPORTS_FILE": data_dir / "flood-reports.json",
-            "RAINFALL_FILE": data_dir / "rainfall-records.json",
             "LIVE_SIGNALS_SCHEDULER_ENABLED": False,
         }
     )

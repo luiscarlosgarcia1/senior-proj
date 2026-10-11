@@ -29,7 +29,7 @@ for (const [name, zIndex] of Object.entries(PANE_Z_INDEX)) map.createPane(name).
 
 initLayers(map);
 initEventsLayer(map);
-initAddressSearch(map);
+initAddressSearch(map, config);
 initAccordion();
 initCountySelect(map, config);
 initLiveSignals(map).catch((error) => console.error("live signal fetch failed", error));

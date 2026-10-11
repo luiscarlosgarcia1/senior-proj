@@ -2,6 +2,8 @@
  * movement. The county-scoped panels refresh themselves: each one listens for
  * the selector's change event (hx-trigger in index.html). */
 
+import { fetchJson } from "./fetch-json.js";
+
 export function initAccordion() {
   const cards = document.querySelectorAll(".sidebar details.collapse");
   cards.forEach((card) => {
@@ -19,7 +21,7 @@ export function initCountySelect(map, { center, zoom }) {
   let boundaries = null;
 
   async function countyBounds(slug) {
-    boundaries ??= fetch("/api/layers/county-boundaries.geojson").then((r) => (r.ok ? r.json() : null));
+    boundaries ??= fetchJson("/api/layers/county-boundaries.geojson");
     const collection = await boundaries;
     if (!collection) boundaries = null; // retry on the next change
     const county = collection?.features?.find((f) => f.properties?.county_slug === slug);

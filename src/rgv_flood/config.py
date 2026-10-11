@@ -13,15 +13,11 @@ _PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
 class Default:
-    # Where the pipeline writes map-ready GeoJSON that the app serves as-is.
+    # Where the pipeline writes the map-ready files the app serves as-is
+    # (file names are in rgv_flood.data_access).
     MAP_DATA_DIR = Path(
         os.environ.get("RGV_MAP_DATA_DIR", _PACKAGE_ROOT / "static" / "data")
     )
-
-    # Overlays built from the ingested NOAA records (pipeline/build_events.py).
-    FLOOD_EVENTS_FILE = MAP_DATA_DIR / "flood-events.geojson"
-    FLOOD_REPORTS_FILE = MAP_DATA_DIR / "flood-reports.json"
-    RAINFALL_FILE = MAP_DATA_DIR / "rainfall-records.json"
     LIVE_SIGNALS_DATABASE = Path(
         os.environ.get(
             "RGV_LIVE_SIGNALS_DATABASE",

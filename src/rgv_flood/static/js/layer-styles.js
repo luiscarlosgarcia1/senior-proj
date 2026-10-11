@@ -1,6 +1,7 @@
 /* Colors and legends for every map layer.
  *
- * Severity (hazard) colors match the sidebar swatches (app.css --sev-*).
+ * Severity (hazard) fills are lighter tints of the sidebar swatches (app.css
+ * --sev-*), since they are drawn semi-transparent over the basemap.
  * Infrastructure and evidence overlays are not hazard ratings, so they use
  * separate hues that stay apart from that palette (app.css --infra-*).
  */

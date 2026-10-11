@@ -9,42 +9,61 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import closing
+from functools import lru_cache
 from pathlib import Path
 
 from flask import current_app
 
+# Files the pipeline writes into MAP_DATA_DIR (see pipeline/README.md).
+LAYERS_FILE = "layers.json"
+FLOOD_EVENTS_FILE = "flood-events.geojson"
+FLOOD_REPORTS_FILE = "flood-reports.json"
+RAINFALL_FILE = "rainfall-records.json"
 
-def _map_data_dir() -> Path:
-    return Path(current_app.config["MAP_DATA_DIR"])
+
+def output_path(name: str) -> Path | None:
+    """A pipeline output file, or None if it hasn't been built."""
+    path = Path(current_app.config["MAP_DATA_DIR"]) / name
+    return path if path.exists() else None
 
 
-def _read_json(config_key: str) -> dict | None:
-    path = Path(current_app.config[config_key])
-    if not path.exists():
-        return None
+@lru_cache(maxsize=16)
+def _parse(path: Path, _modified_ns: int, _size: int):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _read_json(name: str):
+    """A pipeline output parsed as JSON (None if it hasn't been built).
+
+    Parsed once and reused until the file changes, so treat the result as
+    read-only.
+    """
+    path = output_path(name)
+    if path is None:
+        return None
+    stat = path.stat()
+    return _parse(path, stat.st_mtime_ns, stat.st_size)
 
 
 def available_layers() -> list[dict]:
     """Layer manifest written by the pipeline: id, title, source, vintage, file."""
-    manifest = _map_data_dir() / "layers.json"
-    if not manifest.exists():
-        return []
-    return json.loads(manifest.read_text(encoding="utf-8")).get("layers", [])
+    manifest = _read_json(LAYERS_FILE)
+    return manifest.get("layers", []) if manifest else []
+
+
+def layer(layer_id: str) -> dict | None:
+    """One layer's manifest entry."""
+    return next((entry for entry in available_layers() if entry["id"] == layer_id), None)
 
 
 def layer_path(layer_id: str) -> Path | None:
     """The built GeoJSON file for a layer, if it is listed and exists."""
-    for layer in available_layers():
-        if layer["id"] == layer_id:
-            path = _map_data_dir() / layer["file"]
-            return path if path.exists() else None
-    return None
+    entry = layer(layer_id)
+    return output_path(entry["file"]) if entry else None
 
 
-def flood_events_fc() -> dict | None:
-    """The documented-flood-event points as a GeoJSON FeatureCollection."""
-    return _read_json("FLOOD_EVENTS_FILE")
+def _in_county(rows: list[dict], county_slug: str | None) -> list[dict]:
+    return [row for row in rows if row.get("county") == county_slug] if county_slug else rows
 
 
 def flood_events(year: str | None = None, county_slug: str | None = None) -> list[dict]:
@@ -53,26 +72,24 @@ def flood_events(year: str | None = None, county_slug: str | None = None) -> lis
     Each row is the feature's properties plus ``lat`` / ``lon`` when the event
     has a point, so the sidebar list can fly the map to it.
     """
-    fc = flood_events_fc()
-    if not fc:
+    collection = _read_json(FLOOD_EVENTS_FILE)
+    if not collection:
         return []
     rows = []
-    for feature in fc["features"]:
+    for feature in collection["features"]:
         row = dict(feature["properties"])
-        geom = feature.get("geometry")
-        if geom and geom.get("type") == "Point":
-            row["lon"], row["lat"] = geom["coordinates"][:2]
+        geometry = feature.get("geometry")
+        if geometry and geometry.get("type") == "Point":
+            row["lon"], row["lat"] = geometry["coordinates"][:2]
         rows.append(row)
     if year:
-        rows = [r for r in rows if r.get("date", "").startswith(year)]
-    if county_slug:
-        rows = [r for r in rows if r.get("county") == county_slug]
-    return rows
+        rows = [row for row in rows if row.get("date", "").startswith(year)]
+    return _in_county(rows, county_slug)
 
 
 def flood_event_years(county_slug: str | None = None) -> list[str]:
     return sorted(
-        {e["date"][:4] for e in flood_events(county_slug=county_slug) if e.get("date")}, reverse=True
+        {event["date"][:4] for event in flood_events(county_slug=county_slug) if event.get("date")}, reverse=True
     )
 
 
@@ -82,20 +99,14 @@ def flood_reports(county_slug: str | None = None) -> list[dict]:
     Historical only — never live closure data. Each report carries its source
     URL and publication date.
     """
-    data = _read_json("FLOOD_REPORTS_FILE")
-    reports = data.get("reports", []) if data else []
-    if county_slug:
-        reports = [r for r in reports if r.get("county") == county_slug]
-    return reports
+    data = _read_json(FLOOD_REPORTS_FILE)
+    return _in_county(data.get("reports", []) if data else [], county_slug)
 
 
 def rainfall_records(county_slug: str | None = None) -> list[dict]:
     """The wettest single gauge-days on record (date, mm, inches, station)."""
-    data = _read_json("RAINFALL_FILE")
-    days = data.get("days", []) if data else []
-    if county_slug:
-        days = [d for d in days if d.get("county") == county_slug]
-    return days
+    data = _read_json(RAINFALL_FILE)
+    return _in_county(data.get("days", []) if data else [], county_slug)
 
 
 # Columns of the live_signals table that each consumer needs.

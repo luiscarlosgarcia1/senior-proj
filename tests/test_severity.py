@@ -14,13 +14,14 @@ def test_every_mapping_entry_uses_a_known_class():
         assert entry["rationale"].strip()
 
 
-def test_fema_ae_is_high():
-    assert relative_class_for("FEMA NFHL", "AE") == "high"
+def test_twdb_modeled_frequencies_are_mapped():
+    assert relative_class_for("TWDB 2025 cursory floodplain", "1% annual chance") == "high"
+    assert relative_class_for("TWDB 2025 cursory floodplain", "0.2% annual chance") == "moderate"
 
 
 def test_unmapped_category_falls_back_to_uncategorized():
-    assert relative_class_for("FEMA NFHL", "made-up") == "uncategorized"
-    assert relative_class_for("unknown source", "AE") == "uncategorized"
+    assert relative_class_for("TWDB 2025 cursory floodplain", "made-up") == "uncategorized"
+    assert relative_class_for("unknown source", "1% annual chance") == "uncategorized"
 
 
 @pytest.mark.parametrize(

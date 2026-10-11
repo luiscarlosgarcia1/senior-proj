@@ -42,7 +42,8 @@ from paths import ML_RAW as RAW
 
 from rgv_flood.counties import COUNTIES
 
-# Union of the four counties, padded a little. West, south, east, north.
+# West, south, east, north: the four counties padded only a little. Tighter than
+# counties.RGV_BBOX on purpose, because every degree here is downloaded.
 AREA = (-99.25, 25.80, -97.00, 26.85)
 
 COUNTY_FIPS = {slug: county["fips"] for slug, county in COUNTIES.items()}

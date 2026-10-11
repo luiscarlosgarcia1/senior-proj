@@ -1,6 +1,7 @@
 /* Documented flood events (NOAA Storm Events points), toggled from the sidebar
  * and flown to when a locatable row in the event list is clicked. */
 
+import { fetchJson } from "./fetch-json.js";
 import { escapeHtml as esc } from "./html.js";
 
 const MARKER = { pane: "events", radius: 5, color: "#854d0e", weight: 1, fillColor: "#eab308", fillOpacity: 0.85 };
@@ -19,16 +20,14 @@ export function initEventsLayer(map) {
 
   /** The events layer, fetched once on first use (null if the request failed). */
   function eventsLayer() {
-    layerPromise ??= fetch("/api/flood-events.geojson")
-      .then((response) => (response.ok ? response.json() : null))
-      .then(
-        (collection) =>
-          collection &&
-          L.geoJSON(collection, {
-            pointToLayer: (_feature, latlng) => L.circleMarker(latlng, MARKER),
-            onEachFeature: (feature, layer) => layer.bindPopup(eventPopup(feature.properties || {}), { maxHeight: 220 }),
-          }),
-      );
+    layerPromise ??= fetchJson("/api/flood-events.geojson").then(
+      (collection) =>
+        collection &&
+        L.geoJSON(collection, {
+          pointToLayer: (_feature, latlng) => L.circleMarker(latlng, MARKER),
+          onEachFeature: (feature, layer) => layer.bindPopup(eventPopup(feature.properties || {}), { maxHeight: 220 }),
+        }),
+    );
     return layerPromise;
   }
 

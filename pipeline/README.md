@@ -61,7 +61,7 @@ The code is split by concern: `build_layers.py` (hazard and infrastructure
 builders, and the layer-id → builder table that drives `main()`),
 `evidence_layers.py` (Hidalgo drainage-district and NFIP overlays),
 `layer_meta.py` (descriptions, limitations and links to each publisher's own
-map), and `layer_io.py` (paths and the one function that writes a layer file).
+map), and `layer_io.py` (the one function that writes a layer file).
 
 | Output | From |
 | --- | --- |
@@ -118,6 +118,26 @@ Gathers elevation, NLCD, soils, rainfall-frequency grids, Overture layers, NFIP
 claims and policies, and the drainage district's published layers into the
 gitignored `data/ml/raw/`. Re-runs skip files already present. Shared HTTP helpers
 (retries, resumable downloads) are in `net.py`.
+
+## Shared helpers
+
+Every script in this folder builds on the same four small modules, so a path, a
+JSON format or an HTTP setting is defined in exactly one place:
+
+| Module | What it holds |
+| --- | --- |
+| `paths.py` | Where things live: `data/`, each county's folders and record files, the app's `static/data/`, the live-signals database, the GeoPackage |
+| `jsonio.py` | Reading NDJSON, writing readable JSON, canonical (sorted, compact) JSON, GeoJSON feature collections |
+| `net.py` | HTTP GET for bytes, text and JSON, plus resumable downloads with retries |
+| `rgv_flood.counties` | The four counties: slugs, FIPS codes, names, bounding box (shared with the Flask app) |
+
+## Live signals
+
+`run_nws.py`, `run_hidalgo_rss.py` and `run_drivetexas.py` each poll one official
+source and store the result in `data/generated/live-signals.sqlite3` through
+`live_signals.py` (`LiveSignalStore`). The Flask app runs all three on a timer;
+each can also be run by hand, and takes `--output` to write somewhere else.
+`run_live_signal_fixture.py` loads the test fixture instead of a live source.
 
 ## Conventions
 

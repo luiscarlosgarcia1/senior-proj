@@ -8,8 +8,8 @@ place lands in ``uncategorized`` and renders under its own original label.
 Two entry points:
 
 - ``MAPPING`` / ``relative_class_for`` — an explicit table for named categories
-  (used for the TWDB modeled-frequency layers). Each row records source, original
-  category, assigned class, and a rationale; keep it in sync with the data dictionary.
+  (the TWDB modeled-frequency layers). Each row records source, original
+  category, assigned class, and a rationale.
 - ``classify_fema_zone`` — the rule set for FEMA-style zone letters. Applies to the
   FEMA NFHL and to Hidalgo's digitized 1981 FIRM, which uses the same lettering
   (legacy Zone B == shaded Zone X, legacy Zone C == Zone X). The layer's ``source``
@@ -67,43 +67,9 @@ def classify_fema_zone(fld_zone: str | None, zone_subty: str | None = None) -> R
         return "low"
     return "uncategorized"
 
+
+# Named categories that are not FEMA zone letters, and why each gets its class.
 MAPPING: list[dict[str, str]] = [
-    {
-        "source": "FEMA NFHL",
-        "original_category": "AE",
-        "relative_class": "high",
-        "rationale": "1% annual-chance floodplain with base flood elevations (SFHA).",
-    },
-    {
-        "source": "FEMA NFHL",
-        "original_category": "A",
-        "relative_class": "high",
-        "rationale": "1% annual-chance floodplain, no base flood elevation (SFHA).",
-    },
-    {
-        "source": "FEMA NFHL",
-        "original_category": "AO",
-        "relative_class": "high",
-        "rationale": "1% annual-chance shallow flooding / sheet flow (SFHA).",
-    },
-    {
-        "source": "FEMA NFHL",
-        "original_category": "VE",
-        "relative_class": "high",
-        "rationale": "1% annual-chance coastal floodplain with wave action (SFHA).",
-    },
-    {
-        "source": "FEMA NFHL",
-        "original_category": "X (0.2% annual chance)",
-        "relative_class": "moderate",
-        "rationale": "0.2% annual-chance flood hazard area.",
-    },
-    {
-        "source": "FEMA NFHL",
-        "original_category": "X",
-        "relative_class": "low",
-        "rationale": "Area of minimal flood hazard outside the 0.2% annual chance.",
-    },
     {
         "source": "TWDB 2025 cursory floodplain",
         "original_category": "1% annual chance",

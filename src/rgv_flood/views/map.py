@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from rgv_flood import data_access
-from rgv_flood.counties import COUNTIES, is_county
+from rgv_flood.counties import COUNTIES, RGV_BBOX, is_county
 from rgv_flood.severity import RELATIVE_CLASSES
 
 bp = Blueprint("map", __name__)
@@ -19,11 +21,20 @@ def _county_arg() -> tuple[str | None, dict | None]:
     return slug, COUNTIES.get(slug)
 
 
+def _send_json_file(path: Path | None):
+    """Serve a file the pipeline already wrote as valid JSON, untouched (with
+    ETag/Last-Modified, so browsers revalidate instead of re-downloading)."""
+    if path is None:
+        abort(404)
+    return send_file(path, mimetype="application/json")
+
+
 @bp.get("/")
 def index():
     return render_template(
         "index.html",
         counties=COUNTIES,
+        bbox=RGV_BBOX,
         layers=data_access.available_layers(),
         relative_classes=RELATIVE_CLASSES,
         event_count=len(data_access.flood_events()),
@@ -32,28 +43,20 @@ def index():
 
 @bp.get("/api/layers/<layer_id>.geojson")
 def layer(layer_id: str):
-    path = data_access.layer_path(layer_id)
-    if path is None:
-        abort(404)
-    # The pipeline already wrote valid GeoJSON; send the file as is (with
-    # ETag/Last-Modified, so browsers revalidate instead of re-downloading).
-    return send_file(path, mimetype="application/json")
+    return _send_json_file(data_access.layer_path(layer_id))
 
 
 @bp.get("/api/flood-events.geojson")
 def flood_events_geojson():
-    fc = data_access.flood_events_fc()
-    if fc is None:
-        abort(404)
-    return jsonify(fc)
+    return _send_json_file(data_access.output_path(data_access.FLOOD_EVENTS_FILE))
 
 
 @bp.get("/api/live-signals.geojson")
 def live_signals_geojson():
-    fc = data_access.active_official_signal_features()
-    if fc is None:
+    collection = data_access.active_official_signal_features()
+    if collection is None:
         abort(404)
-    return jsonify(fc)
+    return jsonify(collection)
 
 
 @bp.get("/partials/live-signals")
@@ -69,10 +72,10 @@ def live_signals_partial():
 @bp.get("/partials/metadata/<layer_id>")
 def metadata_partial(layer_id: str):
     """Source card shown when a layer or zone is selected."""
-    for entry in data_access.available_layers():
-        if entry["id"] == layer_id:
-            return render_template("partials/metadata.html", layer=entry)
-    abort(404)
+    entry = data_access.layer(layer_id)
+    if entry is None:
+        abort(404)
+    return render_template("partials/metadata.html", layer=entry)
 
 
 @bp.get("/partials/events")
