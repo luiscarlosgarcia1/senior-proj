@@ -30,16 +30,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from pathlib import Path
 
 import shapely
+from jsonio import feature_collection
 from overturemaps import record_batch_reader
+from paths import county_boundary, hazard_layers_dir
 from shapely.geometry import shape
 
 from rgv_flood.counties import COUNTIES
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = REPO_ROOT / "data"
 
 # west, south, east, north -- a generous box around the four counties. This
 # alone is NOT the exclusion boundary: every feature is also tested against
@@ -57,8 +55,7 @@ def _county_polygons() -> dict[str, shapely.Geometry]:
     """Each county's TIGER boundary, prepared so the many intersects tests below are fast."""
     polygons = {}
     for slug in COUNTIES:
-        path = DATA_DIR / f"{slug}-county" / "flood-hazard-layers" / "boundary.geojson"
-        polygons[slug] = shape(json.loads(path.read_text(encoding="utf-8"))["features"][0]["geometry"])
+        polygons[slug] = shape(county_boundary(slug))
         shapely.prepare(polygons[slug])
     return polygons
 
@@ -105,11 +102,10 @@ def main() -> None:
     print(f"dropped {dropped} feature(s) outside all four county boundaries")
 
     for slug, classes in by_county.items():
-        out_dir = DATA_DIR / f"{slug}-county" / "flood-hazard-layers"
+        out_dir = hazard_layers_dir(slug)
         out_dir.mkdir(parents=True, exist_ok=True)
         for cls, features in classes.items():
-            collection = {"type": "FeatureCollection", "features": features}
-            (out_dir / KEPT_CLASSES[cls]).write_text(json.dumps(collection), encoding="utf-8")
+            (out_dir / KEPT_CLASSES[cls]).write_text(json.dumps(feature_collection(features)), encoding="utf-8")
         print(f"  [{slug}] " + ", ".join(f"{cls}s={len(features)}" for cls, features in classes.items()))
 
 

@@ -23,19 +23,20 @@ from pathlib import Path
 from county_collections_geopackage.county_import import CountyImport
 from county_collections_geopackage.errors import BuildError
 from county_collections_geopackage.geopackage import (
-    canonical_json,
     create_schema,
     gpkg_geometry,
     register_spatial_functions,
 )
 from county_collections_geopackage.record_import import import_records
 from county_collections_geopackage.spatial_layer_import import import_spatial_layers
+from jsonio import canonical_json
+from paths import DATA_DIR, REPO_ROOT, county_dir
+from paths import GEOPACKAGE as DEFAULT_OUTPUT
 from shapely.ops import unary_union
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = REPO_ROOT / "data"
-DEFAULT_OUTPUT = DATA_DIR / "generated" / "county-collections.gpkg"
-COUNTY_SLUGS = ("cameron", "hidalgo", "starr", "willacy")
+from rgv_flood.counties import COUNTIES
+
+COUNTY_SLUGS = tuple(COUNTIES)
 
 
 def _artifact_kind(relative_path: Path) -> str:
@@ -73,12 +74,10 @@ def _import_artifacts(
 
 def _build(connection: sqlite3.Connection) -> None:
     seen_record_ids: set[str] = set()
-    county_boundaries: dict[str, list[tuple[object, str]]] = {
-        slug: [] for slug in COUNTY_SLUGS
-    }
+    county_boundaries: dict[str, list[tuple[object, str]]] = {}
     for slug in COUNTY_SLUGS:
-        county_dir = DATA_DIR / f"{slug}-county"
-        manifest_path = county_dir / "manifest.json"
+        directory = county_dir(slug, DATA_DIR)
+        manifest_path = directory / "manifest.json"
         if not manifest_path.is_file():
             raise BuildError(
                 f"missing canonical collection: {manifest_path.relative_to(REPO_ROOT)}"
@@ -90,22 +89,17 @@ def _build(connection: sqlite3.Connection) -> None:
             (
                 slug,
                 county_name,
-                county_dir.relative_to(REPO_ROOT).as_posix(),
+                directory.relative_to(REPO_ROOT).as_posix(),
                 canonical_json(manifest),
             ),
         )
         county = CountyImport(
-            directory=county_dir,
+            directory=directory,
             slug=slug,
-            source_artifacts=_import_artifacts(connection, county_dir, slug),
+            source_artifacts=_import_artifacts(connection, directory, slug),
             repository_root=REPO_ROOT,
         )
-        import_records(
-            connection,
-            county,
-            manifest,
-            seen_record_ids,
-        )
+        import_records(connection, county, manifest, seen_record_ids)
         county_boundaries[slug] = import_spatial_layers(connection, county)
     _import_county_boundaries(connection, county_boundaries)
 

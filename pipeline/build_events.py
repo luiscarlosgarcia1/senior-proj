@@ -23,13 +23,14 @@ Safe to re-run (overwrites only its own three outputs).
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from layer_io import DATA_DIR, OUT_DIR
+from jsonio import feature_collection, read_ndjson, write_json
+from paths import DATA_DIR, OUT_DIR, county_boundary, ghcn_daily_file, storm_events_file
 from shapely.geometry import Point, shape
 
 from rgv_flood.counties import SHORT_NAMES as COUNTY_NAMES
 
+GENERATED_BY = "pipeline/build_events.py"
 RAINFALL_TOP_N = 15
 
 # A handful of NOAA Storm Events rows carry a BEGIN_LAT/LON that is plainly a
@@ -45,20 +46,14 @@ RAINFALL_TOP_N = 15
 BOUNDARY_TOLERANCE_DEG = 0.01  # ~1.1 km
 
 
-def _county_boundary(slug: str):
-    path = DATA_DIR / f"{slug}-county" / "flood-hazard-layers" / "boundary.geojson"
-    return shape(json.loads(path.read_text(encoding="utf-8"))["features"][0]["geometry"])
-
-
 def _near_county(lon: float, lat: float, boundary) -> bool:
     """Inside the county, or within the reporting-error tolerance of its edge."""
     return boundary.distance(Point(lon, lat)) <= BOUNDARY_TOLERANCE_DEG  # 0 when inside
 
 
-def _load(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+def _records(slug: str, record_kind: str) -> list[dict]:
+    """One kind of record from a county's storm-events file (which also holds its public reports)."""
+    return [r for r in read_ndjson(storm_events_file(slug, DATA_DIR)) if r.get("record_kind") == record_kind]
 
 
 def _event_type(summary: str) -> str:
@@ -87,11 +82,8 @@ def build_events() -> int:
     features = []
     dropped_coords = 0
     for slug, name in COUNTY_NAMES.items():
-        boundary = _county_boundary(slug)
-        path = DATA_DIR / f"{slug}-county" / "records" / "events-and-public-reports" / "noaa-storm-events.ndjson"
-        for r in _load(path):
-            if r.get("record_kind") != "flood_event":
-                continue
+        boundary = shape(county_boundary(slug, DATA_DIR))
+        for r in _records(slug, "flood_event"):
             ref = r.get("source_reference") or {}
             geometry = r.get("geometry")
             props = {
@@ -116,9 +108,7 @@ def build_events() -> int:
                     dropped_coords += 1
             features.append({"type": "Feature", "geometry": geometry, "properties": props})
     features.sort(key=lambda f: (f["properties"]["date"], f["properties"]["id"]), reverse=True)
-    (OUT_DIR / "flood-events.geojson").write_text(
-        json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8"
-    )
+    (OUT_DIR / "flood-events.geojson").write_text(json.dumps(feature_collection(features)), encoding="utf-8")
     mapped = sum(1 for f in features if f["geometry"])
     note = f", {dropped_coords} bad coordinate(s) dropped" if dropped_coords else ""
     print(f"flood-events.geojson: {len(features)} events across {len(COUNTY_NAMES)} counties ({mapped} mapped{note})")
@@ -128,10 +118,7 @@ def build_events() -> int:
 def build_reports() -> int:
     reports = []
     for slug in COUNTY_NAMES:
-        path = DATA_DIR / f"{slug}-county" / "records" / "events-and-public-reports" / "noaa-storm-events.ndjson"
-        for r in _load(path):
-            if r.get("record_kind") != "public_report":
-                continue
+        for r in _records(slug, "public_report"):
             ref = r.get("source_reference") or {}
             reports.append({
                 "headline": _first_sentence(r.get("summary", "")),
@@ -145,10 +132,7 @@ def build_reports() -> int:
                 "county": slug,
             })
     reports.sort(key=lambda x: x["published_at"] or "")
-    (OUT_DIR / "flood-reports.json").write_text(
-        json.dumps({"generated_by": "pipeline/build_events.py", "reports": reports}, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_json(OUT_DIR / "flood-reports.json", {"generated_by": GENERATED_BY, "reports": reports})
     by_county = sorted({r["county"] for r in reports})
     print(f"flood-reports.json: {len(reports)} reports (curated so far for: {', '.join(by_county) or 'none'})")
     return len(reports)
@@ -157,8 +141,7 @@ def build_reports() -> int:
 def build_rainfall() -> int:
     days = []
     for slug in COUNTY_NAMES:
-        path = DATA_DIR / f"{slug}-county" / "records" / "layers-and-weather" / "noaa-ghcn-daily-2000-2025.ndjson"
-        for w in _load(path):
+        for w in read_ndjson(ghcn_daily_file(slug, DATA_DIR)):
             attrs = w["original_attributes"]
             prcp = attrs["observations"].get("PRCP")
             if not prcp or prcp.get("value") is None:
@@ -175,10 +158,7 @@ def build_rainfall() -> int:
             })
     days.sort(key=lambda d: d["mm"], reverse=True)
     top = days[:RAINFALL_TOP_N]
-    (OUT_DIR / "rainfall-records.json").write_text(
-        json.dumps({"generated_by": "pipeline/build_events.py", "days": top}, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_json(OUT_DIR / "rainfall-records.json", {"generated_by": GENERATED_BY, "days": top})
     print(f"rainfall-records.json: top {len(top)} of {len(days)} days with measurable rain, all counties")
     return len(top)
 

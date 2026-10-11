@@ -30,19 +30,10 @@ Safe to re-run: every step it calls is independently idempotent.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-# Same default + override as SRC_RAW in pipeline/import_county_flood_data.py.
-FLOOD_PROJECT_DIR = Path(
-    os.environ.get(
-        "RGV_FLOOD_PROJECT_RAW_DIR",
-        "C:/Users/danny/Documents/Code Projects/Flood Project/data/raw",
-    )
-)
+from paths import FLOOD_PROJECT_RAW, REPO_ROOT
 
 
 def run_python(script: str) -> None:
@@ -60,9 +51,9 @@ def main() -> None:
     ]
     for number, (title, script) in enumerate(steps, start=1):
         print(f"\n== {number}/{len(steps)} {title} ==")
-        if script.endswith("import_county_flood_data.py") and not FLOOD_PROJECT_DIR.is_dir():
+        if script.endswith("import_county_flood_data.py") and not FLOOD_PROJECT_RAW.is_dir():
             print(
-                f"[skip] {FLOOD_PROJECT_DIR} not found -- flood-hazard-layers/*.geojson "
+                f"[skip] {FLOOD_PROJECT_RAW} not found -- flood-hazard-layers/*.geojson "
                 "will not be (re)created here.\n"
                 "       See README 'Raw per-county data' for how to get it."
             )

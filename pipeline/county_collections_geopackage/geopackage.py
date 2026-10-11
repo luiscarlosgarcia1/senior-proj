@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import struct
+from functools import lru_cache
 
 from pyproj import Transformer
 from shapely import from_wkb, make_valid
@@ -14,11 +14,6 @@ from shapely.ops import transform
 from .errors import BuildError
 
 EPSG_4326 = 4326
-
-
-def canonical_json(value: object) -> str:
-    """Encode JSON deterministically so successive builds have identical bytes."""
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def gpkg_geometry(
@@ -31,10 +26,13 @@ def gpkg_geometry(
         parsed = shape(geometry)
     except Exception as error:
         raise BuildError(f"{context}: malformed GeoJSON geometry") from error
+    # Validity is checked once per geometry: it is costly on the huge modeled-extent polygons.
     if not parsed.is_valid:
         parsed = make_valid(parsed)
-    if parsed.is_empty or not parsed.is_valid:
-        raise BuildError(f"{context}: geometry is empty or cannot be made valid")
+        if not parsed.is_valid:
+            raise BuildError(f"{context}: geometry cannot be made valid")
+    if parsed.is_empty:
+        raise BuildError(f"{context}: geometry is empty")
     if source_crs.upper() != "EPSG:4326":
         try:
             transformer = Transformer.from_crs(source_crs, "EPSG:4326", always_xy=True)
@@ -46,15 +44,21 @@ def gpkg_geometry(
     return b"GP" + bytes((0, 1)) + struct.pack("<i", EPSG_4326) + parsed.wkb
 
 
+@lru_cache(maxsize=256)
+def _bounds(geometry: bytes) -> tuple[float, float, float, float]:
+    """(min x, min y, max x, max y) of a GeoPackage geometry blob.
+
+    The index triggers ask for all four values of each inserted geometry, one
+    call at a time, and weather records repeat the same few station points, so
+    remembering recent answers saves parsing the same bytes over and over.
+    """
+    return from_wkb(geometry[8:]).bounds
+
+
 def register_spatial_functions(connection: sqlite3.Connection) -> None:
     """Register the geometry-bound functions required by GeoPackage RTree triggers."""
     def coordinate(position: int):
-        def value(geometry: bytes | None) -> float | None:
-            if geometry is None:
-                return None
-            return from_wkb(geometry[8:]).bounds[position]
-
-        return value
+        return lambda geometry: None if geometry is None else _bounds(geometry)[position]
 
     connection.create_function("ST_IsEmpty", 1, lambda geometry: geometry is None)
     connection.create_function("ST_MinX", 1, coordinate(0))

@@ -36,12 +36,11 @@ import time
 import urllib.parse
 from pathlib import Path
 
+from jsonio import feature_collection, write_json
 from net import NETWORK_ERRORS, already_have, download, get_json
+from paths import ML_RAW as RAW
 
 from rgv_flood.counties import COUNTIES
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-RAW = REPO_ROOT / "data" / "ml" / "raw"
 
 # Union of the four counties, padded a little. West, south, east, north.
 AREA = (-99.25, 25.80, -97.00, 26.85)
@@ -136,11 +135,11 @@ def step_hcdd1(force: bool) -> None:
         except (*NETWORK_ERRORS, ValueError, KeyError) as error:  # one layer failing shouldn't lose the rest
             print(f"  [fail] {name} ({service}/{layer}): {error}")
             continue
-        dest.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
+        dest.write_text(json.dumps(feature_collection(features)), encoding="utf-8")
         inventory[name] = {"service": service, "layer": layer, "features": len(features)}
         print(f"  [ok]   {name}: {len(features)} features")
     if inventory:
-        (out / "_inventory.json").write_text(json.dumps(inventory, indent=2), encoding="utf-8")
+        write_json(out / "_inventory.json", inventory)
 
 
 # ---- NFIP / FEMA -----------------------------------------------------------
@@ -382,7 +381,7 @@ def step_soils(force: bool) -> None:
         }
         for polygon_key, (mukey, wkt) in polygons.items()
     ]
-    dest.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
+    dest.write_text(json.dumps(feature_collection(features)), encoding="utf-8")
     print(f"  [ok]   soils: {len(features)} polygons, {len(mukeys)} map units ({dest.stat().st_size / 1e6:.0f} MB)")
 
 

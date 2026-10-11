@@ -6,6 +6,7 @@ from pathlib import Path
 
 import noaa_ingest
 import pytest
+from paths import ghcn_daily_file, storm_events_file
 
 STORM_HEADER = (
     "STATE,CZ_NAME,EVENT_TYPE,BEGIN_LAT,BEGIN_LON,BEGIN_DATE_TIME,BEGIN_YEARMONTH,BEGIN_DAY,"
@@ -59,7 +60,7 @@ def test_storm_events_split_by_county_in_one_pass(tmp_path):
     noaa_ingest.ingest_storm_events(tmp_path / "raw", data_dir, ["hidalgo", "cameron"])
 
     def records(slug):
-        path = noaa_ingest._county_paths(data_dir, slug)["storm_records"]
+        path = storm_events_file(slug, data_dir)
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     hidalgo, cameron = records("hidalgo"), records("cameron")
@@ -77,7 +78,7 @@ def test_storm_events_split_by_county_in_one_pass(tmp_path):
 def test_hand_curated_reports_survive_a_rerun(tmp_path):
     write_storm_file(tmp_path / "raw", [storm_row()])
     data_dir = tmp_path / "data"
-    target = noaa_ingest._county_paths(data_dir, "hidalgo")["storm_records"]
+    target = storm_events_file("hidalgo", data_dir)
     target.parent.mkdir(parents=True)
     report = {"record_id": "hand-curated-1", "record_kind": "public_report", "event_start": "2018-06-22"}
     stale = {"record_id": "noaa-storm-events-old", "record_kind": "flood_event", "event_start": "2001-01-01"}
@@ -104,7 +105,7 @@ def test_ghcn_keeps_clean_rows_in_range_and_drops_flagged_ones(tmp_path):
 
     noaa_ingest.ingest_ghcn_daily(tmp_path / "raw", tmp_path / "data", ["hidalgo"])
 
-    path = noaa_ingest._county_paths(tmp_path / "data", "hidalgo")["ghcn_records"]
+    path = ghcn_daily_file("hidalgo", tmp_path / "data")
     (record,) = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert record["record_id"] == f"noaa-ghcn-daily-{station.lower()}-2018-06-21"
     observations = record["original_attributes"]["observations"]

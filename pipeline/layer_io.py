@@ -1,14 +1,8 @@
-"""Paths shared by the pipeline scripts, and the one place a layer file is written."""
+"""The one place a map layer file is written."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = REPO_ROOT / "data"
-ML_RAW = DATA_DIR / "ml" / "raw"
-OUT_DIR = REPO_ROOT / "src" / "rgv_flood" / "static" / "data"
-LIVE_SIGNALS_DB = DATA_DIR / "generated" / "live-signals.sqlite3"
+from paths import OUT_DIR
 
 
 def write_layer(filename: str, geojson: str, feature_count: int) -> int:

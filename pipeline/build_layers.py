@@ -18,7 +18,6 @@ Safe to re-run (overwrites its own outputs only).
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
@@ -31,8 +30,10 @@ import evidence_layers
 import geopandas as gpd
 import pandas as pd
 import pyogrio
-from layer_io import DATA_DIR, OUT_DIR, write_layer
+from jsonio import write_json
+from layer_io import write_layer
 from layer_meta import LAYER_META
+from paths import OUT_DIR, hazard_layers_dir
 
 from rgv_flood.counties import NFHL_COUNTIES, SHORT_NAMES
 from rgv_flood.severity import classify_fema_zone, relative_class_for
@@ -47,10 +48,6 @@ TOLERANCE_MODELED = 0.0015
 
 # Columns that identify a hazard polygon; polygons sharing all of them are dissolved.
 DISSOLVE_COLS = ["county_slug", "county", "source", "original_category", "relative_class"]
-
-
-def _src(slug: str, name: str) -> Path:
-    return DATA_DIR / f"{slug}-county" / "flood-hazard-layers" / name
 
 
 def _drop_empty(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -68,7 +65,7 @@ def _read(path: Path) -> gpd.GeoDataFrame:
 
 def _read_county(slug: str, filename: str) -> gpd.GeoDataFrame | None:
     """One county's layer file with its county columns set, or None if absent/empty."""
-    path = _src(slug, filename)
+    path = hazard_layers_dir(slug) / filename
     if not path.exists():
         return None
     gdf = _read(path)
@@ -185,8 +182,7 @@ def main() -> None:
         for layer_id, count in counts.items()
         if count
     ]
-    manifest = {"generated_by": "pipeline/build_layers.py", "layers": layers}
-    (OUT_DIR / "layers.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    write_json(OUT_DIR / "layers.json", {"generated_by": "pipeline/build_layers.py", "layers": layers})
     print(f"wrote layers.json with {len(layers)} layer(s)")
 
 

@@ -7,11 +7,12 @@ import json
 import sqlite3
 from pathlib import Path
 
+from jsonio import canonical_json
 from shapely.geometry import shape
 
 from .county_import import CountyImport
 from .errors import BuildError
-from .geopackage import canonical_json, gpkg_geometry
+from .geopackage import gpkg_geometry
 
 
 def import_spatial_layers(

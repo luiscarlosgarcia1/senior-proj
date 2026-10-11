@@ -30,12 +30,12 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from jsonio import read_ndjson, write_json
 from net import download, get_text
 from noaa_stations import STATIONS_BY_COUNTY
+from paths import DATA_DIR, NOAA_RAW, county_dir, ghcn_daily_file, storm_events_file
 
 from rgv_flood.counties import SHORT_NAMES
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 PUBLISHER = "NOAA National Centers for Environmental Information"
 STORM_EVENTS_BASE = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles"
@@ -80,19 +80,8 @@ def _write_ndjson(path: Path, records: list[dict]) -> None:
     path.write_text("".join(_dump(r) + "\n" for r in records), encoding="utf-8")
 
 
-def _write_note(path: Path, note: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(note, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def _county_paths(data_dir: Path, slug: str) -> dict[str, Path]:
-    county = data_dir / f"{slug}-county"
-    return {
-        "storm_records": county / "records" / "events-and-public-reports" / "noaa-storm-events.ndjson",
-        "storm_note": county / "sources" / "official-events" / "noaa-storm-events-2000-2025.json",
-        "ghcn_records": county / "records" / "layers-and-weather" / "noaa-ghcn-daily-2000-2025.ndjson",
-        "ghcn_note": county / "sources" / "weather" / "noaa-ghcn-daily-2000-2025.json",
-    }
+def _source_note(data_dir: Path, slug: str, family: str, name: str) -> Path:
+    return county_dir(slug, data_dir) / "sources" / family / name
 
 
 # ---- download ---------------------------------------------------------------
@@ -208,10 +197,7 @@ def _read_storm_file(path: Path, counties_by_cz_name: dict[str, str], retrieved_
 def _existing_non_generated(path: Path) -> list[dict]:
     """Hand-curated rows (e.g. Hidalgo's news and government reports) that no script
     can reproduce. Re-running the ingest must not delete them."""
-    if not path.exists():
-        return []
-    rows = (json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
-    return [row for row in rows if row.get("record_kind") != "flood_event"]
+    return [row for row in read_ndjson(path) if row.get("record_kind") != "flood_event"]
 
 
 def ingest_storm_events(raw_dir: Path, data_dir: Path, counties: list[str]) -> None:
@@ -224,14 +210,14 @@ def ingest_storm_events(raw_dir: Path, data_dir: Path, counties: list[str]) -> N
             generated[slug] += records
 
     for slug in counties:
-        paths = _county_paths(data_dir, slug)
-        preserved = _existing_non_generated(paths["storm_records"])
+        records_file = storm_events_file(slug, data_dir)
+        preserved = _existing_non_generated(records_file)
         if preserved:
-            print(f"[preserve] keeping {len(preserved)} existing non-generated record(s) from {paths['storm_records']}")
+            print(f"[preserve] keeping {len(preserved)} existing non-generated record(s) from {records_file}")
         records = sorted(generated[slug] + preserved, key=lambda r: (r["event_start"], r["record_id"]))
-        _write_ndjson(paths["storm_records"], records)
+        _write_ndjson(records_file, records)
         cz_name = SHORT_NAMES[slug].upper()
-        _write_note(paths["storm_note"], {
+        write_json(_source_note(data_dir, slug, "official-events", "noaa-storm-events-2000-2025.json"), {
             "publisher": PUBLISHER,
             "dataset": "Storm Events Database",
             "retrieved_at": retrieved_at,
@@ -318,10 +304,9 @@ def ingest_ghcn_daily(raw_dir: Path, data_dir: Path, counties: list[str]) -> Non
                 })
         records.sort(key=lambda r: r["record_id"])
 
-        paths = _county_paths(data_dir, slug)
-        _write_ndjson(paths["ghcn_records"], records)
+        _write_ndjson(ghcn_daily_file(slug, data_dir), records)
         with_data = sorted({r["original_attributes"]["station_id"] for r in records})
-        _write_note(paths["ghcn_note"], {
+        write_json(_source_note(data_dir, slug, "weather", "noaa-ghcn-daily-2000-2025.json"), {
             "publisher": PUBLISHER,
             "dataset": "Global Historical Climatology Network Daily (GHCN-Daily)",
             "retrieved_at": retrieved_at,
@@ -350,8 +335,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("step", nargs="?", choices=("download", "ingest"), help="default: both")
     parser.add_argument("--county", choices=sorted(SHORT_NAMES), help="limit to one county (default: all four)")
-    parser.add_argument("--raw-dir", type=Path, default=REPO_ROOT / "tmp" / "noaa", help="downloaded .csv.gz files")
-    parser.add_argument("--data-dir", type=Path, default=REPO_ROOT / "data", help="where data/<county>-county/ lives")
+    parser.add_argument("--raw-dir", type=Path, default=NOAA_RAW, help="downloaded .csv.gz files")
+    parser.add_argument("--data-dir", type=Path, default=DATA_DIR, help="where data/<county>-county/ lives")
     args = parser.parse_args()
 
     counties = [args.county] if args.county else sorted(SHORT_NAMES)

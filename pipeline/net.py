@@ -1,4 +1,4 @@
-"""HTTP helpers shared by the data-fetching steps."""
+"""HTTP helpers shared by everything in the pipeline that talks to the network."""
 
 from __future__ import annotations
 
@@ -22,26 +22,38 @@ def already_have(path: Path, *, force: bool = False) -> bool:
     return present
 
 
+def _request(url: str, *, headers: dict | None = None, data: bytes | None = None) -> urllib.request.Request:
+    return urllib.request.Request(url, data=data, headers={**USER_AGENT, **(headers or {})})
+
+
+def _wait_before_retry(attempt: int, attempts: int, error: Exception) -> None:
+    wait = min(10 * 2 ** (attempt - 1), 120)
+    print(f"    retry {attempt}/{attempts} after {error!r}; waiting {wait}s", flush=True)
+    time.sleep(wait)
+
+
+def get_bytes(url: str, *, headers: dict | None = None, timeout: int = 60) -> bytes:
+    with urllib.request.urlopen(_request(url, headers=headers), timeout=timeout) as response:
+        return response.read()
+
+
 def get_text(url: str, *, timeout: int = 60) -> str:
-    request = urllib.request.Request(url, headers=USER_AGENT)
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read().decode("utf-8", errors="replace")
+    return get_bytes(url, timeout=timeout).decode("utf-8", errors="replace")
 
 
 def get_json(
-    url: str, *, body: dict | None = None, timeout: int = 90, attempts: int = 1
+    url: str, *, body: dict | None = None, headers: dict | None = None, timeout: int = 90, attempts: int = 1
 ) -> dict | list:
     """GET JSON (POST when `body` is given), backing off and retrying on network errors.
 
     Some public APIs (OpenFEMA especially) answer 503 under load; retrying beats
     losing a long paged download.
     """
-    headers = dict(USER_AGENT)
     data = None
     if body is not None:
         data = json.dumps(body).encode()
-        headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(url, data=data, headers=headers)
+        headers = {**(headers or {}), "Content-Type": "application/json"}
+    request = _request(url, headers=headers, data=data)
     for attempt in range(1, attempts + 1):
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -49,9 +61,7 @@ def get_json(
         except (*NETWORK_ERRORS, json.JSONDecodeError) as error:
             if attempt == attempts:
                 raise
-            wait = min(10 * 2 ** (attempt - 1), 120)
-            print(f"    retry {attempt}/{attempts} after {error!r}; waiting {wait}s", flush=True)
-            time.sleep(wait)
+            _wait_before_retry(attempt, attempts, error)
     raise AssertionError("unreachable")  # pragma: no cover
 
 
@@ -65,18 +75,15 @@ def download(
         return True
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
-    request = urllib.request.Request(url, headers=USER_AGENT)
     for attempt in range(1, attempts + 1):
         try:
-            with urllib.request.urlopen(request, timeout=300) as response, part.open("wb") as out:
+            with urllib.request.urlopen(_request(url), timeout=300) as response, part.open("wb") as out:
                 shutil.copyfileobj(response, out)
             break
         except NETWORK_ERRORS as error:
             part.unlink(missing_ok=True)
             if attempt < attempts:
-                wait = min(10 * 2 ** (attempt - 1), 120)
-                print(f"    retry {attempt}/{attempts} after {error!r}; waiting {wait}s", flush=True)
-                time.sleep(wait)
+                _wait_before_retry(attempt, attempts, error)
             elif required:
                 raise
             else:

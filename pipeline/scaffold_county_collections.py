@@ -22,11 +22,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from rgv_flood.counties import COUNTIES, NFHL_COUNTIES, SHORT_NAMES
+from paths import DATA_DIR, county_dir
+from paths import SCHEMA_DIR as SCHEMA_TEMPLATE_DIR  # tracked; see module docstring
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = REPO_ROOT / "data"
-SCHEMA_TEMPLATE_DIR = REPO_ROOT / "pipeline" / "schemas"  # tracked; see module docstring
+from rgv_flood.counties import COUNTIES, NFHL_COUNTIES, SHORT_NAMES
 
 RECORD_SUBDIRS = ["events-and-public-reports", "layers-and-weather"]
 SOURCE_FAMILIES = [
@@ -225,7 +224,7 @@ def _source_notes(slug: str, name: str, geoid: str) -> dict[str, str]:
 
 def scaffold_county(slug: str, data_dir: Path, schema_files: list[Path]) -> list[str]:
     """Lay down one county's folders and files; returns what was newly created."""
-    root = data_dir / f"{slug}-county"
+    root = county_dir(slug, data_dir)
     name, geoid = SHORT_NAMES[slug], COUNTIES[slug]["fips"]
 
     # Schemas are always refreshed from the tracked template: every county,

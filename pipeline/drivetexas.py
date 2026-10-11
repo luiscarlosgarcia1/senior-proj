@@ -12,14 +12,17 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 
-from live_signals import COUNTY_SLUGS, IngestionResult, LiveSignal, LiveSignalStore
+from live_signals import IngestionResult, LiveSignal, LiveSignalStore, utc_timestamp
+from net import get_json
 from shapely.geometry import shape
 
 DRIVE_TEXAS_PUBLISHER = "Texas Department of Transportation (TxDOT)"
 DRIVE_TEXAS_SERVICE = "https://services.arcgis.com/KTcxiTD9dsQw4r7Z/ArcGIS/rest/services"
+# TxDOT's own county numbers (not FIPS).
 DRIVE_TEXAS_COUNTY_CODES = {"cameron": 31, "hidalgo": 108, "starr": 214, "willacy": 245}
+# The sole approved server-side scope filter: the four counties.
+COUNTY_FILTER = f"TXDOT_COUNTY_NBR IN ({','.join(map(str, DRIVE_TEXAS_COUNTY_CODES.values()))})"
 CONDITION_TYPES = {
     "A": "Accident", "C": "Construction", "D": "Damage", "F": "Flooding",
     "I": "Ice/snow", "O": "Other", "X": "Evacuation lane", "Y": "Contra flow", "Z": "Closed",
@@ -32,6 +35,11 @@ class DriveTexasLayer:
     endpoint: str
     page_size: int
 
+    @property
+    def source(self) -> str:
+        """The live-signal source id; each layer is reconciled on its own."""
+        return f"drivetexas:{self.key}"
+
 
 DRIVE_TEXAS_LAYERS = (
     DriveTexasLayer("points", f"{DRIVE_TEXAS_SERVICE}/DriveTexas_Points/FeatureServer/0", 5000),
@@ -39,11 +47,6 @@ DRIVE_TEXAS_LAYERS = (
 )
 
 PageFetcher = Callable[[DriveTexasLayer, int], Mapping[str, object]]
-
-
-def drivetexas_county_where() -> str:
-    """Return the sole approved server-side four-county scope filter."""
-    return "TXDOT_COUNTY_NBR IN (" + ",".join(str(DRIVE_TEXAS_COUNTY_CODES[slug]) for slug in sorted(COUNTY_SLUGS)) + ")"
 
 
 def ingest_drivetexas_snapshot(
@@ -58,22 +61,15 @@ def ingest_drivetexas_snapshot(
     A request, payload, or pagination failure returns no changes for that layer,
     so partial upstream data can never close an existing live observation.
     """
-    total = IngestionResult(0, 0, 0)
+    boundaries = {slug: shape(geometry) for slug, geometry in county_boundaries.items()}
+    total = IngestionResult()
     for layer in DRIVE_TEXAS_LAYERS:
         try:
-            features = list(_complete_snapshot(layer, fetch_page))
-            signals = list(_signals(layer, features, county_boundaries))
+            signals = list(_signals(layer, _complete_snapshot(layer, fetch_page), boundaries))
         except (OSError, ValueError, KeyError, TypeError):
-            store.ingest(f"drivetexas:{layer.key}", [], retrieved_at=retrieved_at, complete=False)
+            store.ingest(layer.source, [], retrieved_at=retrieved_at, complete=False)
             continue
-        result = store.ingest(
-            f"drivetexas:{layer.key}", signals, retrieved_at=retrieved_at, reconcile=True
-        )
-        total = IngestionResult(
-            total.inserted + result.inserted,
-            total.updated + result.updated,
-            total.terminalized + result.terminalized,
-        )
+        total += store.ingest(layer.source, signals, retrieved_at=retrieved_at)
     return total
 
 
@@ -81,7 +77,7 @@ def fetch_drivetexas_page(layer: DriveTexasLayer, offset: int) -> Mapping[str, o
     """Request one stable-OBJECTID GeoJSON page from the approved public layer."""
     query = urlencode(
         {
-            "where": drivetexas_county_where(),
+            "where": COUNTY_FILTER,
             "outFields": "*",
             "f": "geojson",
             "resultOffset": offset,
@@ -90,17 +86,11 @@ def fetch_drivetexas_page(layer: DriveTexasLayer, offset: int) -> Mapping[str, o
             "returnGeometry": "true",
         }
     )
-    request = Request(
-        f"{layer.endpoint}/query?{query}",
-        headers={"User-Agent": "RGV-Flood-Impact-Visualizer/1.0"},
-    )
-    with urlopen(request, timeout=30) as response:  # nosec B310 -- approved public source
-        import json
-
-        return json.load(response)
+    return get_json(f"{layer.endpoint}/query?{query}", timeout=30)
 
 
 def _complete_snapshot(layer: DriveTexasLayer, fetch_page: PageFetcher) -> Iterable[Mapping[str, object]]:
+    """Every feature of a layer, following the server's paging to the end."""
     offset = 0
     while True:
         page = fetch_page(layer, offset)
@@ -110,8 +100,7 @@ def _complete_snapshot(layer: DriveTexasLayer, fetch_page: PageFetcher) -> Itera
         if not isinstance(features, list):
             raise TypeError("DriveTexas page has no feature list")
         yield from features
-        exceeded = page.get("exceededTransferLimit", False)
-        if not exceeded:
+        if not page.get("exceededTransferLimit", False):
             return
         if not features:
             raise ValueError("DriveTexas page claims more results but is empty")
@@ -119,11 +108,8 @@ def _complete_snapshot(layer: DriveTexasLayer, fetch_page: PageFetcher) -> Itera
 
 
 def _signals(
-    layer: DriveTexasLayer,
-    features: Iterable[Mapping[str, object]],
-    county_boundaries: Mapping[str, Mapping[str, object]],
+    layer: DriveTexasLayer, features: Iterable[Mapping[str, object]], boundaries: Mapping[str, object]
 ) -> Iterable[LiveSignal]:
-    boundaries = {slug: shape(geometry) for slug, geometry in county_boundaries.items()}
     for feature in features:
         geometry = feature.get("geometry")
         properties = feature.get("properties")
@@ -142,16 +128,14 @@ def _signals(
         if not counties:
             continue
         condition_code = str(properties.get("CNSTRNT_TYPE_CD") or "")
-        summary = str(properties.get("COND_DESC") or properties.get("COMMENTS") or condition_code or "Road condition")
-        native_id = str(object_id)
         yield LiveSignal(
-            source=f"drivetexas:{layer.key}",
-            native_id=native_id,
+            source=layer.source,
+            native_id=str(object_id),
             provenance="official",
-            source_url=f"{layer.endpoint}/{native_id}",
+            source_url=f"{layer.endpoint}/{object_id}",
             source_publisher=DRIVE_TEXAS_PUBLISHER,
             source_channel="public-feature-server",
-            summary=summary,
+            summary=str(properties.get("COND_DESC") or properties.get("COMMENTS") or condition_code or "Road condition"),
             source_attributes={
                 "layer": layer.key,
                 "snapshot_identity": {"layer": layer.key, "OBJECTID": object_id},
@@ -172,6 +156,6 @@ def _arcgis_timestamp(value: object) -> str | None:
     if value is None:
         return None
     try:
-        return datetime.fromtimestamp(float(value) / 1000, UTC).isoformat().replace("+00:00", "Z")
+        return utc_timestamp(datetime.fromtimestamp(float(value) / 1000, UTC))
     except (TypeError, ValueError, OSError):
         return None

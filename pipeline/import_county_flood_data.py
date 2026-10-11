@@ -6,8 +6,8 @@ This does NOT re-download anything and does NOT touch the Flask app or the NOAA
 ingest scripts. It only reads GeoJSON from the sibling project and writes a
 `flood-hazard-layers/` folder under each `data/<county>-county/`.
 
-Source project (read-only), overridable with RGV_FLOOD_PROJECT_RAW_DIR:
-    C:/Users/danny/Documents/Code Projects/Flood Project/data/raw/
+Source project (read-only): `paths.FLOOD_PROJECT_RAW`, overridable with the
+RGV_FLOOD_PROJECT_RAW_DIR environment variable.
 
 Layers per county:
     boundary.geojson              US Census TIGER 2023 county polygon
@@ -23,20 +23,14 @@ Safe to re-run (overwrites the imported files; leaves everything else alone).
 from __future__ import annotations
 
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-from rgv_flood.counties import COUNTIES, NFHL_COUNTIES, SHORT_NAMES
+from jsonio import feature_collection, write_json
+from paths import FLOOD_PROJECT_RAW as SRC_RAW
+from paths import hazard_layers_dir
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SRC_RAW = Path(
-    os.environ.get(
-        "RGV_FLOOD_PROJECT_RAW_DIR",
-        "C:/Users/danny/Documents/Code Projects/Flood Project/data/raw",
-    )
-).resolve()
-DATA_DIR = REPO_ROOT / "data"
+from rgv_flood.counties import COUNTIES, NFHL_COUNTIES, SHORT_NAMES
 
 RETRIEVED_AT = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -46,7 +40,7 @@ def _load(name: str) -> dict:
 
 
 def _write_features(path: Path, features: list[dict]) -> int:
-    path.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
+    path.write_text(json.dumps(feature_collection(features)), encoding="utf-8")
     return len(features)
 
 
@@ -146,7 +140,7 @@ def main() -> None:
         "1in500": _load("twdb_cursory_1in500_rgv.geojson"),
     }
     for slug, county in COUNTIES.items():
-        out_dir = DATA_DIR / f"{slug}-county" / "flood-hazard-layers"
+        out_dir = hazard_layers_dir(slug)
         out_dir.mkdir(parents=True, exist_ok=True)
         layers = _county_layers(slug, out_dir, sources)
 
@@ -159,7 +153,7 @@ def main() -> None:
             "importer": "pipeline/import_county_flood_data.py",
             "layers": layers,
         }
-        (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        write_json(out_dir / "manifest.json", manifest)
         (out_dir / "README.md").write_text(_readme(SHORT_NAMES[slug], layers), encoding="utf-8")
         print(f"[{slug}] {len(layers)} layers, {sum(l['feature_count'] for l in layers)} features -> {out_dir}")
 

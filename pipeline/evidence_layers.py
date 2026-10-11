@@ -18,7 +18,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import geopandas as gpd
-from layer_io import ML_RAW, write_layer
+from jsonio import feature_collection, read_ndjson
+from layer_io import write_layer
+from paths import ML_RAW
 from shapely.geometry import mapping, shape
 
 from rgv_flood.counties import FIPS_TO_SLUG, SHORT_NAMES
@@ -85,8 +87,7 @@ def _convert(layer: str, overlay_type: str, to_properties: Properties, tolerance
 def _write_features(filename: str, features: list[dict]) -> int:
     if not features:
         return 0
-    collection = {"type": "FeatureCollection", "features": features}
-    return write_layer(filename, json.dumps(collection, separators=(",", ":")), len(features))
+    return write_layer(filename, json.dumps(feature_collection(features), separators=(",", ":")), len(features))
 
 
 # ---- flood extents and photos ----------------------------------------------
@@ -270,10 +271,7 @@ class _Tally:
 def _tally_claims(path: Path) -> dict[str, _Tally]:
     """Claims grouped by the 11-digit census tract in each claim's block-group id."""
     tallies: dict[str, _Tally] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        claim = json.loads(line)
+    for claim in read_ndjson(path):
         geoid = str(claim.get("censusGeoid") or "")[:11]
         if len(geoid) != 11:
             continue
