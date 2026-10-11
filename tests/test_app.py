@@ -2,7 +2,7 @@ import json
 from datetime import UTC, datetime
 
 import pytest
-from app_db import open_app_db, replace_table
+from database import open_database, replace_table
 from live_signals import LiveSignal, LiveSignalStore
 
 import rgv_flood
@@ -19,7 +19,10 @@ def _event(event_id: str, date: str, **values) -> dict:
         "location": "Hidalgo County, Texas",
         "precision": "county",
         "summary": "test event",
-        "source_url": None,
+        "narrative": "test narrative",
+        "source_url": "https://example.test/noaa",
+        "source_lon": values.get("lon"),
+        "source_lat": values.get("lat"),
         "geometry_note": None,
         "lon": None,
         "lat": None,
@@ -39,7 +42,33 @@ EVENTS = [
     ),
     _event("noaa-storm-events-2", "2018-06-20", summary="test event without a point"),
 ]
-RAINFALL = [{"county": "hidalgo", "date": "2025-03-28", "mm": 218.4, "inches": 8.6, "station": "Weslaco"}]
+STATIONS = [
+    {
+        "station_id": "USC00419588",
+        "county": "hidalgo",
+        "name": "Weslaco",
+        "lon": -97.97,
+        "lat": 26.18,
+        "elevation_m": 22.9,
+        "source_url": "https://example.test/USC00419588.csv.gz",
+    }
+]
+
+
+def _reading(date: str, element: str, value: int) -> dict:
+    return {
+        "station_id": "USC00419588", "date": date, "element": element, "value": value,
+        "measurement_flag": None, "source_flag": "7", "observation_time_flag": None,
+    }
+
+
+# PRCP is tenths of a millimetre: 2184 is 218.4 mm, or 8.6 inches.
+READINGS = [
+    _reading("2025-03-28", "PRCP", 2184),
+    _reading("2025-03-29", "PRCP", 100),
+    _reading("2025-03-30", "PRCP", 0),  # a dry day is not a rainfall record
+    _reading("2025-03-28", "TMAX", 9999),  # nor is a temperature
+]
 
 
 def _layer(layer_id: str, geojson: str = '{"type":"FeatureCollection","features":[]}', **values) -> dict:
@@ -64,24 +93,18 @@ def _layer(layer_id: str, geojson: str = '{"type":"FeatureCollection","features"
 
 
 def _set_layers(client, *layers: dict) -> None:
-    with open_app_db(client.application.config["APP_DATABASE"]) as connection:
+    with open_database(client.application.config["DATABASE"]) as connection:
         replace_table(connection, "layers", list(layers))
 
 
 @pytest.fixture()
 def client(tmp_path):
     database = tmp_path / "rgv-flood.sqlite3"
-    with open_app_db(database) as connection:
+    with open_database(database) as connection:
         replace_table(connection, "flood_events", EVENTS)
-        replace_table(connection, "rainfall_records", RAINFALL)
-    app = create_app(
-        {
-            "TESTING": True,
-            "APP_DATABASE": database,
-            "LIVE_SIGNALS_DATABASE": tmp_path / "no-live-signals-yet.sqlite3",
-            "LIVE_SIGNALS_SCHEDULER_ENABLED": False,
-        }
-    )
+        replace_table(connection, "weather_stations", STATIONS)
+        replace_table(connection, "weather_observations", READINGS)
+    app = create_app({"TESTING": True, "DATABASE": database, "LIVE_SIGNALS_SCHEDULER_ENABLED": False})
     return app.test_client()
 
 
@@ -110,7 +133,7 @@ def test_app_starts_live_signal_scheduler_when_enabled(tmp_path, monkeypatch):
     app = create_app(
         {
             "LIVE_SIGNALS_SCHEDULER_ENABLED": True,
-            "LIVE_SIGNALS_DATABASE": database,
+            "DATABASE": database,
             "LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS": 30,
             "LIVE_SIGNALS_SCHEDULER_LOCK_FILE": lock_file,
         }
@@ -168,8 +191,12 @@ def test_flood_events_geojson(client):
     assert len(res.json["features"]) == 2
 
 
-def test_missing_live_signals_is_404(client):
-    assert client.get("/api/live-signals.geojson").status_code == 404
+def test_no_live_signals_before_the_first_poll(client):
+    response = client.get("/api/live-signals.geojson")
+
+    assert response.status_code == 200
+    assert response.json["features"] == []
+    assert b"No active official signals" in client.get("/partials/live-signals").data
 
 
 def test_live_signals_endpoint_returns_only_mappable_official_signals(client, tmp_path):
@@ -209,7 +236,7 @@ def test_live_signals_endpoint_returns_only_mappable_official_signals(client, tm
     )
     connection.commit()
     connection.close()
-    client.application.config["LIVE_SIGNALS_DATABASE"] = database
+    client.application.config["DATABASE"] = database
 
     response = client.get("/api/live-signals.geojson")
 
@@ -241,7 +268,7 @@ def test_live_signals_partial_keeps_unmappable_notices_as_source_links(client, t
         ],
         retrieved_at=now,
     )
-    client.application.config["LIVE_SIGNALS_DATABASE"] = database
+    client.application.config["DATABASE"] = database
 
     response = client.get("/partials/live-signals?county_slug=hidalgo")
 
@@ -277,7 +304,7 @@ def test_app_runs_before_the_database_is_built(tmp_path):
     app = create_app(
         {
             "TESTING": True,
-            "APP_DATABASE": tmp_path / "not-built-yet.sqlite3",
+            "DATABASE": tmp_path / "not-built-yet.sqlite3",
             "LIVE_SIGNALS_SCHEDULER_ENABLED": False,
         }
     )
@@ -285,15 +312,24 @@ def test_app_runs_before_the_database_is_built(tmp_path):
 
     assert b"No layers yet" in client.get("/").data
     assert b"No events" in client.get("/partials/events").data
+    assert b"No rainfall records" in client.get("/partials/rainfall").data
     assert client.get("/api/flood-events.geojson").status_code == 404
+    assert client.get("/api/live-signals.geojson").status_code == 404
     assert client.get("/api/layers/fema-nfhl.geojson").status_code == 404
     assert not (tmp_path / "not-built-yet.sqlite3").exists()  # reading must not create it
 
 
-def test_rainfall_partial(client):
-    res = client.get("/partials/rainfall")
-    assert res.status_code == 200
-    assert b"8.6 in" in res.data
+def test_rainfall_partial_ranks_the_wettest_days(client):
+    html = client.get("/partials/rainfall").get_data(as_text=True)
+
+    assert html.index("8.6 in") < html.index("0.4 in")  # 218.4 mm, then 10 mm
+    assert html.count("rain-amount") == 2  # the dry day and the temperature reading are not listed
+    assert "Weslaco" in html
+
+
+def test_rainfall_partial_filters_by_county(client):
+    assert b"8.6 in" in client.get("/partials/rainfall?county_slug=hidalgo").data
+    assert b"No rainfall records" in client.get("/partials/rainfall?county_slug=starr").data
 
 
 def test_event_count_in_index(client):

@@ -2,9 +2,10 @@
 FEMA NFIP claims: recorded flooding, flood photos, the drainage network, bond
 projects, and insurance claims per census tract.
 
-Inputs live in data/ml/raw/ (fetched by pipeline/fetch_ml_inputs.py, gitignored).
-Every builder returns None when its inputs are missing, so a clone that hasn't
-run the fetch script still builds the other layers.
+Inputs are pulled from the publishers by `public_sources.py`, which downloads
+each one once and afterwards reads it from the download cache. A builder returns
+None when its sources have nothing to show; a publisher that can't be reached
+raises, and `build_layers.py` then leaves that one layer out.
 """
 
 from __future__ import annotations
@@ -18,14 +19,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import geopandas as gpd
-from app_db import MapLayer
+from database import MapLayer
 from jsonio import feature_collection, read_ndjson
-from paths import ML_RAW
+from public_sources import census_tracts, hcdd1_layer, nfip_claims
 from shapely.geometry import mapping, shape
 
 from rgv_flood.counties import FIPS_TO_SLUG, RGV_BBOX, SHORT_NAMES
 
-HCDD1_DIR = ML_RAW / "hcdd1"
 HCDD1_NAME = "Hidalgo County Drainage District No. 1"
 # Degrees; ~0.00002 is about 2 m, enough to shrink files without visible change.
 FINE = 0.00002
@@ -40,13 +40,6 @@ STATUS_NAMES = {
 }
 
 Properties = Callable[[dict], dict]
-
-
-def _hcdd1(name: str) -> list[dict]:
-    path = HCDD1_DIR / f"{name}.geojson"
-    if not path.exists():
-        return []
-    return json.loads(path.read_text(encoding="utf-8"))["features"]
 
 
 def _round_coords(coords, digits: int = 5):
@@ -76,7 +69,7 @@ def _convert(layer: str, overlay_type: str, to_properties: Properties, tolerance
     """Every feature of one HCDD1 layer, with properties rebuilt by `to_properties`."""
     converted = (
         _feature(f.get("geometry"), {"overlay_type": overlay_type, **to_properties(f["properties"])}, tolerance)
-        for f in _hcdd1(layer)
+        for f in hcdd1_layer(layer)
     )
     return [feature for feature in converted if feature]
 
@@ -132,7 +125,7 @@ def build_hcdd1_flood_photos() -> MapLayer | None:
     west, south, east, north = RGV_BBOX  # drops photos with stray GPS tags
     features = []
     for layer, event in FLOOD_PHOTOS:
-        for f in _hcdd1(layer):
+        for f in hcdd1_layer(layer):
             geometry = f.get("geometry")
             if not geometry or geometry["type"] != "Point":
                 continue
@@ -242,9 +235,6 @@ def build_hcdd1_bond_projects() -> MapLayer | None:
 
 # ---- NFIP claims by census tract -------------------------------------------
 
-CLAIMS_FILE = ML_RAW / "nfip" / "nfip_claims_v3.ndjson"
-TRACTS_2023 = ML_RAW / "tracts" / "tl_2023_48_tract.zip"
-TRACTS_2010 = ML_RAW / "tracts" / "tl_2010_48_tract10.zip"
 UTM_14N = 32614  # equal-area-ish metres for overlap weights
 
 
@@ -285,7 +275,7 @@ def _tally_claims(path: Path) -> dict[str, _Tally]:
 def _spread_old_tracts(old: dict[str, _Tally], tracts: gpd.GeoDataFrame, placed: dict[str, _Tally]) -> float:
     """Spread claims filed under 2010-vintage tract ids across the 2023 tracts that
     cover them, weighted by overlapping area. Returns how many claims moved."""
-    old_shapes = gpd.read_file(f"zip://{TRACTS_2010}")
+    old_shapes = gpd.read_file(f"zip://{census_tracts(2010)}")
     old_shapes = old_shapes[old_shapes["GEOID10"].isin(old)][["GEOID10", "geometry"]].to_crs(UTM_14N)
     new_shapes = tracts[["GEOID", "geometry"]].to_crs(UTM_14N)
     pieces = gpd.overlay(old_shapes, new_shapes, how="intersection", keep_geom_type=True)
@@ -312,19 +302,16 @@ def build_nfip_claims_by_tract() -> MapLayer | None:
     About a third of claims carry 2010-vintage tract ids; those are spread
     across the current tracts by area instead of being dropped.
     """
-    if not (CLAIMS_FILE.exists() and TRACTS_2023.exists()):
-        return None
-
-    by_geoid = _tally_claims(CLAIMS_FILE)
+    by_geoid = _tally_claims(nfip_claims())
     total = sum(t.claims for t in by_geoid.values())
 
-    tracts = gpd.read_file(f"zip://{TRACTS_2023}")
+    tracts = gpd.read_file(f"zip://{census_tracts(2023)}")
     tracts = tracts[tracts["GEOID"].str[:5].isin(FIPS_TO_SLUG)].to_crs(4326)
     known = set(tracts["GEOID"])
     placed = {geoid: t for geoid, t in by_geoid.items() if geoid in known}
     old = {geoid: t for geoid, t in by_geoid.items() if geoid not in known}
 
-    moved = _spread_old_tracts(old, tracts, placed) if old and TRACTS_2010.exists() else 0.0
+    moved = _spread_old_tracts(old, tracts, placed) if old else 0.0
     print(f"  claims placed on a 2023 tract: {sum(t.claims for t in placed.values()):.0f}/{total:.0f}"
           f" (spread from old tracts: {moved:.0f})")
 

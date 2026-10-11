@@ -5,45 +5,18 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Pipeline scratch and build outputs are not committed (see README
-# "Repository Layout").
-data/**/raw/
-*.tmp
+# The central database and everything else the build produces. Rebuilt by
+# pipeline/build_all.py, never committed (see README "Repository Layout").
+data/generated/
+
+# The download cache: publishers' own files, kept so a rebuild doesn't fetch
+# them again. Safe to delete.
 /tmp/
-data/generated/*.gpkg
-data/generated/*.sqlite3
-data/generated/.live-signals-scheduler.lock
 
-# Per-county source data — everything under data/<county>-county/ that
-# pipeline/build_all.py can (re)produce on its own is build output, not
-# committed.
-#   records/**/*.ndjson                <- pipeline/noaa_ingest.py (public NOAA URLs)
-#   manifest.json, sources/**/*.json,  <- pipeline/scaffold_county_collections.py
-#   schemas/*.schema.json                 (schemas are copied from the tracked
-#                                          template at pipeline/schemas/, not
-#                                          from any county's own directory)
-#
-# Two things build_all.py CANNOT reproduce from a bare clone stay tracked:
-#   flood-hazard-layers/*.geojson,manifest.json  -- pipeline/import_county_flood_data.py
-#     needs the sibling Flood Project/ working directory, which has no public,
-#     scripted source (see build_all.py step 3).
-#   hidalgo-county's events-and-public-reports ndjson -- carries 16 hand-curated
-#     reports alongside the NOAA-generated events; the ingest script only
-#     preserves them if the file already exists on disk to read back from, so a
-#     bare clone has nothing to preserve them from.
-data/*-county/records/**/*.ndjson
-!data/hidalgo-county/records/events-and-public-reports/noaa-storm-events.ndjson
-data/*-county/manifest.json
-data/*-county/schemas/*.schema.json
-data/*-county/sources/**/*.json
-
-# Overture Maps bridges/dams: same folder as the tracked FEMA/TWDB layers, but
-# unlike those, fully public and reproducible -- pipeline/import_overture_infrastructure.py
-data/*-county/flood-hazard-layers/overture-*.geojson
-
-# ML inputs/outputs: all public downloads (pipeline/fetch_ml_inputs.py) or
-# derived from them, so none of it is committed.
+# Inputs for the Hidalgo model: public downloads from pipeline/fetch_ml_inputs.py.
 data/ml/
+
+# The only data that IS committed is data/seed/ (see data/seed/README.md).
 
 # OS / editor
 .DS_Store

@@ -10,7 +10,7 @@
     <li class="report">
       <div class="report-head">{{ r.headline }}</div>
       <div class="report-meta">
-        {{ r.published_at | default("date unknown", true) }}
+        {{ r.event_date | default("date unknown", true) }}
         · {{ r.publisher }}
         {%- if r.location %} · {{ r.location }}{% endif %}
       </div>

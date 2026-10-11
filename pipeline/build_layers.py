@@ -1,6 +1,6 @@
-"""Build every map layer and store it in the app database.
+"""Build every map layer and store it in the central database.
 
-Reads `data/<county>-county/flood-hazard-layers/*.geojson`, then for each layer:
+Hazard layers come from the seed GeoJSON in `data/seed/<county>/`. For each one this:
 
   * reprojects to EPSG:4326
   * clips FEMA NFHL to the true county boundary (drops bounding-box spillover)
@@ -8,10 +8,11 @@ Reads `data/<county>-county/flood-hazard-layers/*.geojson`, then for each layer:
   * dissolves adjacent polygons that share (county, source, category, class)
   * simplifies geometry to a map-scale tolerance
 
-Each layer becomes one row of the `layers` table (see `app_db.py`): its
+Each layer becomes one row of the `layers` table (see `database.py`): its
 map-ready GeoJSON, which the Flask app serves as is, next to its description.
-Flood-evidence, drainage and insurance-claims layers come from
-`evidence_layers.py`; layer descriptions from `layer_meta.py`.
+Bridges and dams are pulled from Overture Maps (`overture.py`); flood-evidence,
+drainage and insurance-claims layers from their publishers
+(`evidence_layers.py`); layer descriptions come from `layer_meta.py`.
 
 Run:  uv run --group pipeline python pipeline/build_layers.py
 Safe to re-run (replaces the `layers` table only).
@@ -31,11 +32,13 @@ os.environ.setdefault("OGR_GEOJSON_MAX_OBJ_SIZE", "0")
 
 import evidence_layers
 import geopandas as gpd
+import overture
 import pandas as pd
 import pyogrio
-from app_db import MapLayer, open_app_db, replace_table
+from database import MapLayer, open_database, record_sources, replace_table
 from layer_meta import LAYER_META
-from paths import APP_DB, hazard_layers_dir
+from net import NETWORK_ERRORS, fetched_at
+from paths import DATABASE, DOWNLOAD_CACHE, seed_file
 
 from rgv_flood.counties import NFHL_COUNTIES, SHORT_NAMES
 from rgv_flood.severity import classify_fema_zone, relative_class_for
@@ -66,8 +69,8 @@ def _read(path: Path) -> gpd.GeoDataFrame:
 
 
 def _read_county(slug: str, filename: str) -> gpd.GeoDataFrame | None:
-    """One county's layer file with its county columns set, or None if absent/empty."""
-    path = hazard_layers_dir(slug) / filename
+    """One county's seed layer with its county columns set, or None if absent/empty."""
+    path = seed_file(slug, filename)
     if not path.exists():
         return None
     gdf = _read(path)
@@ -139,37 +142,38 @@ def build_twdb(freq: str, chance: str) -> MapLayer:
     return _finish(_stack(parts), tolerance=TOLERANCE_MODELED)
 
 
-def _primary_names(gdf: gpd.GeoDataFrame) -> list[str | None]:
-    """Overture stores names as {"primary": ...}; take the primary one."""
-    if "names" not in gdf.columns:
-        return [None] * len(gdf)
-    return [n.get("primary") if isinstance(n, dict) else None for n in gdf["names"]]
-
-
-def build_overture_infrastructure(kind: str, filename: str) -> MapLayer | None:
-    """Bridges/dams, kept as individual features (no dissolve, no severity:
-    these are discrete structures at risk, not hazard zones)."""
-    parts = []
-    for slug in SHORT_NAMES:
-        g = _read_county(slug, filename)
-        if g is None:
-            continue
-        parts.append(g.assign(name=_primary_names(g))[["geometry", "county_slug", "county", "name"]])
-    if not parts:
+def build_overture_infrastructure(kind: str) -> MapLayer | None:
+    """Bridges or dams, kept as individual features (no dissolve, no severity:
+    these are discrete structures at risk, not hazard zones). A structure that
+    spans two counties is listed under each."""
+    rows = [
+        {
+            "geometry": geometry,
+            "county_slug": slug,
+            "county": SHORT_NAMES[slug],
+            "name": (attributes.get("names") or {}).get("primary"),  # Overture: {"primary": ...}
+        }
+        for slug, geometry, attributes in overture.in_counties(overture.bridges_and_dams())
+        if attributes["class"] == kind
+    ]
+    if not rows:
         return None
-    return _as_layer(_drop_empty(_stack(parts).assign(source="Overture Maps Foundation", infrastructure_type=kind)))
+    rows.sort(key=lambda row: list(SHORT_NAMES).index(row["county_slug"]))  # stable: county by county
+    out = gpd.GeoDataFrame(rows, crs=4326)
+    out["geometry"] = out.geometry.make_valid()
+    return _as_layer(_drop_empty(out).assign(source="Overture Maps Foundation", infrastructure_type=kind))
 
 
-# Layer id -> builder. Order is the order layers appear in the sidebar. A builder
-# returns None when its inputs haven't been downloaded; that layer is left out.
+# Layer id -> builder. Order is the order layers appear in the sidebar. A layer
+# whose builder returns None (nothing to show) is left out.
 BUILDERS = {
     "county-boundaries": build_county_boundaries,
     "fema-nfhl": build_fema_nfhl,
     "hidalgo-firm-1981": build_hidalgo_firm,
     "twdb-cursory-1in100": lambda: build_twdb("1in100", "1% annual chance"),
     "twdb-cursory-1in500": lambda: build_twdb("1in500", "0.2% annual chance"),
-    "overture-bridges": lambda: build_overture_infrastructure("bridge", "overture-bridges.geojson"),
-    "overture-dams": lambda: build_overture_infrastructure("dam", "overture-dams.geojson"),
+    "overture-bridges": lambda: build_overture_infrastructure("bridge"),
+    "overture-dams": lambda: build_overture_infrastructure("dam"),
     "hcdd1-flood-extents": evidence_layers.build_hcdd1_flood_extents,
     "hcdd1-flood-photos": evidence_layers.build_hcdd1_flood_photos,
     "hcdd1-drainage": evidence_layers.build_hcdd1_drainage,
@@ -193,20 +197,62 @@ def _row(layer_id: str, position: int, layer: MapLayer) -> dict:
     }
 
 
-def main(database: Path = APP_DB) -> None:
+# Layer id -> the download-cache folders its builder reads. Layers not listed
+# are built from the seed files, which are not downloaded.
+DOWNLOADED_INTO = {
+    "overture-bridges": ("overture",),
+    "overture-dams": ("overture",),
+    "hcdd1-flood-extents": ("hcdd1",),
+    "hcdd1-flood-photos": ("hcdd1",),
+    "hcdd1-drainage": ("hcdd1",),
+    "hcdd1-bond-projects": ("hcdd1",),
+    "nfip-claims-by-tract": ("nfip", "tracts"),
+}
+
+
+def _source(layer_id: str, feature_count: int) -> dict:
+    """The `data_sources` row for a layer, from the same metadata the app shows."""
+    meta = LAYER_META[layer_id]
+    downloads = [
+        path
+        for folder in DOWNLOADED_INTO.get(layer_id, ())
+        for path in (DOWNLOAD_CACHE / folder).iterdir()
+        if path.is_file()
+    ]
+    return {
+        "id": f"layer:{layer_id}",
+        "publisher": meta["source"],
+        "dataset": meta["title"],
+        "url": meta.get("source_url"),
+        "retrieved_at": fetched_at(downloads),
+        "record_count": feature_count,
+        "notes": f"Vintage: {meta.get('vintage') or 'unknown'}. {meta.get('limitation') or ''}".strip(),
+    }
+
+
+def main(database: Path = DATABASE) -> None:
     print("building map layers ->", database)
-    rows = []
+    rows, skipped = [], []
     for position, (layer_id, build) in enumerate(BUILDERS.items()):
-        layer = build()
+        try:
+            layer = build()
+        except NETWORK_ERRORS as error:
+            # One publisher being down shouldn't cost the map every other layer.
+            print(f"  [fail] {layer_id}: could not reach its source ({error})")
+            skipped.append(layer_id)
+            continue
         if layer is None or not layer.feature_count:
             continue
         row = _row(layer_id, position, layer)
         print(f"  {layer_id}: {layer.feature_count} features, {len(row['geojson']) / 1024:,.0f} KB")
         rows.append(row)
 
-    with open_app_db(database) as connection:
+    with open_database(database) as connection:
         replace_table(connection, "layers", rows)
+        record_sources(connection, [_source(row["id"], row["feature_count"]) for row in rows])
     print(f"wrote {len(rows)} layer(s) to the layers table")
+    if skipped:
+        raise SystemExit(f"layers left out because their source could not be reached: {', '.join(skipped)}")
 
 
 if __name__ == "__main__":

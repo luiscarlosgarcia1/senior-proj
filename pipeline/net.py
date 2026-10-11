@@ -7,6 +7,7 @@ import json
 import shutil
 import time
 import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
 
 USER_AGENT = {"User-Agent": "RGV-Flood-Impact-Visualizer/1.0 (student research)"}
@@ -20,6 +21,14 @@ def already_have(path: Path, *, force: bool = False) -> bool:
     if present:
         print(f"  [skip] {path.name} already present", flush=True)
     return present
+
+
+def fetched_at(files: list[Path]) -> str | None:
+    """When the newest of these cached downloads was fetched (ISO 8601, UTC)."""
+    if not files:
+        return None
+    newest = max(path.stat().st_mtime for path in files)
+    return datetime.fromtimestamp(newest, UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _request(url: str, *, headers: dict | None = None, data: bytes | None = None) -> urllib.request.Request:

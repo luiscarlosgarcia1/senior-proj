@@ -30,15 +30,21 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import sys
 import time
 import urllib.parse
-from pathlib import Path
 
 from jsonio import feature_collection, write_json
 from net import NETWORK_ERRORS, already_have, download, get_json
 from paths import ML_RAW as RAW
+from public_sources import (
+    HCDD1_LAYERS,
+    OPENFEMA,
+    census_tracts,
+    export_openfema,
+    hcdd1_layer,
+    nfip_claims,
+)
 
 from rgv_flood.counties import COUNTIES
 
@@ -51,101 +57,20 @@ COUNTY_FIPS = {slug: county["fips"] for slug, county in COUNTIES.items()}
 
 # ---- HCDD1 -----------------------------------------------------------------
 
-HCDD1_BASE = "https://services7.arcgis.com/JSUhwVSJhyVkcN3Q/arcgis/rest/services"
-
-# (service, layer id, output name). Skipped on purpose: parcels, survey123
-# forms, and the 41,859-segment road centerline layer (Overture covers roads).
-HCDD1_LAYERS = [
-    ("Historical_Flooding_Layer", 0, "flood_photos_2020_hanna"),
-    ("Historical_Flooding_Layer", 1, "flood_photos_2019_june"),
-    ("Historical_Flooding_Layer", 2, "flood_photos_2018_sept"),
-    ("Historical_Flooding_Layer", 3, "flood_photos_2018_june"),
-    ("Historical_Flooding_Layer", 4, "flood_extent_2020_8to14in"),
-    ("Historical_Flooding_Layer", 5, "flood_extent_2019_4to10in"),
-    ("Historical_Flooding_Layer", 6, "flood_extent_2018_4to18in"),
-    ("Historical_Flooding_Layer", 7, "flood_extent_2015_1to8in"),
-    ("Historical_Flooding_Layer", 8, "flood_extent_2010_3to6in"),
-    ("Historical_Flooding_Layer", 9, "flood_extent_2008_4to10in"),
-    ("Hanna_Geotagged_Photos", 0, "hanna_geotagged_photos"),
-    ("Precinct_4_Calls", 0, "precinct4_calls"),
-    ("Detention_Ponds", 0, "detention_ponds"),
-    ("DetentionPonds", 0, "detention_ponds_alt"),
-    ("HCDD1_System", 0, "drainage_system"),
-    ("Ditch_Maintenance", 0, "ditch_maintenance"),
-    ("Future_System", 0, "future_system"),
-    ("Gates_Pumps", 0, "gates_pumps"),
-    ("Gate_Pumps_New", 0, "gates_pumps_new"),
-    ("Precinct_4_Valves_Gates", 0, "precinct4_valves_gates"),
-    ("PumpFlowterInstall", 0, "pump_flowter_install"),
-    ("Map", 0, "ditches_weslaco"),
-    ("Map", 1, "ditches_edinburg"),
-    ("Map", 2, "ditches_mcallen"),
-    ("Map", 3, "ditches_mission"),
-    ("Map", 4, "ditches_pharr"),
-    ("ArcGIS_Online_Two", 0, "arcgis_online_two"),
-    ("2012_Bond_Program", 0, "bond_2012"),
-    ("2018_Bond_Program", 0, "bond_2018"),
-    ("2023_Bond", 0, "bond_2023"),
-    ("District_Projects", 2, "district_projects"),
-    ("Projects_Merged0119", 0, "projects_merged_0119"),
-    ("Subd_Dev_Note", 0, "subdivision_dev_notes"),
-    ("LOMR_CLOMR", 0, "lomr_clomr"),
-    ("FEMA_Hidalgo_FIRM", 0, "fema_hidalgo_firm"),
-    ("HCDD1_HMAP", 0, "hazard_mitigation_areas"),
-    ("HCDD1_Boundary", 0, "hcdd1_boundary"),
-    ("HCDD1_Discharge_Permits", 0, "discharge_permits"),
-    ("Irrigation_Dist_Boundaries", 1, "irrigation_offices"),
-    ("Irrigation_Dist_Boundaries", 2, "irrigation_districts"),
-    ("City_Limits_2020", 0, "city_limits_2020"),
-    ("Rain_n_Stream_Gauges", 1, "gauges_rain"),
-    ("Rain_n_Stream_Gauges", 3, "gauges_stream"),
-    ("Rain_n_Stream_Gauges", 4, "gauges_rain_stream"),
-]
-
-
-def fetch_arcgis_layer(service: str, layer: int) -> list[dict]:
-    """Every feature of one ArcGIS layer as GeoJSON, paged because servers cap
-    how many features one response may carry."""
-    base = f"{HCDD1_BASE}/{service}/FeatureServer/{layer}/query"
-    features: list[dict] = []
-    while True:
-        params = {
-            "where": "1=1",
-            "outFields": "*",
-            "outSR": "4326",
-            "f": "geojson",
-            "resultOffset": len(features),
-            "resultRecordCount": 1000,
-        }
-        page = get_json(f"{base}?{urllib.parse.urlencode(params)}", timeout=120)["features"]
-        if not page:
-            return features
-        features += page
-
 
 def step_hcdd1(force: bool) -> None:
-    out = RAW / "hcdd1"
-    out.mkdir(parents=True, exist_ok=True)
     inventory = {}
-    for service, layer, name in HCDD1_LAYERS:
-        dest = out / f"{name}.geojson"
-        if already_have(dest, force=force):
-            continue
+    for name, (service, layer) in HCDD1_LAYERS.items():
         try:
-            features = fetch_arcgis_layer(service, layer)
+            features = hcdd1_layer(name, RAW / "hcdd1", force=force)
         except (*NETWORK_ERRORS, ValueError, KeyError) as error:  # one layer failing shouldn't lose the rest
             print(f"  [fail] {name} ({service}/{layer}): {error}")
             continue
-        dest.write_text(json.dumps(feature_collection(features)), encoding="utf-8")
         inventory[name] = {"service": service, "layer": layer, "features": len(features)}
-        print(f"  [ok]   {name}: {len(features)} features")
-    if inventory:
-        write_json(out / "_inventory.json", inventory)
+    write_json(RAW / "hcdd1" / "_inventory.json", inventory)
 
 
 # ---- NFIP / FEMA -----------------------------------------------------------
-
-OPENFEMA = "https://www.fema.gov/api/open"
 
 # Policy fields worth keeping; the API returns ~60 per row.
 POLICY_FIELDS = (
@@ -156,42 +81,9 @@ POLICY_FIELDS = (
 )
 
 
-def export_openfema(dataset: str, version: str, dest: Path, *, select: str = "") -> int:
-    """The four counties' rows of an OpenFEMA dataset as NDJSON, via its file-export
-    endpoint.
-
-    Without `$top` the `.jsonl` endpoint streams every matching row in one response,
-    so there is no paging (deep `$skip` queries time out on the big tables). Each
-    county is its own request, kept in a parts folder so an interrupted run resumes
-    where it stopped instead of starting over.
-    """
-    parts = dest.parent / f".{dest.stem}-parts"
-    for slug, fips in COUNTY_FIPS.items():
-        params = {"$filter": f"countyCode eq '{fips}'"}
-        if select:
-            params["$select"] = select
-        url = f"{OPENFEMA}/{version}/{dataset}.jsonl?{urllib.parse.urlencode(params)}"
-        download(url, parts / f"{slug}.ndjson", attempts=6)
-
-    rows = 0
-    part = dest.with_suffix(dest.suffix + ".part")
-    with part.open("wb") as out:
-        for piece in sorted(parts.glob("*.ndjson")):
-            data = piece.read_bytes().rstrip(b"\n") + b"\n"  # the export has no trailing newline
-            out.write(data)
-            rows += data.count(b"\n")
-    part.replace(dest)
-    shutil.rmtree(parts)
-    return rows
-
-
 def step_nfip(force: bool) -> None:
     out = RAW / "nfip"
-    out.mkdir(parents=True, exist_ok=True)
-
-    claims = out / "nfip_claims_v3.ndjson"
-    if not already_have(claims, force=force):
-        print(f"  [ok]   claims: {export_openfema('NfipClaims', 'v3', claims)}")
+    nfip_claims(out, force=force)
 
     declarations = out / "disaster_declarations.json"
     if not already_have(declarations, force=force):
@@ -223,11 +115,8 @@ def step_nfip_policies(force: bool) -> None:
 
 
 def step_tracts(force: bool) -> None:
-    out = RAW / "tracts"
-    download("https://www2.census.gov/geo/tiger/TIGER2023/TRACT/tl_2023_48_tract.zip",
-             out / "tl_2023_48_tract.zip", force=force)
-    download("https://www2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_48_tract10.zip",
-             out / "tl_2010_48_tract10.zip", force=force)
+    for vintage in (2023, 2010):
+        census_tracts(vintage, RAW / "tracts", force=force)
 
 
 # ---- NLCD ------------------------------------------------------------------

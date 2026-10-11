@@ -51,7 +51,7 @@ def _start_live_signal_scheduler(app: Flask) -> None:
     if app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         return
     scheduler = LiveSignalScheduler(
-        build_refresh_commands(app.config["LIVE_SIGNALS_DATABASE"]),
+        build_refresh_commands(app.config["DATABASE"]),
         interval_seconds=app.config["LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS"],
         lock_file=app.config["LIVE_SIGNALS_SCHEDULER_LOCK_FILE"],
     )

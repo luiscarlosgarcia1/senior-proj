@@ -1,9 +1,9 @@
 """Source-faithful storage for short-lived official incident signals.
 
-This module deliberately owns a database separate from the historical county
-collections. Source adapters turn their response into :class:`LiveSignal` and
-call :meth:`LiveSignalStore.ingest`; they do not make historical events or
-reports out of a current source claim.
+Live signals have their own tables in the central database (`database.py`),
+apart from the historical events and reports. Source adapters turn their
+response into :class:`LiveSignal` and call :meth:`LiveSignalStore.ingest`; they
+do not make historical events or reports out of a current source claim.
 """
 
 from __future__ import annotations
@@ -17,8 +17,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from database import ensure_schema
 from jsonio import canonical_json
-from paths import LIVE_SIGNALS_DB
+from paths import DATABASE
 
 from rgv_flood.counties import COUNTIES
 
@@ -30,58 +31,6 @@ INCLUSION_BASES = frozenset(("source_geometry_intersection", "source_county_clai
 ABSENCES_BEFORE_INACTIVE = 2
 TERMINAL_RETENTION = timedelta(days=30)
 TOMBSTONE_RETENTION = timedelta(days=90)
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS live_signals (
-  signal_id INTEGER PRIMARY KEY,
-  source TEXT NOT NULL,
-  native_id TEXT NOT NULL,
-  provenance TEXT NOT NULL CHECK (provenance IN ('official', 'public-report')),
-  source_url TEXT NOT NULL,
-  source_publisher TEXT NOT NULL,
-  source_channel TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  source_attributes_json TEXT NOT NULL,
-  county_slugs_json TEXT NOT NULL,
-  inclusion_basis TEXT NOT NULL,
-  source_geometry_json TEXT,
-  geometry_absence_reason TEXT,
-  is_mappable INTEGER NOT NULL CHECK (is_mappable IN (0, 1)),
-  published_at TEXT,
-  effective_at TEXT,
-  source_updated_at TEXT,
-  expires_at TEXT,
-  first_seen_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL,
-  retrieved_at TEXT NOT NULL,
-  lifecycle_state TEXT NOT NULL CHECK (lifecycle_state IN ('active', 'inactive', 'withdrawn', 'archived')),
-  terminal_at TEXT,
-  terminal_reason TEXT,
-  absent_success_count INTEGER NOT NULL DEFAULT 0,
-  UNIQUE(source, native_id),
-  CHECK ((source_geometry_json IS NOT NULL AND geometry_absence_reason IS NULL AND is_mappable = 1)
-    OR (source_geometry_json IS NULL AND geometry_absence_reason IS NOT NULL AND is_mappable = 0))
-);
-CREATE TABLE IF NOT EXISTS live_signal_runs (
-  run_id INTEGER PRIMARY KEY,
-  source TEXT NOT NULL,
-  retrieved_at TEXT NOT NULL,
-  completed_at TEXT,
-  is_complete INTEGER NOT NULL CHECK (is_complete IN (0, 1)),
-  received_count INTEGER NOT NULL,
-  error_message TEXT
-);
-CREATE TABLE IF NOT EXISTS live_signal_tombstones (
-  source TEXT NOT NULL,
-  native_id TEXT NOT NULL,
-  terminal_at TEXT NOT NULL,
-  terminal_reason TEXT NOT NULL,
-  purge_after TEXT NOT NULL,
-  PRIMARY KEY(source, native_id)
-);
-CREATE INDEX IF NOT EXISTS live_signals_live_lookup
-  ON live_signals(source, lifecycle_state, last_seen_at);
-"""
 
 # What a poll writes for each signal. A signal seen again keeps its row and its
 # first_seen_at, takes every other value from the new poll, and becomes active.
@@ -150,7 +99,7 @@ def utc_timestamp(value: datetime) -> str:
 def runner_parser(description: str) -> argparse.ArgumentParser:
     """Command-line parser shared by the run_*.py scripts: every one takes --output."""
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--output", type=Path, default=LIVE_SIGNALS_DB, help="live-signals SQLite database")
+    parser.add_argument("--output", type=Path, default=DATABASE, help="the SQLite database to update")
     return parser
 
 
@@ -205,7 +154,7 @@ class LiveSignalStore:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
-            connection.executescript(SCHEMA)
+            ensure_schema(connection)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:

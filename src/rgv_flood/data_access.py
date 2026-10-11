@@ -1,9 +1,10 @@
-"""Read-only access to pipeline outputs.
+"""Read-only access to the central database.
 
-The app serves what the offline pipeline produced: the app database (map
-layers, flood events, reports, rainfall; see `pipeline/app_db.py` for its
-tables) and the live-signals database. It does not fetch from FEMA, TWDB,
-Census, or news sites at request time.
+Every query the app runs is in this module. The database is what the offline
+pipeline produced (map layers, flood events, reports, weather) plus the live
+signals the scheduler keeps current; `pipeline/database.py` defines its tables.
+The app reads no data files and does not fetch from FEMA, TWDB, Census, or news
+sites at request time.
 """
 
 from __future__ import annotations
@@ -20,11 +21,13 @@ LAYER_COLUMNS = (
     "visualizations_json, feature_count"
 )
 EVENT_COLUMNS = "id, county, date, date_end, type, location, precision, summary, source_url, geometry_note, lon, lat"
+# How many of the wettest gauge-days the rainfall panel ranks.
+RAINFALL_TOP_N = 15
 
 
-def _rows(database_key: str, query: str, parameters: tuple = ()) -> list[dict] | None:
-    """Rows of a query as dicts, or None when that database hasn't been built yet."""
-    database = Path(current_app.config[database_key])
+def _rows(query: str, parameters: tuple = ()) -> list[dict] | None:
+    """Rows of a query as dicts, or None when the database hasn't been built yet."""
+    database = Path(current_app.config["DATABASE"])
     if not database.exists():
         return None
     # closing(): sqlite3's own context manager commits but never closes the file.
@@ -34,7 +37,7 @@ def _rows(database_key: str, query: str, parameters: tuple = ()) -> list[dict] |
 
 
 def _app_rows(query: str, parameters: tuple = ()) -> list[dict]:
-    return _rows("APP_DATABASE", query, parameters) or []
+    return _rows(query, parameters) or []
 
 
 def _where(equals: dict[str, str | None]) -> tuple[str, tuple]:
@@ -81,7 +84,7 @@ def layer_geojson(layer_id: str) -> bytes | None:
 
 def _events(where: str = "", parameters: tuple = ()) -> list[dict] | None:
     query = f"select {EVENT_COLUMNS} from flood_events{where} order by date desc, id desc"
-    return _rows("APP_DATABASE", query, parameters)
+    return _rows(query, parameters)
 
 
 def flood_events(year: str | None = None, county_slug: str | None = None) -> list[dict]:
@@ -120,16 +123,31 @@ def flood_reports(county_slug: str | None = None) -> list[dict]:
     """Local-news and local-government reports tied to documented flood events.
 
     Historical only — never live closure data. Each report carries its source
-    URL and publication date.
+    URL and the date of the event it describes. Oldest first.
     """
     where, parameters = _where({"county": county_slug})
-    return _app_rows(f"select * from flood_reports{where} order by report_id", parameters)
+    return _app_rows(f"select * from flood_reports{where} order by event_date, rowid", parameters)
 
 
 def rainfall_records(county_slug: str | None = None) -> list[dict]:
-    """The wettest single gauge-days on record (date, mm, inches, station)."""
-    where, parameters = _where({"county": county_slug})
-    return _app_rows(f"select * from rainfall_records{where} order by rank", parameters)
+    """The wettest single gauge-days on record (date, mm, inches, station).
+
+    The ranking is across all four counties; a county filter then shows which
+    of those record days happened there.
+    """
+    wettest = _app_rows(
+        """select s.county, o.date, o.value as tenths_of_mm, s.name as station
+           from weather_observations o join weather_stations s using (station_id)
+           where o.element = 'PRCP' and o.value > 0
+           order by o.value desc, s.county, o.station_id, o.date
+           limit ?""",
+        (RAINFALL_TOP_N,),
+    )
+    days = []
+    for row in wettest:
+        mm = round(row.pop("tenths_of_mm") / 10.0, 1)
+        days.append({**row, "mm": mm, "inches": round(mm / 25.4, 1)})
+    return [day for day in days if day["county"] == county_slug] if county_slug else days
 
 
 # ---- live signals ----
@@ -151,9 +169,8 @@ SIDEBAR_SIGNAL_COLUMNS = (
 def _active_official_signals(
     columns: tuple[str, ...], *, only_mappable: bool, order_by: str = ""
 ) -> list[dict] | None:
-    """Active, official rows of the live-signals database (None if it doesn't exist yet)."""
+    """Active, official live signals (None if the database doesn't exist yet)."""
     return _rows(
-        "LIVE_SIGNALS_DATABASE",
         f"select {', '.join(columns)} from live_signals "
         "where lifecycle_state = 'active' and provenance = 'official'"
         + (" and is_mappable = 1" if only_mappable else "")

@@ -17,8 +17,8 @@ emergency guidance.
 ## Technology Stack
 
 - Flask, Jinja templates, HTMX, Leaflet
-- Python data pipeline (geopandas, shapely) that builds one SQLite database for the app
-- SQLite live-signal snapshots
+- One SQLite database holds all the data; the app reads nothing else
+- Python data pipeline (geopandas, shapely) that pulls each source and writes it to that database
 - Vanilla JavaScript ES modules for the map; no Node or build step
 - NOAA, FEMA, TWDB, Census, NWS, TxDOT, and local government sources
 
@@ -36,16 +36,13 @@ uv run flask --app rgv_flood run --debug
 
 Open <http://127.0.0.1:5000>.
 
-`build_all.py` is the one build command. It prepares the source data and writes
-everything the app serves into a single SQLite database,
-`data/generated/rgv-flood.sqlite3` (map layers, flood events, reports, rainfall).
-Re-run it after changing pipeline inputs or rules. Each step is also a script in
-`pipeline/` that can be run on its own (`build_layers.py` and `build_events.py`
-are the two that fill the database); see [pipeline/README.md](pipeline/README.md).
-
-For the Hidalgo flood-evidence, drainage, bond-project and insurance-claims
-layers, run `uv run --group pipeline python pipeline/fetch_ml_inputs.py --only hcdd1,nfip,tracts`
-before `build_all.py`; without those downloads the layers are simply skipped.
+`build_all.py` is the one build command. It pulls every source into memory and
+writes it to a single SQLite database, `data/generated/rgv-flood.sqlite3`: map
+layers, flood events, local reports, weather records and live signals. The app
+reads only that database, never data files. Re-run the build after changing
+pipeline inputs or rules; it is safe to run while the app is up. The first run
+downloads about 400 MB into the `tmp/` cache, and later runs reuse it. See
+[pipeline/README.md](pipeline/README.md) for the tables and the individual steps.
 
 Flask refreshes official live signals at startup and every 15 minutes. Set
 `RGV_LIVE_SIGNALS_SCHEDULER_ENABLED=false` to disable it, or set
@@ -55,33 +52,34 @@ Flask refreshes official live signals at startup and every 15 minutes. Set
 
 - `uv` errors: run `uv sync --group dev --group pipeline` again.
 - Map has no layers or events: run `build_all.py` (it builds `data/generated/rgv-flood.sqlite3`).
-- Fresh data build fails: confirm network access to NOAA, Overture and FEMA.
+- Build fails on a download: confirm network access to NOAA, Overture, FEMA, the Census Bureau and
+  the Hidalgo drainage district, then re-run; finished downloads are kept in `tmp/`.
+- A layer is missing after a build: its publisher was unreachable. The build says which; re-run it.
 - Live signals unavailable: source outages are logged; the app remains usable.
 
-## Data Pipeline and Outputs
+## Data and Database
 
-`pipeline/build_all.py` is the one build command. It scaffolds county data,
-downloads and ingests reproducible NOAA records (`noaa_ingest.py`), imports
-Overture Maps bridges and dams (clipped to each county's real boundary, not just
-a bounding box — the RGV box also covers a strip of Mexico), and then builds two
-files under `data/generated/`:
+Everything lives in one SQLite file, `data/generated/rgv-flood.sqlite3`:
 
-| File | What it is |
+| Table | Holds |
 | --- | --- |
-| `rgv-flood.sqlite3` | The app database. Tables `layers`, `flood_events`, `flood_reports` and `rainfall_records` hold everything the Flask app serves. |
-| `county-collections.gpkg` | A queryable archive of the full county collections. The app does not read it. |
+| `layers` | Every map layer: its description and the GeoJSON the map draws |
+| `flood_events` | Flood-type events from NOAA's Storm Events Database, 2000–2025 |
+| `flood_reports` | Hand-curated local-news and government flood reports |
+| `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily readings, 2000–2025 |
+| `data_sources` | Where each dataset came from and when it was downloaded |
+| `live_signals` | Current official alerts, road conditions and notices, refreshed while the app runs |
 
-`pipeline/fetch_ml_inputs.py` gathers the public inputs for the planned Hidalgo
-flood-susceptibility model (elevation, NLCD, soils, Atlas 14 rainfall, Overture
-buildings/roads, NFIP claims and policies, Hidalgo drainage-district flood
-photos and infrastructure) into the gitignored `data/ml/raw/`.
+The build scripts download from the publishers, hold the data in memory and
+write these tables. The only data files in the repository are the seed files in
+`data/seed/`: flood-hazard geometry and curated reports that no publisher offers
+as a scripted download. Set `RGV_DATABASE` to point the app at a database
+somewhere else, which is all a deployment needs alongside the code.
 
-The Flask app queries the app database and reads no data files directly.
-Live-source snapshots are separate, in `data/generated/live-signals.sqlite3`,
-because they are written while the app runs. Generated outputs are ignored by
-Git; tracked source geometry and curated Hidalgo reports remain available after
-a fresh clone. Set `RGV_APP_DATABASE` to point the app at a database somewhere
-else.
+`pipeline/fetch_ml_inputs.py` is separate from the app: it gathers the public
+inputs for the planned Hidalgo flood-susceptibility model (elevation, NLCD,
+soils, Atlas 14 rainfall, Overture buildings/roads, NFIP claims and policies,
+Hidalgo drainage-district layers) into the gitignored `data/ml/raw/`.
 
 ## Hidalgo Drainage District (HCDD1) Data and Visualizations
 
@@ -106,13 +104,12 @@ https://services7.arcgis.com/JSUhwVSJhyVkcN3Q/arcgis/rest/services
 | Download as GeoJSON | `<base>/<Service>/FeatureServer/<layer>/query?where=1=1&outFields=*&outSR=4326&f=geojson&resultOffset=0&resultRecordCount=1000` |
 
 Servers cap how many features one response can return, so the script asks for
-1,000 at a time and advances `resultOffset` until a page comes back empty. `pipeline/fetch_ml_inputs.py` does this for every
-layer listed in its `HCDD1_LAYERS` table and writes GeoJSON to
-`data/ml/raw/hcdd1/`; `pipeline/build_layers.py` turns those into the map
-overlays:
+1,000 at a time and advances `resultOffset` until a page comes back empty.
+`pipeline/public_sources.py` does this for the layers listed in its
+`HCDD1_LAYERS` table, and `pipeline/build_layers.py` turns the ones below into
+map layers in the database:
 
 ```bash
-uv run --group pipeline python pipeline/fetch_ml_inputs.py --only hcdd1
 uv run --group pipeline python pipeline/build_layers.py
 ```
 
@@ -179,15 +176,13 @@ publishing this project outside the course.
 | `src/rgv_flood/` | The Flask app: `views/`, `data_access.py` (every database query), templates, and the map's ES modules in `static/js/` | yes |
 | `pipeline/` | The build scripts and the live-signal pollers; see [pipeline/README.md](pipeline/README.md) | yes |
 | `tests/` | Tests for the app and the pipeline | yes |
-| `data/<county>-county/flood-hazard-layers/` | FEMA, TWDB and county-boundary GeoJSON: source data with no public scripted download | yes, except the `overture-*` files |
-| `data/hidalgo-county/records/events-and-public-reports/` | Hidalgo's 16 hand-curated local reports, alongside its NOAA events | yes |
-| the rest of `data/<county>-county/` | NOAA records, source notes, schemas and manifests written by `build_all.py` | no |
-| `data/generated/` | The app database, the live-signals database and the archive GeoPackage | no |
-| `data/ml/raw/` | Downloads from `fetch_ml_inputs.py` | no |
-| `tmp/noaa/` | Cache of NOAA's raw files, so a rebuild does not download them again | no |
+| `data/seed/` | Seed files: FEMA, TWDB and county-boundary GeoJSON and Hidalgo's 16 curated reports. The only data in the repository; see [data/seed/README.md](data/seed/README.md) | yes |
+| `data/generated/` | The database, `rgv-flood.sqlite3` | no |
+| `tmp/` | Download cache: publishers' files as downloaded, so a rebuild does not fetch them again. Safe to delete | no |
+| `data/ml/raw/` | Downloads from `fetch_ml_inputs.py` for the planned model | no |
 
-Nothing generated is committed and the app reads no loose data files, so after a
-fresh clone `build_all.py` has to run once before the map has anything to show.
+Nothing generated is committed and the app reads no data files, so after a fresh
+clone `build_all.py` has to run once before the map has anything to show.
 
 ## Development and Testing
 
