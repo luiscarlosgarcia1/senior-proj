@@ -17,7 +17,8 @@ emergency guidance.
 ## Technology Stack
 
 - Flask, Jinja templates, HTMX, Leaflet
-- Python data pipeline (geopandas, shapely); SQLite live-signal snapshots
+- Python data pipeline (geopandas, shapely) that builds one SQLite database for the app
+- SQLite live-signal snapshots
 - Vanilla JavaScript ES modules for the map; no Node or build step
 - NOAA, FEMA, TWDB, Census, NWS, TxDOT, and local government sources
 
@@ -30,22 +31,21 @@ From the repository root:
 ```bash
 uv sync --group dev --group pipeline
 uv run --group pipeline python pipeline/build_all.py
-uv run --group pipeline python pipeline/build_layers.py
-uv run python pipeline/build_events.py
 uv run flask --app rgv_flood run --debug
 ```
 
 Open <http://127.0.0.1:5000>.
 
-`build_all.py` prepares the historical source data and local GeoPackage.
-`build_layers.py` and `build_events.py` create the smaller files the Flask app
-serves. Re-run the build steps after changing pipeline inputs or rules. Each
-script in `pipeline/` can also be run on its own; see
-[pipeline/README.md](pipeline/README.md) for details.
+`build_all.py` is the one build command. It prepares the source data and writes
+everything the app serves into a single SQLite database,
+`data/generated/rgv-flood.sqlite3` (map layers, flood events, reports, rainfall).
+Re-run it after changing pipeline inputs or rules. Each step is also a script in
+`pipeline/` that can be run on its own (`build_layers.py` and `build_events.py`
+are the two that fill the database); see [pipeline/README.md](pipeline/README.md).
 
 For the Hidalgo flood-evidence, drainage, bond-project and insurance-claims
-overlays, run `uv run --group pipeline python pipeline/fetch_ml_inputs.py --only hcdd1,nfip,tracts`
-before `build_layers.py`; without those downloads the layers are simply skipped.
+layers, run `uv run --group pipeline python pipeline/fetch_ml_inputs.py --only hcdd1,nfip,tracts`
+before `build_all.py`; without those downloads the layers are simply skipped.
 
 Flask refreshes official live signals at startup and every 15 minutes. Set
 `RGV_LIVE_SIGNALS_SCHEDULER_ENABLED=false` to disable it, or set
@@ -54,28 +54,34 @@ Flask refreshes official live signals at startup and every 15 minutes. Set
 ## Troubleshooting
 
 - `uv` errors: run `uv sync --group dev --group pipeline` again.
-- Map has no layers: run `build_layers.py` and `build_events.py`.
+- Map has no layers or events: run `build_all.py` (it builds `data/generated/rgv-flood.sqlite3`).
 - Fresh data build fails: confirm network access to NOAA, Overture and FEMA.
 - Live signals unavailable: source outages are logged; the app remains usable.
 
 ## Data Pipeline and Outputs
 
-`pipeline/build_all.py` is the normal historical-data entry point. It scaffolds
-county data, downloads and ingests reproducible NOAA records
-(`noaa_ingest.py`), imports Overture Maps bridges and dams (clipped to each county's real boundary, not just a
-bounding box — the RGV box also covers a strip of Mexico), and builds
-`data/generated/county-collections.gpkg`.
+`pipeline/build_all.py` is the one build command. It scaffolds county data,
+downloads and ingests reproducible NOAA records (`noaa_ingest.py`), imports
+Overture Maps bridges and dams (clipped to each county's real boundary, not just
+a bounding box — the RGV box also covers a strip of Mexico), and then builds two
+files under `data/generated/`:
+
+| File | What it is |
+| --- | --- |
+| `rgv-flood.sqlite3` | The app database. Tables `layers`, `flood_events`, `flood_reports` and `rainfall_records` hold everything the Flask app serves. |
+| `county-collections.gpkg` | A queryable archive of the full county collections. The app does not read it. |
 
 `pipeline/fetch_ml_inputs.py` gathers the public inputs for the planned Hidalgo
 flood-susceptibility model (elevation, NLCD, soils, Atlas 14 rainfall, Overture
 buildings/roads, NFIP claims and policies, Hidalgo drainage-district flood
 photos and infrastructure) into the gitignored `data/ml/raw/`.
 
-The Flask app reads precomputed layers and summaries from
-`src/rgv_flood/static/data/`. Live-source snapshots are separate in
-`data/generated/live-signals.sqlite3`. Generated outputs are mostly ignored by
+The Flask app queries the app database and reads no data files directly.
+Live-source snapshots are separate, in `data/generated/live-signals.sqlite3`,
+because they are written while the app runs. Generated outputs are ignored by
 Git; tracked source geometry and curated Hidalgo reports remain available after
-a fresh clone.
+a fresh clone. Set `RGV_APP_DATABASE` to point the app at a database somewhere
+else.
 
 ## Hidalgo Drainage District (HCDD1) Data and Visualizations
 

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from flask import Blueprint, abort, jsonify, render_template, request, send_file
+from flask import Blueprint, Response, abort, jsonify, render_template, request
 
 from rgv_flood import data_access
 from rgv_flood.counties import COUNTIES, RGV_BBOX, is_county
@@ -21,14 +19,6 @@ def _county_arg() -> tuple[str | None, dict | None]:
     return slug, COUNTIES.get(slug)
 
 
-def _send_json_file(path: Path | None):
-    """Serve a file the pipeline already wrote as valid JSON, untouched (with
-    ETag/Last-Modified, so browsers revalidate instead of re-downloading)."""
-    if path is None:
-        abort(404)
-    return send_file(path, mimetype="application/json")
-
-
 @bp.get("/")
 def index():
     return render_template(
@@ -37,18 +27,32 @@ def index():
         bbox=RGV_BBOX,
         layers=data_access.available_layers(),
         relative_classes=RELATIVE_CLASSES,
-        event_count=len(data_access.flood_events()),
+        event_count=data_access.flood_event_count(),
     )
 
 
 @bp.get("/api/layers/<layer_id>.geojson")
 def layer(layer_id: str):
-    return _send_json_file(data_access.layer_path(layer_id))
+    """The layer's GeoJSON as the pipeline built it. Layers run to several MB, so
+    a browser that already holds the current version is told so (304) without
+    the geometry being read at all."""
+    etag = data_access.layer_etag(layer_id)
+    if etag is None:
+        abort(404)
+    if etag in request.if_none_match:
+        response = Response(status=304)
+    else:
+        response = Response(data_access.layer_geojson(layer_id), mimetype="application/json")
+    response.set_etag(etag)
+    return response
 
 
 @bp.get("/api/flood-events.geojson")
 def flood_events_geojson():
-    return _send_json_file(data_access.output_path(data_access.FLOOD_EVENTS_FILE))
+    collection = data_access.flood_events_geojson()
+    if collection is None:
+        abort(404)
+    return jsonify(collection)
 
 
 @bp.get("/api/live-signals.geojson")

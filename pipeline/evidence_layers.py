@@ -3,8 +3,8 @@ FEMA NFIP claims: recorded flooding, flood photos, the drainage network, bond
 projects, and insurance claims per census tract.
 
 Inputs live in data/ml/raw/ (fetched by pipeline/fetch_ml_inputs.py, gitignored).
-Every builder returns 0 and writes nothing when its inputs are missing, so a
-clone that hasn't run the fetch script still builds the other layers.
+Every builder returns None when its inputs are missing, so a clone that hasn't
+run the fetch script still builds the other layers.
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import geopandas as gpd
+from app_db import MapLayer
 from jsonio import feature_collection, read_ndjson
-from layer_io import write_layer
 from paths import ML_RAW
 from shapely.geometry import mapping, shape
 
@@ -81,10 +81,10 @@ def _convert(layer: str, overlay_type: str, to_properties: Properties, tolerance
     return [feature for feature in converted if feature]
 
 
-def _write_features(filename: str, features: list[dict]) -> int:
+def _layer(features: list[dict]) -> MapLayer | None:
     if not features:
-        return 0
-    return write_layer(filename, json.dumps(feature_collection(features), separators=(",", ":")), len(features))
+        return None
+    return MapLayer(json.dumps(feature_collection(features), separators=(",", ":")), len(features))
 
 
 # ---- flood extents and photos ----------------------------------------------
@@ -109,7 +109,7 @@ FLOOD_PHOTOS = [
 ]
 
 
-def build_hcdd1_flood_extents() -> int:
+def build_hcdd1_flood_extents() -> MapLayer | None:
     """Areas the district mapped as flooded after six past storms (2008-2020)."""
     features = []
     for layer, year, label in FLOOD_EXTENTS:
@@ -118,7 +118,7 @@ def build_hcdd1_flood_extents() -> int:
             return {"year": year, "hcdd1_label": label, "county": "Hidalgo", "source": HCDD1_NAME}
 
         features += _convert(layer, "flood_extent", properties, tolerance=0.00003)
-    return _write_features("hcdd1-flood-extents.geojson", features)
+    return _layer(features)
 
 
 def _exif_to_text(exif_datetime: str) -> str:
@@ -126,7 +126,7 @@ def _exif_to_text(exif_datetime: str) -> str:
     return exif_datetime[:16].replace(":", "-", 2)
 
 
-def build_hcdd1_flood_photos() -> int:
+def build_hcdd1_flood_photos() -> MapLayer | None:
     """Where and when the district photographed four floods. File paths and
     camera headings in the source are deliberately dropped."""
     west, south, east, north = RGV_BBOX  # drops photos with stray GPS tags
@@ -145,7 +145,7 @@ def build_hcdd1_flood_photos() -> int:
                 "geometry": {"type": "Point", "coordinates": [round(x, 5), round(y, 5)]},
                 "properties": {"overlay_type": "flood_photo", "event": event, "taken": taken},
             })
-    return _write_features("hcdd1-flood-photos.geojson", features)
+    return _layer(features)
 
 
 # ---- drainage network -------------------------------------------------------
@@ -195,12 +195,12 @@ DRAINAGE_SOURCES = [
 ]
 
 
-def build_hcdd1_drainage() -> int:
+def build_hcdd1_drainage() -> MapLayer | None:
     """The district's channels, planned channels, detention ponds, gates and pumps."""
     features = []
     for layer, properties, tolerance in DRAINAGE_SOURCES:
         features += _convert(layer, "drainage", properties, tolerance)
-    return _write_features("hcdd1-drainage.geojson", features)
+    return _layer(features)
 
 
 # ---- bond projects ----------------------------------------------------------
@@ -232,12 +232,12 @@ def _bond_project(program: str) -> Properties:
     return properties
 
 
-def build_hcdd1_bond_projects() -> int:
+def build_hcdd1_bond_projects() -> MapLayer | None:
     """Drainage projects funded by the 2012, 2018 and 2023 bonds, with status and dates."""
     features = []
     for layer, program in BOND_PROGRAMS:
         features += _convert(layer, "bond_project", _bond_project(program), FINE)
-    return _write_features("hcdd1-bond-projects.geojson", features)
+    return _layer(features)
 
 
 # ---- NFIP claims by census tract -------------------------------------------
@@ -304,7 +304,7 @@ def _class_breaks(counts: list[int]) -> list[int]:
     return [ranked[int(len(ranked) * q)] for q in (0.2, 0.4, 0.6, 0.8)] if ranked else []
 
 
-def build_nfip_claims_by_tract() -> int:
+def build_nfip_claims_by_tract() -> MapLayer | None:
     """NFIP flood-insurance claims per census tract, all four counties.
 
     Raw counts only: the policy file (needed to turn counts into a rate) is a
@@ -313,7 +313,7 @@ def build_nfip_claims_by_tract() -> int:
     across the current tracts by area instead of being dropped.
     """
     if not (CLAIMS_FILE.exists() and TRACTS_2023.exists()):
-        return 0
+        return None
 
     by_geoid = _tally_claims(CLAIMS_FILE)
     total = sum(t.claims for t in by_geoid.values())
@@ -352,4 +352,4 @@ def build_nfip_claims_by_tract() -> int:
         )
         if feature:
             features.append(feature)
-    return _write_features("nfip-claims-by-tract.geojson", features)
+    return _layer(features)

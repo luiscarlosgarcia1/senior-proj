@@ -1,36 +1,35 @@
 #!/usr/bin/env python3
-"""Turn the ingested NOAA records into app-ready overlays.
+"""Turn the ingested NOAA records into the app database's event tables.
 
 Reads the schema-validated NDJSON under `data/<county>-county/records/` for all
-four counties and writes, into `src/rgv_flood/static/data/`:
+four counties and fills three tables (see `app_db.py`):
 
-  flood-events.geojson   documented flood events as map points, all four
-                         counties merged (each feature carries its own
-                         `county`); events without a coordinate are kept with
-                         null geometry so the sidebar list can still show them
-  flood-reports.json     the local-news / local-government reports tied to
-                         those events -- currently Hidalgo only; the other
-                         three counties have no hand-curated reports yet
-  rainfall-records.json  the wettest gauge-days on record, 2000-2025, across
-                         every county's stations
+  flood_events      documented flood events, all four counties merged; events
+                    without a usable coordinate are kept with null lon/lat so
+                    the sidebar list can still show them
+  flood_reports     the local-news / local-government reports tied to those
+                    events -- currently Hidalgo only; the other three counties
+                    have no hand-curated reports yet
+  rainfall_records  the wettest gauge-days on record, 2000-2025, across every
+                    county's stations
 
 Fast, and needs only shapely (a core dependency) — no pipeline dependency group.
 
 Run:  uv run python pipeline/build_events.py
-Safe to re-run (overwrites only its own three outputs).
+Safe to re-run (replaces only its own three tables).
 """
 
 from __future__ import annotations
 
-import json
+from pathlib import Path
 
-from jsonio import feature_collection, read_ndjson, write_json
-from paths import DATA_DIR, OUT_DIR, county_boundary, ghcn_daily_file, storm_events_file
+from app_db import open_app_db, replace_table
+from jsonio import read_ndjson
+from paths import APP_DB, DATA_DIR, county_boundary, ghcn_daily_file, storm_events_file
 from shapely.geometry import Point, shape
 
 from rgv_flood.counties import SHORT_NAMES as COUNTY_NAMES
 
-GENERATED_BY = "pipeline/build_events.py"
 RAINFALL_TOP_N = 15
 
 # A handful of NOAA Storm Events rows carry a BEGIN_LAT/LON that is plainly a
@@ -78,67 +77,63 @@ def _first_sentence(text: str) -> str:
     return text.strip()
 
 
-def build_events() -> int:
-    features = []
-    dropped_coords = 0
+def build_events() -> list[dict]:
+    """`flood_events` rows, newest first."""
+    events = []
     for slug, name in COUNTY_NAMES.items():
         boundary = shape(county_boundary(slug, DATA_DIR))
         for r in _records(slug, "flood_event"):
-            ref = r.get("source_reference") or {}
             geometry = r.get("geometry")
-            props = {
+            lon = lat = geometry_note = None
+            if geometry and geometry.get("type") == "Point":
+                lon, lat = geometry["coordinates"][:2]
+                if not _near_county(lon, lat, boundary):
+                    lon = lat = None
+                    geometry_note = (
+                        f"The source coordinate falls outside {name} County and looks "
+                        "like a data-entry error, so this event is listed but not mapped."
+                    )
+            events.append({
                 "id": r["record_id"],
+                "county": slug,
                 "date": r["event_start"],
                 "date_end": r.get("event_end"),
                 "type": _event_type(r.get("summary", "")),
                 "location": r.get("location_text", ""),
                 "precision": r.get("location_precision"),
                 "summary": r.get("summary", ""),
-                "source_url": ref.get("value"),
-                "county": slug,
-            }
-            if geometry and geometry.get("type") == "Point":
-                lon, lat = geometry["coordinates"][:2]
-                if not _near_county(lon, lat, boundary):
-                    geometry = None
-                    props["geometry_note"] = (
-                        f"The source coordinate falls outside {name} County and looks "
-                        "like a data-entry error, so this event is listed but not mapped."
-                    )
-                    dropped_coords += 1
-            features.append({"type": "Feature", "geometry": geometry, "properties": props})
-    features.sort(key=lambda f: (f["properties"]["date"], f["properties"]["id"]), reverse=True)
-    (OUT_DIR / "flood-events.geojson").write_text(json.dumps(feature_collection(features)), encoding="utf-8")
-    mapped = sum(1 for f in features if f["geometry"])
-    note = f", {dropped_coords} bad coordinate(s) dropped" if dropped_coords else ""
-    print(f"flood-events.geojson: {len(features)} events across {len(COUNTY_NAMES)} counties ({mapped} mapped{note})")
-    return len(features)
+                "source_url": (r.get("source_reference") or {}).get("value"),
+                "geometry_note": geometry_note,
+                "lon": lon,
+                "lat": lat,
+            })
+    events.sort(key=lambda e: (e["date"], e["id"]), reverse=True)
+    return events
 
 
-def build_reports() -> int:
+def build_reports() -> list[dict]:
+    """`flood_reports` rows, oldest first."""
     reports = []
     for slug in COUNTY_NAMES:
         for r in _records(slug, "public_report"):
-            ref = r.get("source_reference") or {}
             reports.append({
+                "county": slug,
                 "headline": _first_sentence(r.get("summary", "")),
                 "detail": r.get("summary", ""),
                 "location": r.get("location_text", ""),
                 "published_at": r.get("event_start"),
                 "publisher": r.get("source_publisher", ""),
                 "channel": r.get("source_channel", ""),
-                "source_url": ref.get("value"),
-                "group": r.get("duplicate_group_id"),
-                "county": slug,
+                "source_url": (r.get("source_reference") or {}).get("value"),
+                "duplicate_group": r.get("duplicate_group_id"),
             })
-    reports.sort(key=lambda x: x["published_at"] or "")
-    write_json(OUT_DIR / "flood-reports.json", {"generated_by": GENERATED_BY, "reports": reports})
-    by_county = sorted({r["county"] for r in reports})
-    print(f"flood-reports.json: {len(reports)} reports (curated so far for: {', '.join(by_county) or 'none'})")
-    return len(reports)
+    reports.sort(key=lambda report: report["published_at"] or "")
+    return reports
 
 
-def build_rainfall() -> int:
+def build_rainfall() -> tuple[list[dict], int]:
+    """The `rainfall_records` rows (the wettest RAINFALL_TOP_N gauge-days) and
+    how many days with measurable rain they were picked from."""
     days = []
     for slug in COUNTY_NAMES:
         for w in read_ndjson(ghcn_daily_file(slug, DATA_DIR)):
@@ -150,24 +145,32 @@ def build_rainfall() -> int:
             if mm <= 0:
                 continue
             days.append({
+                "county": slug,
                 "date": attrs["date"],
                 "mm": round(mm, 1),
                 "inches": round(mm / 25.4, 1),
                 "station": attrs["station_name"],
-                "county": slug,
             })
     days.sort(key=lambda d: d["mm"], reverse=True)
-    top = days[:RAINFALL_TOP_N]
-    write_json(OUT_DIR / "rainfall-records.json", {"generated_by": GENERATED_BY, "days": top})
-    print(f"rainfall-records.json: top {len(top)} of {len(days)} days with measurable rain, all counties")
-    return len(top)
+    return days[:RAINFALL_TOP_N], len(days)
 
 
-def main() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    build_events()
-    build_reports()
-    build_rainfall()
+def main(database: Path = APP_DB) -> None:
+    events, reports = build_events(), build_reports()
+    wettest, rain_days = build_rainfall()
+    with open_app_db(database) as connection:
+        replace_table(connection, "flood_events", events)
+        replace_table(connection, "flood_reports", reports)
+        replace_table(connection, "rainfall_records", wettest)
+
+    mapped = sum(1 for e in events if e["lat"] is not None)
+    dropped = sum(1 for e in events if e["geometry_note"])
+    note = f", {dropped} bad coordinate(s) dropped" if dropped else ""
+    print(f"flood_events: {len(events)} events across {len(COUNTY_NAMES)} counties ({mapped} mapped{note})")
+    curated = sorted({r["county"] for r in reports})
+    print(f"flood_reports: {len(reports)} reports (curated so far for: {', '.join(curated) or 'none'})")
+    print(f"rainfall_records: top {len(wettest)} of {rain_days} days with measurable rain, all counties")
+    print("written to", database)
 
 
 if __name__ == "__main__":

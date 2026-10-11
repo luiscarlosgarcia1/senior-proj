@@ -10,8 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 ML_RAW = DATA_DIR / "ml" / "raw"  # public model inputs (fetch_ml_inputs.py)
 NOAA_RAW = REPO_ROOT / "tmp" / "noaa"  # downloaded NOAA .csv.gz files
-OUT_DIR = REPO_ROOT / "src" / "rgv_flood" / "static" / "data"  # what the Flask app serves
 SCHEMA_DIR = REPO_ROOT / "pipeline" / "schemas"
+APP_DB = DATA_DIR / "generated" / "rgv-flood.sqlite3"  # everything the Flask app serves (app_db.py)
 LIVE_SIGNALS_DB = DATA_DIR / "generated" / "live-signals.sqlite3"
 GEOPACKAGE = DATA_DIR / "generated" / "county-collections.gpkg"
 

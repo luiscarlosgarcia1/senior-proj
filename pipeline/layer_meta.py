@@ -1,8 +1,8 @@
 """Descriptive metadata for every map layer: title, plain-language description,
 source, vintage, limitations, and links to the publisher's own visualizations.
 
-`build_layers.py` merges these into `layers.json`; the sidebar and each layer's
-"source" card render straight from it. Keep the wording honest about what a
+`build_layers.py` stores these with each layer in the app database; the sidebar
+and each layer's "source" card render straight from it. Keep the wording honest about what a
 layer is not (see each `limitation`).
 """
 

@@ -1,13 +1,35 @@
 # Preprocessing pipeline
 
 Offline data engineering. Turns the collected source data under `data/` into the
-small files the Flask app serves from `src/rgv_flood/static/data/`. Not shipped
-with the app.
+one SQLite database the Flask app reads, `data/generated/rgv-flood.sqlite3`. Not
+shipped with the app.
 
 Everything here is deterministic and re-runnable — it only overwrites its own
-outputs. Every generated file, including `layers.json`, is gitignored, so
-`build_layers.py` and `build_events.py` must run after a clone before the app has
-anything to serve.
+outputs. The database is gitignored build output, so `build_all.py` must run
+after a clone before the app has anything to serve.
+
+## The app database
+
+| Table | One row per | Filled by |
+| --- | --- | --- |
+| `layers` | map layer: its title, description, source, limitation and links, plus the map-ready GeoJSON the browser draws | `build_layers.py` |
+| `flood_events` | documented flood event (date, type, location, summary, point if it has one) | `build_events.py` |
+| `flood_reports` | local-news or government report tied to an event | `build_events.py` |
+| `rainfall_records` | one of the wettest gauge-days on record | `build_events.py` |
+
+The table definitions are in `app_db.py`; the queries the app runs are in
+`src/rgv_flood/data_access.py`. Each build script replaces only its own tables,
+in a single transaction, so either can be re-run alone while the app is running.
+Open the file with any SQLite tool to look around:
+
+```bash
+sqlite3 data/generated/rgv-flood.sqlite3 "select id, feature_count from layers order by position"
+```
+
+Two other SQLite files sit next to it and are separate on purpose:
+`live-signals.sqlite3` is written while the app runs (see "Live signals"), and
+`county-collections.gpkg` is a 1 GB archive of the raw collections that the app
+never reads.
 
 `schemas/` in this directory is the one exception to "gitignored build output"
 in the whole `data/`-adjacent tree — it's the tracked template
@@ -24,9 +46,10 @@ uv run --group pipeline python pipeline/build_all.py
 Runs every step in order, for all four counties, from a bare clone: scaffold the
 county folders, download and ingest the NOAA records (`noaa_ingest.py`), import the
 flood-hazard-layer GeoJSON (skipped with a warning if the sibling `Flood Project/`
-directory isn't found), import Overture bridges and dams, then build the
-GeoPackage. See its docstring for the exact step list; each step is also a script
-you can run on its own.
+directory isn't found), import Overture bridges and dams, build the app database
+(`build_layers.py`, `build_events.py`), then build the archive GeoPackage. See its
+docstring for the exact step list; each step is also a script you can run on its
+own.
 
 ## `build_county_collections_geopackage.py` — local spatial query database
 
@@ -42,9 +65,9 @@ to their source artifacts, retains source JSON and nullable-geometry evidence, a
 stores usable GeoJSON as native EPSG:4326 GeoPackage geometry. It validates input
 and replaces the destination atomically, so malformed geometry or duplicate record
 identities never produce a partial artifact. It is deliberately separate from the
-app's static-overlay builders.
+app database: the app never reads it.
 
-## `build_layers.py` — hazard layers
+## `build_layers.py` — map layers
 
 ```bash
 uv run --group pipeline python pipeline/build_layers.py      # ~90 s
@@ -61,18 +84,17 @@ The code is split by concern: `build_layers.py` (hazard and infrastructure
 builders, and the layer-id → builder table that drives `main()`),
 `evidence_layers.py` (Hidalgo drainage-district and NFIP overlays),
 `layer_meta.py` (descriptions, limitations and links to each publisher's own
-map), and `layer_io.py` (the one function that writes a layer file).
+map), and `app_db.py` (the database tables and how they are written).
 
-| Output | From |
+| `layers.id` | From |
 | --- | --- |
-| `county-boundaries.geojson` | TIGER county polygons, all four counties |
-| `fema-nfhl.geojson` | FEMA NFHL — Cameron, Starr, Willacy |
-| `hidalgo-firm-1981.geojson` | Hidalgo County DD No. 1 digitized 1981 FIRM |
-| `twdb-cursory-1in100.geojson` / `-1in500.geojson` | TWDB 2025 cursory floodplain, all four |
-| `overture-bridges.geojson` / `overture-dams.geojson` | Overture Maps, clipped to the county polygons (`import_overture_infrastructure.py`) |
+| `county-boundaries` | TIGER county polygons, all four counties |
+| `fema-nfhl` | FEMA NFHL — Cameron, Starr, Willacy |
+| `hidalgo-firm-1981` | Hidalgo County DD No. 1 digitized 1981 FIRM |
+| `twdb-cursory-1in100` / `-1in500` | TWDB 2025 cursory floodplain, all four |
+| `overture-bridges` / `overture-dams` | Overture Maps, clipped to the county polygons (`import_overture_infrastructure.py`) |
 | `hcdd1-flood-extents`, `-flood-photos`, `-drainage`, `-bond-projects` | Hidalgo drainage district's published layers |
-| `nfip-claims-by-tract.geojson` | FEMA NFIP claims per census tract |
-| `layers.json` | manifest (id, file, title, description, source, vintage, limitation, links) |
+| `nfip-claims-by-tract` | FEMA NFIP claims per census tract |
 
 The drainage-district and NFIP overlays need the raw downloads from
 `fetch_ml_inputs.py` (`--only hcdd1,nfip,tracts`); without them those layers are
@@ -91,11 +113,11 @@ Reads the schema-validated NDJSON under `data/<county>-county/records/` for all
 four counties (NOAA Storm Events + GHCN-Daily, collected via `pipeline/noaa_ingest.py`)
 and merges them, each event/report/day tagged with its own `county`.
 
-| Output | Contents |
+| Table | Contents |
 | --- | --- |
-| `flood-events.geojson` | Documented flood events as points, all four counties; an event whose source coordinate falls outside its own county's boundary is kept but not mapped (`geometry_note`) |
-| `flood-reports.json` | Local-news / government reports tied to those events — 16 so far, **Hidalgo only**; the other three counties have none because nobody's done that hand-curation pass for them yet, not because no script exists |
-| `rainfall-records.json` | The 15 wettest single gauge-days on record, ranked across every county's stations |
+| `flood_events` | Documented flood events, all four counties; an event whose source coordinate falls outside its own county's boundary is kept without a point (`geometry_note` says why) |
+| `flood_reports` | Local-news / government reports tied to those events — 16 so far, **Hidalgo only**; the other three counties have none because nobody's done that hand-curation pass for them yet, not because no script exists |
+| `rainfall_records` | The 15 wettest single gauge-days on record, ranked across every county's stations |
 
 ## `noaa_ingest.py` — NOAA Storm Events and GHCN-Daily
 
@@ -126,7 +148,7 @@ JSON format or an HTTP setting is defined in exactly one place:
 
 | Module | What it holds |
 | --- | --- |
-| `paths.py` | Where things live: `data/`, each county's folders and record files, the app's `static/data/`, the live-signals database, the GeoPackage |
+| `paths.py` | Where things live: `data/`, each county's folders and record files, the app database, the live-signals database, the GeoPackage |
 | `jsonio.py` | Reading NDJSON, writing readable JSON, canonical (sorted, compact) JSON, GeoJSON feature collections |
 | `net.py` | HTTP GET for bytes, text and JSON, plus resumable downloads with retries |
 | `rgv_flood.counties` | The four counties: slugs, FIPS codes, names, bounding box (shared with the Flask app) |

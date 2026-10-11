@@ -18,8 +18,8 @@
   </p>
   <ul class="event-list">
     {% for e in events %}
-    <li class="event-item {{ 'locatable' if e.lat is defined }}"
-        {% if e.lat is defined %}data-id="{{ e.id }}" data-lat="{{ e.lat }}" data-lon="{{ e.lon }}"{% endif %}>
+    <li class="event-item {{ 'locatable' if e.lat is not none }}"
+        {% if e.lat is not none %}data-id="{{ e.id }}" data-lat="{{ e.lat }}" data-lon="{{ e.lon }}"{% endif %}>
       <div class="event-row">
         <span class="event-type">{{ e.type }}</span>
         <span class="event-date">{{ e.date }}</span>

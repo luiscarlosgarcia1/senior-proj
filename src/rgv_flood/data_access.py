@@ -1,7 +1,9 @@
 """Read-only access to pipeline outputs.
 
-The app serves what the offline pipeline produced. It does not fetch from FEMA,
-TWDB, Census, or news sites at request time.
+The app serves what the offline pipeline produced: the app database (map
+layers, flood events, reports, rainfall; see `pipeline/app_db.py` for its
+tables) and the live-signals database. It does not fetch from FEMA, TWDB,
+Census, or news sites at request time.
 """
 
 from __future__ import annotations
@@ -9,88 +11,109 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import closing
-from functools import lru_cache
 from pathlib import Path
 
 from flask import current_app
 
-# Files the pipeline writes into MAP_DATA_DIR (see pipeline/README.md).
-LAYERS_FILE = "layers.json"
-FLOOD_EVENTS_FILE = "flood-events.geojson"
-FLOOD_REPORTS_FILE = "flood-reports.json"
-RAINFALL_FILE = "rainfall-records.json"
+LAYER_COLUMNS = (
+    "id, title, description, source, vintage, hazard_type, coverage, limitation, source_url, "
+    "visualizations_json, feature_count"
+)
+EVENT_COLUMNS = "id, county, date, date_end, type, location, precision, summary, source_url, geometry_note, lon, lat"
 
 
-def output_path(name: str) -> Path | None:
-    """A pipeline output file, or None if it hasn't been built."""
-    path = Path(current_app.config["MAP_DATA_DIR"]) / name
-    return path if path.exists() else None
-
-
-@lru_cache(maxsize=16)
-def _parse(path: Path, _modified_ns: int, _size: int):
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _read_json(name: str):
-    """A pipeline output parsed as JSON (None if it hasn't been built).
-
-    Parsed once and reused until the file changes, so treat the result as
-    read-only.
-    """
-    path = output_path(name)
-    if path is None:
+def _rows(database_key: str, query: str, parameters: tuple = ()) -> list[dict] | None:
+    """Rows of a query as dicts, or None when that database hasn't been built yet."""
+    database = Path(current_app.config[database_key])
+    if not database.exists():
         return None
-    stat = path.stat()
-    return _parse(path, stat.st_mtime_ns, stat.st_size)
+    # closing(): sqlite3's own context manager commits but never closes the file.
+    with closing(sqlite3.connect(database)) as connection:
+        connection.row_factory = sqlite3.Row
+        return [dict(row) for row in connection.execute(query, parameters)]
+
+
+def _app_rows(query: str, parameters: tuple = ()) -> list[dict]:
+    return _rows("APP_DATABASE", query, parameters) or []
+
+
+def _where(equals: dict[str, str | None]) -> tuple[str, tuple]:
+    """A WHERE clause (and its parameters) for every column expression given a value."""
+    wanted = {expression: value for expression, value in equals.items() if value}
+    if not wanted:
+        return "", ()
+    return " where " + " and ".join(f"{expression} = ?" for expression in wanted), tuple(wanted.values())
+
+
+# ---- map layers ----
+
+
+def _layer(row: dict) -> dict:
+    row["visualizations"] = json.loads(row.pop("visualizations_json"))
+    return row
 
 
 def available_layers() -> list[dict]:
-    """Layer manifest written by the pipeline: id, title, source, vintage, file."""
-    manifest = _read_json(LAYERS_FILE)
-    return manifest.get("layers", []) if manifest else []
+    """Every layer's descriptive metadata (not its geometry), in sidebar order."""
+    return [_layer(row) for row in _app_rows(f"select {LAYER_COLUMNS} from layers order by position")]
 
 
 def layer(layer_id: str) -> dict | None:
-    """One layer's manifest entry."""
-    return next((entry for entry in available_layers() if entry["id"] == layer_id), None)
+    """One layer's descriptive metadata."""
+    rows = _app_rows(f"select {LAYER_COLUMNS} from layers where id = ?", (layer_id,))
+    return _layer(rows[0]) if rows else None
 
 
-def layer_path(layer_id: str) -> Path | None:
-    """The built GeoJSON file for a layer, if it is listed and exists."""
-    entry = layer(layer_id)
-    return output_path(entry["file"]) if entry else None
+def layer_etag(layer_id: str) -> str | None:
+    """A token that changes whenever the layer's GeoJSON does (None for an unknown layer)."""
+    rows = _app_rows("select etag from layers where id = ?", (layer_id,))
+    return rows[0]["etag"] if rows else None
 
 
-def _in_county(rows: list[dict], county_slug: str | None) -> list[dict]:
-    return [row for row in rows if row.get("county") == county_slug] if county_slug else rows
+def layer_geojson(layer_id: str) -> bytes | None:
+    """The layer's FeatureCollection, exactly as the pipeline built it."""
+    rows = _app_rows("select geojson from layers where id = ?", (layer_id,))
+    return rows[0]["geojson"] if rows else None
+
+
+# ---- flood events, reports, rainfall ----
+
+
+def _events(where: str = "", parameters: tuple = ()) -> list[dict] | None:
+    query = f"select {EVENT_COLUMNS} from flood_events{where} order by date desc, id desc"
+    return _rows("APP_DATABASE", query, parameters)
 
 
 def flood_events(year: str | None = None, county_slug: str | None = None) -> list[dict]:
     """Event rows (newest first), optionally filtered to one year and/or county.
 
-    Each row is the feature's properties plus ``lat`` / ``lon`` when the event
-    has a point, so the sidebar list can fly the map to it.
+    ``lat`` / ``lon`` are None when the event has no point to fly the map to.
     """
-    collection = _read_json(FLOOD_EVENTS_FILE)
-    if not collection:
-        return []
-    rows = []
-    for feature in collection["features"]:
-        row = dict(feature["properties"])
-        geometry = feature.get("geometry")
-        if geometry and geometry.get("type") == "Point":
-            row["lon"], row["lat"] = geometry["coordinates"][:2]
-        rows.append(row)
-    if year:
-        rows = [row for row in rows if row.get("date", "").startswith(year)]
-    return _in_county(rows, county_slug)
+    return _events(*_where({"substr(date, 1, 4)": year, "county": county_slug})) or []
+
+
+def flood_event_count() -> int:
+    rows = _app_rows("select count(*) as total from flood_events")
+    return rows[0]["total"] if rows else 0
 
 
 def flood_event_years(county_slug: str | None = None) -> list[str]:
-    return sorted(
-        {event["date"][:4] for event in flood_events(county_slug=county_slug) if event.get("date")}, reverse=True
-    )
+    where, parameters = _where({"county": county_slug})
+    rows = _app_rows(f"select distinct substr(date, 1, 4) as year from flood_events{where} order by year desc", parameters)
+    return [row["year"] for row in rows]
+
+
+def flood_events_geojson() -> dict | None:
+    """Every event as a GeoJSON feature for the map (None before the first build)."""
+    events = _events()
+    if events is None:
+        return None
+    features = []
+    for event in events:
+        lon, lat = event.pop("lon"), event.pop("lat")
+        geometry = {"type": "Point", "coordinates": [lon, lat]} if lat is not None else None
+        features.append({"type": "Feature", "geometry": geometry, "properties": event})
+    return {"type": "FeatureCollection", "features": features}
 
 
 def flood_reports(county_slug: str | None = None) -> list[dict]:
@@ -99,15 +122,17 @@ def flood_reports(county_slug: str | None = None) -> list[dict]:
     Historical only — never live closure data. Each report carries its source
     URL and publication date.
     """
-    data = _read_json(FLOOD_REPORTS_FILE)
-    return _in_county(data.get("reports", []) if data else [], county_slug)
+    where, parameters = _where({"county": county_slug})
+    return _app_rows(f"select * from flood_reports{where} order by report_id", parameters)
 
 
 def rainfall_records(county_slug: str | None = None) -> list[dict]:
     """The wettest single gauge-days on record (date, mm, inches, station)."""
-    data = _read_json(RAINFALL_FILE)
-    return _in_county(data.get("days", []) if data else [], county_slug)
+    where, parameters = _where({"county": county_slug})
+    return _app_rows(f"select * from rainfall_records{where} order by rank", parameters)
 
+
+# ---- live signals ----
 
 # Columns of the live_signals table that each consumer needs.
 MAP_SIGNAL_COLUMNS = (
@@ -127,19 +152,13 @@ def _active_official_signals(
     columns: tuple[str, ...], *, only_mappable: bool, order_by: str = ""
 ) -> list[dict] | None:
     """Active, official rows of the live-signals database (None if it doesn't exist yet)."""
-    database = Path(current_app.config["LIVE_SIGNALS_DATABASE"])
-    if not database.exists():
-        return None
-    query = (
+    return _rows(
+        "LIVE_SIGNALS_DATABASE",
         f"select {', '.join(columns)} from live_signals "
         "where lifecycle_state = 'active' and provenance = 'official'"
         + (" and is_mappable = 1" if only_mappable else "")
-        + (f" order by {order_by}" if order_by else "")
+        + (f" order by {order_by}" if order_by else ""),
     )
-    # closing(): sqlite3's own context manager commits but never closes the file.
-    with closing(sqlite3.connect(database)) as connection:
-        connection.row_factory = sqlite3.Row
-        return [dict(row) for row in connection.execute(query)]
 
 
 def active_official_signal_features() -> dict | None:

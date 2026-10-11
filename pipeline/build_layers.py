@@ -1,4 +1,4 @@
-"""Turn the per-county flood-hazard layers into map-ready GeoJSON.
+"""Build every map layer and store it in the app database.
 
 Reads `data/<county>-county/flood-hazard-layers/*.geojson`, then for each layer:
 
@@ -8,16 +8,19 @@ Reads `data/<county>-county/flood-hazard-layers/*.geojson`, then for each layer:
   * dissolves adjacent polygons that share (county, source, category, class)
   * simplifies geometry to a map-scale tolerance
 
-and writes the result plus `layers.json` into `src/rgv_flood/static/data/`,
-which the Flask app serves as-is. Flood-evidence, drainage and insurance-claims
-layers come from `evidence_layers.py`; layer descriptions from `layer_meta.py`.
+Each layer becomes one row of the `layers` table (see `app_db.py`): its
+map-ready GeoJSON, which the Flask app serves as is, next to its description.
+Flood-evidence, drainage and insurance-claims layers come from
+`evidence_layers.py`; layer descriptions from `layer_meta.py`.
 
 Run:  uv run --group pipeline python pipeline/build_layers.py
-Safe to re-run (overwrites its own outputs only).
+Safe to re-run (replaces the `layers` table only).
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -30,10 +33,9 @@ import evidence_layers
 import geopandas as gpd
 import pandas as pd
 import pyogrio
-from jsonio import write_json
-from layer_io import write_layer
+from app_db import MapLayer, open_app_db, replace_table
 from layer_meta import LAYER_META
-from paths import OUT_DIR, hazard_layers_dir
+from paths import APP_DB, hazard_layers_dir
 
 from rgv_flood.counties import NFHL_COUNTIES, SHORT_NAMES
 from rgv_flood.severity import classify_fema_zone, relative_class_for
@@ -80,25 +82,28 @@ def _stack(parts: list[gpd.GeoDataFrame]) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), crs=4326)
 
 
-def _finish(gdf: gpd.GeoDataFrame, filename: str, tolerance: float = TOLERANCE_REGULATORY) -> int:
-    """Dissolve, simplify and write a hazard layer."""
+def _as_layer(gdf: gpd.GeoDataFrame) -> MapLayer:
+    return MapLayer(gdf.to_json(drop_id=True), len(gdf))
+
+
+def _finish(gdf: gpd.GeoDataFrame, tolerance: float = TOLERANCE_REGULATORY) -> MapLayer:
+    """Dissolve and simplify a hazard layer."""
     gdf = gdf[[*(c for c in DISSOLVE_COLS if c in gdf.columns), "geometry"]]
     gdf = gdf.dissolve(by=[c for c in DISSOLVE_COLS if c in gdf.columns], as_index=False)
     gdf["geometry"] = gdf.geometry.simplify(tolerance, preserve_topology=True)
-    gdf = _drop_empty(gdf)
-    return write_layer(filename, gdf.to_json(drop_id=True), len(gdf))
+    return _as_layer(_drop_empty(gdf))
 
 
-def build_county_boundaries() -> int:
+def build_county_boundaries() -> MapLayer:
     parts = [_read_county(slug, "boundary.geojson")[["geometry", "county_slug", "county"]] for slug in SHORT_NAMES]
     out = _stack(parts)
     out["source"] = "US Census TIGER/Line 2023"
     out["original_category"] = "county boundary"
     out["relative_class"] = "uncategorized"
-    return _finish(out, "county-boundaries.geojson")
+    return _finish(out)
 
 
-def build_fema_nfhl() -> int:
+def build_fema_nfhl() -> MapLayer:
     parts = []
     for slug in NFHL_COUNTIES:
         g = _read_county(slug, "fema-nfhl.geojson")
@@ -108,19 +113,19 @@ def build_fema_nfhl() -> int:
         g["original_category"] = g["FLD_ZONE"].fillna("").astype(str)
         g["relative_class"] = [classify_fema_zone(zone, subtype) for zone, subtype in zip(g["FLD_ZONE"], subtypes, strict=True)]
         parts.append(g)
-    return _finish(_stack(parts), "fema-nfhl.geojson")
+    return _finish(_stack(parts))
 
 
-def build_hidalgo_firm() -> int:
+def build_hidalgo_firm() -> MapLayer:
     g = _read_county("hidalgo", "hcdd1-firm-1981.geojson")
     zone = g["ZONE_LABEL"] if "ZONE_LABEL" in g.columns else g["ZONE"]
     g["source"] = "Hidalgo County DD No. 1 digitized 1981 FIRM"
     g["original_category"] = zone.fillna("").astype(str)
     g["relative_class"] = [classify_fema_zone(z) for z in g["original_category"]]
-    return _finish(g, "hidalgo-firm-1981.geojson")
+    return _finish(g)
 
 
-def build_twdb(freq: str, chance: str) -> int:
+def build_twdb(freq: str, chance: str) -> MapLayer:
     source = "TWDB 2025 cursory floodplain"
     parts = []
     for slug in SHORT_NAMES:
@@ -131,7 +136,7 @@ def build_twdb(freq: str, chance: str) -> int:
         g["original_category"] = chance
         g["relative_class"] = relative_class_for(source, chance)
         parts.append(g)
-    return _finish(_stack(parts), f"twdb-cursory-{freq}.geojson", tolerance=TOLERANCE_MODELED)
+    return _finish(_stack(parts), tolerance=TOLERANCE_MODELED)
 
 
 def _primary_names(gdf: gpd.GeoDataFrame) -> list[str | None]:
@@ -141,7 +146,7 @@ def _primary_names(gdf: gpd.GeoDataFrame) -> list[str | None]:
     return [n.get("primary") if isinstance(n, dict) else None for n in gdf["names"]]
 
 
-def build_overture_infrastructure(kind: str, filename: str) -> int:
+def build_overture_infrastructure(kind: str, filename: str) -> MapLayer | None:
     """Bridges/dams, kept as individual features (no dissolve, no severity:
     these are discrete structures at risk, not hazard zones)."""
     parts = []
@@ -151,12 +156,12 @@ def build_overture_infrastructure(kind: str, filename: str) -> int:
             continue
         parts.append(g.assign(name=_primary_names(g))[["geometry", "county_slug", "county", "name"]])
     if not parts:
-        return 0
-    out = _drop_empty(_stack(parts).assign(source="Overture Maps Foundation", infrastructure_type=kind))
-    return write_layer(filename, out.to_json(drop_id=True), len(out))
+        return None
+    return _as_layer(_drop_empty(_stack(parts).assign(source="Overture Maps Foundation", infrastructure_type=kind)))
 
 
-# Layer id -> builder. Order is the order layers appear in the sidebar.
+# Layer id -> builder. Order is the order layers appear in the sidebar. A builder
+# returns None when its inputs haven't been downloaded; that layer is left out.
 BUILDERS = {
     "county-boundaries": build_county_boundaries,
     "fema-nfhl": build_fema_nfhl,
@@ -173,17 +178,35 @@ BUILDERS = {
 }
 
 
-def main() -> None:
-    print("building map-ready layers ->", OUT_DIR)
-    counts = {layer_id: build() for layer_id, build in BUILDERS.items()}
+def _row(layer_id: str, position: int, layer: MapLayer) -> dict:
+    """A `layers` table row: the layer's GeoJSON plus its descriptive metadata."""
+    meta = dict(LAYER_META[layer_id])
+    geojson = layer.geojson.encode("utf-8")
+    return {
+        "id": layer_id,
+        "position": position,
+        "visualizations_json": json.dumps(meta.pop("visualizations", [])),
+        **meta,
+        "feature_count": layer.feature_count,
+        "geojson": geojson,
+        "etag": hashlib.sha256(geojson).hexdigest()[:32],
+    }
 
-    layers = [
-        {"id": layer_id, "file": f"{layer_id}.geojson", "feature_count": count, **LAYER_META[layer_id]}
-        for layer_id, count in counts.items()
-        if count
-    ]
-    write_json(OUT_DIR / "layers.json", {"generated_by": "pipeline/build_layers.py", "layers": layers})
-    print(f"wrote layers.json with {len(layers)} layer(s)")
+
+def main(database: Path = APP_DB) -> None:
+    print("building map layers ->", database)
+    rows = []
+    for position, (layer_id, build) in enumerate(BUILDERS.items()):
+        layer = build()
+        if layer is None or not layer.feature_count:
+            continue
+        row = _row(layer_id, position, layer)
+        print(f"  {layer_id}: {layer.feature_count} features, {len(row['geojson']) / 1024:,.0f} KB")
+        rows.append(row)
+
+    with open_app_db(database) as connection:
+        replace_table(connection, "layers", rows)
+    print(f"wrote {len(rows)} layer(s) to the layers table")
 
 
 if __name__ == "__main__":

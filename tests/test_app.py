@@ -2,58 +2,83 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+from app_db import open_app_db, replace_table
 from live_signals import LiveSignal, LiveSignalStore
 
 import rgv_flood
 from rgv_flood import create_app
 
-EVENTS_FC = {
-    "type": "FeatureCollection",
-    "features": [
-        {
-            "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [-98.2, 26.2]},
-            "properties": {
-                "id": "noaa-storm-events-1",
-                "date": "2020-07-25",
-                "type": "Flash flood",
-                "location": "WESLACO, Hidalgo County, Texas",
-                "summary": "test event",
-                "source_url": "https://example.test/1",
-                "county": "hidalgo",
-            },
-        },
-        {
-            "type": "Feature",
-            "geometry": None,
-            "properties": {
-                "id": "noaa-storm-events-2",
-                "date": "2018-06-20",
-                "type": "Flood",
-                "location": "Hidalgo County, Texas",
-                "summary": "test event without a point",
-                "source_url": None,
-                "county": "hidalgo",
-            },
-        },
-    ],
-}
+
+def _event(event_id: str, date: str, **values) -> dict:
+    return {
+        "id": event_id,
+        "county": "hidalgo",
+        "date": date,
+        "date_end": None,
+        "type": "Flood",
+        "location": "Hidalgo County, Texas",
+        "precision": "county",
+        "summary": "test event",
+        "source_url": None,
+        "geometry_note": None,
+        "lon": None,
+        "lat": None,
+        **values,
+    }
+
+
+EVENTS = [
+    _event(
+        "noaa-storm-events-1",
+        "2020-07-25",
+        type="Flash flood",
+        location="WESLACO, Hidalgo County, Texas",
+        source_url="https://example.test/1",
+        lon=-98.2,
+        lat=26.2,
+    ),
+    _event("noaa-storm-events-2", "2018-06-20", summary="test event without a point"),
+]
+RAINFALL = [{"county": "hidalgo", "date": "2025-03-28", "mm": 218.4, "inches": 8.6, "station": "Weslaco"}]
+
+
+def _layer(layer_id: str, geojson: str = '{"type":"FeatureCollection","features":[]}', **values) -> dict:
+    """A `layers` row with every column the app reads."""
+    return {
+        "id": layer_id,
+        "position": 0,
+        "title": layer_id.title(),
+        "description": None,
+        "source": "Somewhere",
+        "vintage": None,
+        "hazard_type": None,
+        "coverage": None,
+        "limitation": None,
+        "source_url": None,
+        "visualizations_json": "[]",
+        "feature_count": 0,
+        "geojson": geojson.encode(),
+        "etag": f"etag-of-{layer_id}",
+        **values,
+    }
+
+
+def _set_layers(client, *layers: dict) -> None:
+    with open_app_db(client.application.config["APP_DATABASE"]) as connection:
+        replace_table(connection, "layers", list(layers))
 
 
 @pytest.fixture()
 def client(tmp_path):
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    (data_dir / "layers.json").write_text(json.dumps({"layers": []}))
-    (data_dir / "flood-events.geojson").write_text(json.dumps(EVENTS_FC))
-    (data_dir / "flood-reports.json").write_text(json.dumps({"reports": []}))
-    (data_dir / "rainfall-records.json").write_text(
-        json.dumps({"days": [{"date": "2025-03-28", "mm": 218.4, "inches": 8.6, "station": "Weslaco"}]})
-    )
+    database = tmp_path / "rgv-flood.sqlite3"
+    with open_app_db(database) as connection:
+        replace_table(connection, "flood_events", EVENTS)
+        replace_table(connection, "rainfall_records", RAINFALL)
     app = create_app(
         {
             "TESTING": True,
-            "MAP_DATA_DIR": data_dir,
+            "APP_DATABASE": database,
+            "LIVE_SIGNALS_DATABASE": tmp_path / "no-live-signals-yet.sqlite3",
             "LIVE_SIGNALS_SCHEDULER_ENABLED": False,
         }
     )
@@ -243,6 +268,28 @@ def test_events_partial_marks_locatable_rows(client):
     assert body.count(b"event-item") == 2  # both events listed
 
 
+def test_events_partial_filters_by_county(client):
+    assert b"2 events" in client.get("/partials/events?county_slug=hidalgo").data
+    assert b"No events" in client.get("/partials/events?county_slug=cameron").data
+
+
+def test_app_runs_before_the_database_is_built(tmp_path):
+    app = create_app(
+        {
+            "TESTING": True,
+            "APP_DATABASE": tmp_path / "not-built-yet.sqlite3",
+            "LIVE_SIGNALS_SCHEDULER_ENABLED": False,
+        }
+    )
+    client = app.test_client()
+
+    assert b"No layers yet" in client.get("/").data
+    assert b"No events" in client.get("/partials/events").data
+    assert client.get("/api/flood-events.geojson").status_code == 404
+    assert client.get("/api/layers/fema-nfhl.geojson").status_code == 404
+    assert not (tmp_path / "not-built-yet.sqlite3").exists()  # reading must not create it
+
+
 def test_rainfall_partial(client):
     res = client.get("/partials/rainfall")
     assert res.status_code == 200
@@ -254,15 +301,8 @@ def test_event_count_in_index(client):
 
 
 def test_source_card_lists_original_visualizations(client):
-    data_dir = client.application.config["MAP_DATA_DIR"]
-    layer = {
-        "id": "demo",
-        "file": "demo.geojson",
-        "title": "Demo layer",
-        "source": "Somewhere",
-        "visualizations": [{"title": "Publisher's own map", "url": "https://example.test/map"}],
-    }
-    (data_dir / "layers.json").write_text(json.dumps({"layers": [layer]}))
+    visualizations = [{"title": "Publisher's own map", "url": "https://example.test/map"}]
+    _set_layers(client, _layer("demo", title="Demo layer", visualizations_json=json.dumps(visualizations)))
 
     html = client.get("/partials/metadata/demo").get_data(as_text=True)
 
@@ -272,22 +312,28 @@ def test_source_card_lists_original_visualizations(client):
 
 
 def test_source_card_omits_visualizations_when_none(client):
-    data_dir = client.application.config["MAP_DATA_DIR"]
-    layer = {"id": "plain", "file": "plain.geojson", "title": "Plain", "source": "Somewhere"}
-    (data_dir / "layers.json").write_text(json.dumps({"layers": [layer]}))
+    _set_layers(client, _layer("plain"))
 
     html = client.get("/partials/metadata/plain").get_data(as_text=True)
 
     assert "Original visualizations" not in html
 
 
-def test_layer_file_is_served_as_is_and_revalidates(client):
-    data_dir = client.application.config["MAP_DATA_DIR"]
-    (data_dir / "layers.json").write_text(json.dumps({"layers": [{"id": "demo", "file": "demo.geojson"}]}))
-    (data_dir / "demo.geojson").write_text('{"type":"FeatureCollection","features":[]}')
+def test_layers_are_listed_in_sidebar_order(client):
+    _set_layers(client, _layer("second", position=1), _layer("first", position=0))
+
+    html = client.get("/").get_data(as_text=True)
+
+    assert html.index('value="first"') < html.index('value="second"')
+
+
+def test_layer_geojson_is_served_as_built_and_revalidates(client):
+    geojson = '{"type":"FeatureCollection","features":[],"note":"kept as written"}'
+    _set_layers(client, _layer("demo", geojson))
 
     response = client.get("/api/layers/demo.geojson")
-    assert response.json["type"] == "FeatureCollection"
+    assert response.get_data(as_text=True) == geojson
+    assert response.mimetype == "application/json"
 
     repeat = client.get("/api/layers/demo.geojson", headers={"If-None-Match": response.headers["ETag"]})
     assert repeat.status_code == 304

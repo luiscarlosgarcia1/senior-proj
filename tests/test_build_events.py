@@ -1,6 +1,8 @@
 """Pipeline: pipeline/build_events.py — multi-county events/reports/rainfall."""
 
 import json
+import sqlite3
+from contextlib import closing
 
 import build_events
 from shapely.geometry import shape
@@ -62,12 +64,9 @@ def _weather(date, mm, station="Test Station"):
 
 def _setup(tmp_path, monkeypatch, counties):
     data_dir = tmp_path / "data"
-    out_dir = tmp_path / "out"
-    out_dir.mkdir()
     monkeypatch.setattr(build_events, "DATA_DIR", data_dir)
-    monkeypatch.setattr(build_events, "OUT_DIR", out_dir)
     monkeypatch.setattr(build_events, "COUNTY_NAMES", {slug: slug.title() for slug in counties})
-    return data_dir, out_dir
+    return data_dir
 
 
 def test_near_county_allows_small_tolerance_but_not_far_away():
@@ -79,7 +78,7 @@ def test_near_county_allows_small_tolerance_but_not_far_away():
 
 
 def test_build_events_merges_counties_and_drops_out_of_county_points(tmp_path, monkeypatch):
-    data_dir, out_dir = _setup(tmp_path, monkeypatch, ["alpha", "beta"])
+    data_dir = _setup(tmp_path, monkeypatch, ["alpha", "beta"])
     _write_county(
         data_dir,
         "alpha",
@@ -97,23 +96,21 @@ def test_build_events_merges_counties_and_drops_out_of_county_points(tmp_path, m
         events=[_event("in-2", {"type": "Point", "coordinates": [-90.2, 26.2]}, county="beta")],
     )
 
-    total = build_events.build_events()
-    assert total == 4
+    events = build_events.build_events()
+    assert len(events) == 4
+    by_id = {event["id"]: event for event in events}
 
-    fc = json.loads((out_dir / "flood-events.geojson").read_text())
-    by_id = {f["properties"]["id"]: f for f in fc["features"]}
-
-    assert by_id["in-1"]["geometry"] is not None
-    assert by_id["in-1"]["properties"]["county"] == "alpha"
-    assert by_id["bad-1"]["geometry"] is None
-    assert "geometry_note" in by_id["bad-1"]["properties"]
-    assert by_id["nogeo-1"]["geometry"] is None
-    assert "geometry_note" not in by_id["nogeo-1"]["properties"]
-    assert by_id["in-2"]["properties"]["county"] == "beta"
+    assert (by_id["in-1"]["lon"], by_id["in-1"]["lat"]) == (-98.2, 26.2)
+    assert by_id["in-1"]["county"] == "alpha"
+    assert by_id["bad-1"]["lat"] is None
+    assert "outside Alpha County" in by_id["bad-1"]["geometry_note"]
+    assert by_id["nogeo-1"]["lat"] is None
+    assert by_id["nogeo-1"]["geometry_note"] is None
+    assert by_id["in-2"]["county"] == "beta"
 
 
 def test_build_reports_only_counts_public_reports_and_tags_county(tmp_path, monkeypatch):
-    data_dir, out_dir = _setup(tmp_path, monkeypatch, ["alpha", "beta"])
+    data_dir = _setup(tmp_path, monkeypatch, ["alpha", "beta"])
     _write_county(
         data_dir,
         "alpha",
@@ -125,16 +122,14 @@ def test_build_reports_only_counts_public_reports_and_tags_county(tmp_path, monk
     )
     _write_county(data_dir, "beta", (-90.5, 26.0, -89.9, 26.8), events=[])
 
-    count = build_events.build_reports()
-    assert count == 1
+    reports = build_events.build_reports()
 
-    data = json.loads((out_dir / "flood-reports.json").read_text())
-    assert len(data["reports"]) == 1
-    assert data["reports"][0]["county"] == "alpha"
+    assert len(reports) == 1
+    assert reports[0]["county"] == "alpha"
 
 
 def test_build_rainfall_merges_and_ranks_across_counties(tmp_path, monkeypatch):
-    data_dir, out_dir = _setup(tmp_path, monkeypatch, ["alpha", "beta"])
+    data_dir = _setup(tmp_path, monkeypatch, ["alpha", "beta"])
     _write_county(
         data_dir,
         "alpha",
@@ -149,15 +144,37 @@ def test_build_rainfall_merges_and_ranks_across_counties(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(build_events, "RAINFALL_TOP_N", 2)
-    count = build_events.build_rainfall()
-    assert count == 2
+    days, rain_days = build_events.build_rainfall()
 
-    data = json.loads((out_dir / "rainfall-records.json").read_text())
-    days = data["days"]
-    assert days[0]["county"] == "beta"
-    assert days[0]["mm"] == 80.0
-    assert days[1]["county"] == "alpha"
-    assert days[1]["mm"] == 50.0
+    assert rain_days == 3
+    assert [(day["county"], day["mm"]) for day in days] == [("beta", 80.0), ("alpha", 50.0)]
+
+
+def test_main_fills_the_app_database_and_can_be_rerun(tmp_path, monkeypatch):
+    data_dir = _setup(tmp_path, monkeypatch, ["alpha"])
+    _write_county(
+        data_dir,
+        "alpha",
+        (-98.6, 26.0, -97.9, 26.8),
+        events=[
+            _event("in-1", {"type": "Point", "coordinates": [-98.2, 26.2]}, county="alpha"),
+            _event("rep-1", None, county="alpha", record_kind="public_report"),
+        ],
+        weather=[_weather("2020-07-25", 50.0)],
+    )
+    database = tmp_path / "generated" / "app.sqlite3"
+
+    build_events.main(database)
+    build_events.main(database)  # replaces its tables rather than adding to them
+
+    with closing(sqlite3.connect(database)) as connection:
+        counts = {
+            table: connection.execute(f"select count(*) from {table}").fetchone()[0]
+            for table in ("flood_events", "flood_reports", "rainfall_records", "layers")
+        }
+        point = connection.execute("select lon, lat from flood_events").fetchone()
+    assert counts == {"flood_events": 1, "flood_reports": 1, "rainfall_records": 1, "layers": 0}
+    assert point == (-98.2, 26.2)
 
 
 def test_event_type_from_summary():

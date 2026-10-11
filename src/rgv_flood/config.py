@@ -9,21 +9,15 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-_PACKAGE_ROOT = Path(__file__).resolve().parent
+# Build outputs live outside the package, under the repository's data/generated/.
+_GENERATED = Path(__file__).resolve().parents[2] / "data" / "generated"
 
 
 class Default:
-    # Where the pipeline writes the map-ready files the app serves as-is
-    # (file names are in rgv_flood.data_access).
-    MAP_DATA_DIR = Path(
-        os.environ.get("RGV_MAP_DATA_DIR", _PACKAGE_ROOT / "static" / "data")
-    )
-    LIVE_SIGNALS_DATABASE = Path(
-        os.environ.get(
-            "RGV_LIVE_SIGNALS_DATABASE",
-            _PACKAGE_ROOT.parents[1] / "data" / "generated" / "live-signals.sqlite3",
-        )
-    )
+    # Map layers, flood events, reports and rainfall, built by pipeline/build_all.py.
+    APP_DATABASE = Path(os.environ.get("RGV_APP_DATABASE", _GENERATED / "rgv-flood.sqlite3"))
+    # Current official signals, refreshed by the scheduler while the app runs.
+    LIVE_SIGNALS_DATABASE = Path(os.environ.get("RGV_LIVE_SIGNALS_DATABASE", _GENERATED / "live-signals.sqlite3"))
     LIVE_SIGNALS_SCHEDULER_ENABLED = (
         os.environ.get("RGV_LIVE_SIGNALS_SCHEDULER_ENABLED", "true").lower() == "true"
     )
