@@ -17,7 +17,8 @@ emergency guidance.
 ## Technology Stack
 
 - Flask, Jinja templates, HTMX, Leaflet
-- Python data pipeline; SQLite live-signal snapshots
+- Python data pipeline (geopandas, shapely); SQLite live-signal snapshots
+- Vanilla JavaScript ES modules for the map; no Node or build step
 - NOAA, FEMA, TWDB, Census, NWS, TxDOT, and local government sources
 
 Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
@@ -38,7 +39,9 @@ Open <http://127.0.0.1:5000>.
 
 `build_all.py` prepares the historical source data and local GeoPackage.
 `build_layers.py` and `build_events.py` create the smaller files the Flask app
-serves. Re-run the build steps after changing pipeline inputs or rules.
+serves. Re-run the build steps after changing pipeline inputs or rules. Each
+script in `pipeline/` can also be run on its own; see
+[pipeline/README.md](pipeline/README.md) for details.
 
 For the Hidalgo flood-evidence, drainage, bond-project and insurance-claims
 overlays, run `uv run --group pipeline python pipeline/fetch_ml_inputs.py --only hcdd1,nfip,tracts`
@@ -58,8 +61,8 @@ Flask refreshes official live signals at startup and every 15 minutes. Set
 ## Data Pipeline and Outputs
 
 `pipeline/build_all.py` is the normal historical-data entry point. It scaffolds
-county data, downloads and ingests reproducible NOAA records, imports Overture
-Maps bridges and dams (clipped to each county's real boundary, not just a
+county data, downloads and ingests reproducible NOAA records
+(`noaa_ingest.py`), imports Overture Maps bridges and dams (clipped to each county's real boundary, not just a
 bounding box — the RGV box also covers a strip of Mexico), and builds
 `data/generated/county-collections.gpkg`.
 
@@ -170,8 +173,9 @@ uv run pytest
 uv run ruff check .
 ```
 
-Core areas: `src/rgv_flood/` for the app, `pipeline/` for builds, `data/` for
-county collections, and `tests/` for verification. Keep source attribution and
+Core areas: `src/rgv_flood/` for the app (`views/`, `data_access.py`, and the
+map's ES modules in `static/js/`), `pipeline/` for builds and live-signal
+polling, `data/` for county collections, and `tests/` for verification. Keep source attribution and
 source-supplied geometry intact; do not infer live conditions.
 
 ## Sources, Contributing, License, and Acknowledgments
