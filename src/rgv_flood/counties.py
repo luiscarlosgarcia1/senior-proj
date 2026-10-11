@@ -13,6 +13,10 @@ COUNTIES: dict[str, dict[str, str]] = {
     "willacy": {"fips": "48489", "name": "Willacy County"},
 }
 
+# FEMA publishes a digital flood map (NFHL) for these three. Hidalgo only has the
+# 1981 FIRM digitized by its drainage district.
+NFHL_COUNTIES: tuple[str, ...] = ("cameron", "starr", "willacy")
+
 FIPS_TO_SLUG: dict[str, str] = {c["fips"]: slug for slug, c in COUNTIES.items()}
 SHORT_NAMES: dict[str, str] = {slug: c["name"].removesuffix(" County") for slug, c in COUNTIES.items()}
 

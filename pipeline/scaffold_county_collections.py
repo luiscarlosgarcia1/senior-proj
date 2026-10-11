@@ -22,17 +22,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from rgv_flood.counties import COUNTIES, NFHL_COUNTIES, SHORT_NAMES
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = REPO_ROOT / "data"
 SCHEMA_TEMPLATE_DIR = REPO_ROOT / "pipeline" / "schemas"  # tracked; see module docstring
-
-# slug -> (county name, GEOID, uses FEMA NFHL?  else HCDD1 legacy FIRM)
-COUNTIES = {
-    "cameron": ("Cameron", "48061", True),
-    "hidalgo": ("Hidalgo", "48215", False),
-    "starr": ("Starr", "48427", True),
-    "willacy": ("Willacy", "48489", True),
-}
 
 RECORD_SUBDIRS = ["events-and-public-reports", "layers-and-weather"]
 SOURCE_FAMILIES = [
@@ -48,6 +42,7 @@ SOURCE_FAMILIES = [
 def _write_if_missing(path: Path, text: str) -> bool:
     if path.exists():
         return False
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return True
 
@@ -166,7 +161,7 @@ def _tiger_source_note(name: str, geoid: str) -> str:
     }, indent=2) + "\n"
 
 
-def _fema_source_note(name: str, slug: str) -> str:
+def _fema_source_note(slug: str) -> str:
     return json.dumps({
         "publisher": "Federal Emergency Management Agency",
         "dataset": "National Flood Hazard Layer (NFHL)",
@@ -183,7 +178,7 @@ def _fema_source_note(name: str, slug: str) -> str:
     }, indent=2) + "\n"
 
 
-def _twdb_source_note(name: str) -> str:
+def _twdb_source_note() -> str:
     return json.dumps({
         "publisher": "Texas Water Development Board",
         "dataset": "2025 Cursory Floodplain Dataset (Fathom 3m combined peril, Scenario 5 existing conditions)",
@@ -215,52 +210,49 @@ def _hcdd1_source_note() -> str:
     }, indent=2) + "\n"
 
 
-def main() -> None:
+def _source_notes(slug: str, name: str, geoid: str) -> dict[str, str]:
+    """Provenance notes for the imported flood-hazard layers, by path under sources/."""
+    notes = {
+        f"terrain-hydrography/us-census-tigerweb-{slug}-county-2026.json": _tiger_source_note(name, geoid),
+        f"flood-susceptibility/twdb-cursory-floodplain-{slug}-county-2026.json": _twdb_source_note(),
+    }
+    if slug in NFHL_COUNTIES:
+        notes[f"flood-susceptibility/fema-nfhl-{slug}-county-2026.json"] = _fema_source_note(slug)
+    else:
+        notes["flood-susceptibility/hcdd1-firm-1981-hidalgo-county.json"] = _hcdd1_source_note()
+    return notes
+
+
+def scaffold_county(slug: str, data_dir: Path, schema_files: list[Path]) -> list[str]:
+    """Lay down one county's folders and files; returns what was newly created."""
+    root = data_dir / f"{slug}-county"
+    name, geoid = SHORT_NAMES[slug], COUNTIES[slug]["fips"]
+
+    # Schemas are always refreshed from the tracked template: every county,
+    # Hidalgo included, is just a copy, and none of them is itself the source.
+    (root / "schemas").mkdir(parents=True, exist_ok=True)
+    for schema in schema_files:
+        (root / "schemas" / schema.name).write_text(schema.read_text(encoding="utf-8"), encoding="utf-8")
+
+    # Empty record/source folders get a .gitkeep so they exist on a fresh clone.
+    keep = [root / "records" / sub for sub in RECORD_SUBDIRS] + [root / "sources" / fid for fid, _ in SOURCE_FAMILIES]
+    for directory in keep:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / ".gitkeep").touch()
+
+    # Never overwrite a hand-written manifest, README or source note.
+    files = {"manifest.json": _manifest(name, slug), "README.md": _readme(name)}
+    files |= {f"sources/{path}": text for path, text in _source_notes(slug, name, geoid).items()}
+    return [relative for relative, text in files.items() if _write_if_missing(root / relative, text)]
+
+
+def main(data_dir: Path = DATA_DIR) -> None:
     schema_files = list(SCHEMA_TEMPLATE_DIR.glob("*.schema.json"))
     if not schema_files:
         raise SystemExit(f"no schema files under {SCHEMA_TEMPLATE_DIR}")
 
-    for slug, (name, geoid, uses_nfhl) in COUNTIES.items():
-        root = DATA_DIR / f"{slug}-county"
-        root.mkdir(parents=True, exist_ok=True)
-
-        # schemas/ (always refreshed from the tracked template -- every county,
-        # Hidalgo included, is just a copy; none of them is itself the source)
-        (root / "schemas").mkdir(exist_ok=True)
-        for sf in schema_files:
-            (root / "schemas" / sf.name).write_text(sf.read_text(encoding="utf-8"), encoding="utf-8")
-
-        # records/ + sources/ skeleton with .gitkeep
-        for sub in RECORD_SUBDIRS:
-            d = root / "records" / sub
-            d.mkdir(parents=True, exist_ok=True)
-            (d / ".gitkeep").touch()
-        for fid, _ in SOURCE_FAMILIES:
-            d = root / "sources" / fid
-            d.mkdir(parents=True, exist_ok=True)
-            (d / ".gitkeep").touch()
-
-        # top-level manifest + README (only if not hand-written already)
-        created = []
-        if _write_if_missing(root / "manifest.json", _manifest(name, slug)):
-            created.append("manifest.json")
-        if _write_if_missing(root / "README.md", _readme(name)):
-            created.append("README.md")
-
-        # source notes for the imported flood-hazard layers
-        fs = root / "sources" / "flood-susceptibility"
-        th = root / "sources" / "terrain-hydrography"
-        if _write_if_missing(th / f"us-census-tigerweb-{slug}-county-2026.json", _tiger_source_note(name, geoid)):
-            created.append("terrain-hydrography/tiger note")
-        if _write_if_missing(fs / f"twdb-cursory-floodplain-{slug}-county-2026.json", _twdb_source_note(name)):
-            created.append("flood-susceptibility/twdb note")
-        if uses_nfhl:
-            if _write_if_missing(fs / f"fema-nfhl-{slug}-county-2026.json", _fema_source_note(name, slug)):
-                created.append("flood-susceptibility/fema note")
-        else:  # hidalgo
-            if _write_if_missing(fs / "hcdd1-firm-1981-hidalgo-county.json", _hcdd1_source_note()):
-                created.append("flood-susceptibility/hcdd1 note")
-
+    for slug in COUNTIES:
+        created = scaffold_county(slug, data_dir, schema_files)
         print(f"[{slug}] scaffold ok" + (f" - created: {', '.join(created)}" if created else " - already complete"))
 
 

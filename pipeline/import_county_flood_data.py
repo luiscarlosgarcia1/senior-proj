@@ -27,6 +27,8 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from rgv_flood.counties import COUNTIES, NFHL_COUNTIES, SHORT_NAMES
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_RAW = Path(
     os.environ.get(
@@ -36,17 +38,6 @@ SRC_RAW = Path(
 ).resolve()
 DATA_DIR = REPO_ROOT / "data"
 
-# slug -> (TIGER NAME, TIGER GEOID)
-COUNTIES = {
-    "cameron": ("Cameron", "48061"),
-    "hidalgo": ("Hidalgo", "48215"),
-    "starr": ("Starr", "48427"),
-    "willacy": ("Willacy", "48489"),
-}
-
-# FEMA NFHL has real digital coverage only for these three.
-NFHL_COUNTIES = {"cameron", "starr", "willacy"}
-
 RETRIEVED_AT = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -54,128 +45,126 @@ def _load(name: str) -> dict:
     return json.loads((SRC_RAW / name).read_text(encoding="utf-8"))
 
 
-def _write_fc(path: Path, features: list[dict], extra: dict | None = None) -> int:
-    fc = {"type": "FeatureCollection", "features": features}
-    if extra:
-        fc.update(extra)
-    path.write_text(json.dumps(fc), encoding="utf-8")
+def _write_features(path: Path, features: list[dict]) -> int:
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
     return len(features)
 
 
-def _split_by_county(fc: dict, name: str) -> list[dict]:
-    return [f for f in fc["features"] if f.get("properties", {}).get("county") == name]
+def _layer(file: str, *, title: str, publisher: str, dataset: str, status: str, vintage: str, crs: str,
+           count: int, note: str) -> dict:
+    """One entry in a county's flood-hazard-layers manifest."""
+    return {
+        "id": file.removesuffix(".geojson"),
+        "file": file,
+        "title": title,
+        "source_publisher": publisher,
+        "source_dataset": dataset,
+        "status": status,
+        "vintage": vintage,
+        "crs": crs,
+        "feature_count": count,
+        "note": note,
+    }
+
+
+def _county_layers(slug: str, out_dir: Path, sources: dict) -> list[dict]:
+    """Write one county's GeoJSON files and return their manifest entries."""
+    name, geoid = SHORT_NAMES[slug], COUNTIES[slug]["fips"]
+
+    boundary = [f for f in sources["counties"]["features"] if f["properties"].get("GEOID") == geoid]
+    layers = [_layer(
+        "boundary.geojson",
+        title=f"{name} County boundary",
+        publisher="U.S. Census Bureau",
+        dataset="TIGER/Line 2023 — Counties",
+        status="reference",
+        vintage="2023",
+        crs="EPSG:4269",
+        count=_write_features(out_dir / "boundary.geojson", boundary),
+        note="Study-area boundary only. Not flood evidence.",
+    )]
+
+    if slug in NFHL_COUNTIES:
+        nfhl = _load(f"nfhl_{slug}.geojson")["features"]
+        layers.append(_layer(
+            "fema-nfhl.geojson",
+            title=f"FEMA National Flood Hazard Layer — {name} County",
+            publisher="Federal Emergency Management Agency",
+            dataset="National Flood Hazard Layer, MapServer layer 28 (Flood Hazard Zones)",
+            status="official_effective",
+            vintage="effective FIRM date varies by panel",
+            crs="EPSG:4326",
+            count=_write_features(out_dir / "fema-nfhl.geojson", nfhl),
+            note=(
+                "Downloaded by bounding-box query; a few polygons from neighboring "
+                "counties may spill in and should be clipped to the boundary before use. "
+                "Not a property-level determination."
+            ),
+        ))
+    else:
+        firm = _load("hidalgo_firm_hcdd1.geojson")["features"]
+        layers.append(_layer(
+            "hcdd1-firm-1981.geojson",
+            title="Hidalgo County digitized 1981 FIRM",
+            publisher="Hidalgo County Drainage District No. 1",
+            dataset="FloodMapService/FeatureServer/0 (HidalgoFIRM), digitized copy of the 1981 FIRM",
+            status="legacy_local_reference",
+            vintage="1981 base map; some zones revised by later LOMR",
+            crs="EPSG:4326",
+            count=_write_features(out_dir / "hcdd1-firm-1981.geojson", firm),
+            note=(
+                "The only flood-zone dataset that exists for Hidalgo County — FEMA has no "
+                "digital NFHL coverage here. 44 years old; urban core largely undrawn. "
+                "Zone semantics not confirmed equivalent to current FEMA classes."
+            ),
+        ))
+
+    for freq, chance in (("1in100", "1% annual chance"), ("1in500", "0.2% annual chance")):
+        county_features = [f for f in sources[freq]["features"] if f.get("properties", {}).get("county") == name]
+        file = f"twdb-cursory-{freq}.geojson"
+        layers.append(_layer(
+            file,
+            title=f"TWDB modeled flood extent — {chance} — {name} County",
+            publisher="Texas Water Development Board",
+            dataset="2025 Cursory Floodplain Dataset (Fathom 3m), Region 15, clipped to county",
+            status="modeled_contextual",
+            vintage="2025",
+            crs="EPSG:4326",
+            count=_write_features(out_dir / file, county_features),
+            note="Modeled estimate, NOT an effective FEMA map or regulatory determination.",
+        ))
+    return layers
 
 
 def main() -> None:
     if not SRC_RAW.is_dir():
         raise SystemExit(f"source not found: {SRC_RAW}")
 
-    counties_fc = _load("rgv_counties.geojson")
-    twdb_100 = _load("twdb_cursory_1in100_rgv.geojson")
-    twdb_500 = _load("twdb_cursory_1in500_rgv.geojson")
-
-    for slug, (name, geoid) in COUNTIES.items():
+    sources = {
+        "counties": _load("rgv_counties.geojson"),
+        "1in100": _load("twdb_cursory_1in100_rgv.geojson"),
+        "1in500": _load("twdb_cursory_1in500_rgv.geojson"),
+    }
+    for slug, county in COUNTIES.items():
         out_dir = DATA_DIR / f"{slug}-county" / "flood-hazard-layers"
         out_dir.mkdir(parents=True, exist_ok=True)
-
-        layers: list[dict] = []
-
-        # 1. county boundary (single feature)
-        boundary = [f for f in counties_fc["features"] if f["properties"].get("GEOID") == geoid]
-        n = _write_fc(out_dir / "boundary.geojson", boundary)
-        layers.append({
-            "id": "boundary",
-            "file": "boundary.geojson",
-            "title": f"{name} County boundary",
-            "source_publisher": "U.S. Census Bureau",
-            "source_dataset": "TIGER/Line 2023 — Counties",
-            "status": "reference",
-            "vintage": "2023",
-            "crs": "EPSG:4269",
-            "feature_count": n,
-            "note": "Study-area boundary only. Not flood evidence.",
-        })
-
-        # 2. FEMA NFHL (three counties) or HCDD1 FIRM (Hidalgo)
-        if slug in NFHL_COUNTIES:
-            nfhl = _load(f"nfhl_{slug}.geojson")
-            n = _write_fc(out_dir / "fema-nfhl.geojson", nfhl["features"])
-            layers.append({
-                "id": "fema-nfhl",
-                "file": "fema-nfhl.geojson",
-                "title": f"FEMA National Flood Hazard Layer — {name} County",
-                "source_publisher": "Federal Emergency Management Agency",
-                "source_dataset": "National Flood Hazard Layer, MapServer layer 28 (Flood Hazard Zones)",
-                "status": "official_effective",
-                "vintage": "effective FIRM date varies by panel",
-                "crs": "EPSG:4326",
-                "feature_count": n,
-                "note": (
-                    "Downloaded by bounding-box query; a few polygons from neighboring "
-                    "counties may spill in and should be clipped to the boundary before use. "
-                    "Not a property-level determination."
-                ),
-            })
-        else:  # hidalgo
-            firm = _load("hidalgo_firm_hcdd1.geojson")
-            n = _write_fc(out_dir / "hcdd1-firm-1981.geojson", firm["features"])
-            layers.append({
-                "id": "hcdd1-firm-1981",
-                "file": "hcdd1-firm-1981.geojson",
-                "title": "Hidalgo County digitized 1981 FIRM",
-                "source_publisher": "Hidalgo County Drainage District No. 1",
-                "source_dataset": "FloodMapService/FeatureServer/0 (HidalgoFIRM), digitized copy of the 1981 FIRM",
-                "status": "legacy_local_reference",
-                "vintage": "1981 base map; some zones revised by later LOMR",
-                "crs": "EPSG:4326",
-                "feature_count": n,
-                "note": (
-                    "The only flood-zone dataset that exists for Hidalgo County — FEMA has no "
-                    "digital NFHL coverage here. 44 years old; urban core largely undrawn. "
-                    "Zone semantics not confirmed equivalent to current FEMA classes."
-                ),
-            })
-
-        # 3. TWDB modeled extent, both frequencies
-        for freq, fc, chance in (
-            ("1in100", twdb_100, "1% annual chance"),
-            ("1in500", twdb_500, "0.2% annual chance"),
-        ):
-            feats = _split_by_county(fc, name)
-            fname = f"twdb-cursory-{freq}.geojson"
-            n = _write_fc(out_dir / fname, feats)
-            layers.append({
-                "id": f"twdb-cursory-{freq}",
-                "file": fname,
-                "title": f"TWDB modeled flood extent — {chance} — {name} County",
-                "source_publisher": "Texas Water Development Board",
-                "source_dataset": "2025 Cursory Floodplain Dataset (Fathom 3m), Region 15, clipped to county",
-                "status": "modeled_contextual",
-                "vintage": "2025",
-                "crs": "EPSG:4326",
-                "feature_count": n,
-                "note": "Modeled estimate, NOT an effective FEMA map or regulatory determination.",
-            })
+        layers = _county_layers(slug, out_dir, sources)
 
         manifest = {
-            "county": name,
+            "county": SHORT_NAMES[slug],
             "county_slug": slug,
-            "geoid": geoid,
+            "geoid": county["fips"],
             "imported_from": str(SRC_RAW),
             "imported_at": RETRIEVED_AT,
             "importer": "pipeline/import_county_flood_data.py",
             "layers": layers,
         }
-        (out_dir / "manifest.json").write_text(
-            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
-        )
-        (out_dir / "README.md").write_text(_readme(name, slug, layers), encoding="utf-8")
-
-        total = sum(layer["feature_count"] for layer in layers)
-        print(f"[{slug}] {len(layers)} layers, {total} features -> {out_dir}")
+        (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        (out_dir / "README.md").write_text(_readme(SHORT_NAMES[slug], layers), encoding="utf-8")
+        print(f"[{slug}] {len(layers)} layers, {sum(l['feature_count'] for l in layers)} features -> {out_dir}")
 
 
-def _readme(name: str, slug: str, layers: list[dict]) -> str:
+def _readme(name: str, layers: list[dict]) -> str:
     rows = "\n".join(
         f"| `{layer['file']}` | {layer['source_publisher']} | {layer['status']} | "
         f"{layer['feature_count']} | {layer['vintage']} |"

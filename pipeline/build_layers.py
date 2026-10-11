@@ -31,10 +31,10 @@ import evidence_layers
 import geopandas as gpd
 import pandas as pd
 import pyogrio
-from layer_io import COUNTY_DIR, OUT_DIR, write_layer
+from layer_io import DATA_DIR, OUT_DIR, write_layer
 from layer_meta import LAYER_META
 
-from rgv_flood.counties import SHORT_NAMES
+from rgv_flood.counties import NFHL_COUNTIES, SHORT_NAMES
 from rgv_flood.severity import classify_fema_zone, relative_class_for
 
 pyogrio.set_gdal_config_options({"OGR_GEOJSON_MAX_OBJ_SIZE": "0"})
@@ -45,15 +45,12 @@ pyogrio.set_gdal_config_options({"OGR_GEOJSON_MAX_OBJ_SIZE": "0"})
 TOLERANCE_REGULATORY = 0.0003
 TOLERANCE_MODELED = 0.0015
 
-# Only these three counties have a digital FEMA NFHL; Hidalgo has the 1981 FIRM.
-NFHL_COUNTIES = ("cameron", "starr", "willacy")
-
 # Columns that identify a hazard polygon; polygons sharing all of them are dissolved.
 DISSOLVE_COLS = ["county_slug", "county", "source", "original_category", "relative_class"]
 
 
 def _src(slug: str, name: str) -> Path:
-    return COUNTY_DIR / f"{slug}-county" / "flood-hazard-layers" / name
+    return DATA_DIR / f"{slug}-county" / "flood-hazard-layers" / name
 
 
 def _drop_empty(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:

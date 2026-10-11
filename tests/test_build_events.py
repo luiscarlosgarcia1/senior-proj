@@ -3,6 +3,7 @@
 import json
 
 import build_events
+from shapely.geometry import shape
 
 
 def _boundary_fc(bbox):
@@ -65,29 +66,16 @@ def _setup(tmp_path, monkeypatch, counties):
     out_dir.mkdir()
     monkeypatch.setattr(build_events, "DATA_DIR", data_dir)
     monkeypatch.setattr(build_events, "OUT_DIR", out_dir)
-    monkeypatch.setattr(build_events, "COUNTIES", {slug: slug.title() for slug in counties})
+    monkeypatch.setattr(build_events, "COUNTY_NAMES", {slug: slug.title() for slug in counties})
     return data_dir, out_dir
 
 
-def test_point_in_ring():
-    ring = [(-98.6, 26.0), (-97.9, 26.0), (-97.9, 26.8), (-98.6, 26.8), (-98.6, 26.0)]
-    assert build_events._point_in_ring(-98.2, 26.2, ring) is True
-    assert build_events._point_in_ring(-97.0, 26.2, ring) is False
-
-
 def test_near_county_allows_small_tolerance_but_not_far_away():
-    ring = [(-98.6, 26.0), (-97.9, 26.0), (-97.9, 26.8), (-98.6, 26.8), (-98.6, 26.0)]
+    county = shape({"type": "Polygon", "coordinates": [[(-98.6, 26.0), (-97.9, 26.0), (-97.9, 26.8), (-98.6, 26.8), (-98.6, 26.0)]]})
     just_outside = -97.9 + build_events.BOUNDARY_TOLERANCE_DEG / 2
-    assert build_events._near_county(just_outside, 26.2, ring) is True  # within tolerance
-    assert build_events._near_county(-90.0, 26.2, ring) is False  # nowhere close
-
-
-def test_county_ring_reads_real_boundary(tmp_path, monkeypatch):
-    data_dir, _ = _setup(tmp_path, monkeypatch, ["testville"])
-    _write_county(data_dir, "testville", (-98.6, 26.0, -97.9, 26.8))
-    ring = build_events._county_ring("testville")
-    assert ring[0] == (-98.6, 26.0)
-    assert len(ring) == 5
+    assert build_events._near_county(-98.2, 26.2, county) is True  # inside
+    assert build_events._near_county(just_outside, 26.2, county) is True  # within tolerance
+    assert build_events._near_county(-90.0, 26.2, county) is False  # nowhere close
 
 
 def test_build_events_merges_counties_and_drops_out_of_county_points(tmp_path, monkeypatch):

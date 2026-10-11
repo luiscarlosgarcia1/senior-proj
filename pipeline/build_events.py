@@ -14,7 +14,7 @@ four counties and writes, into `src/rgv_flood/static/data/`:
   rainfall-records.json  the wettest gauge-days on record, 2000-2025, across
                          every county's stations
 
-Pure standard library and fast — no need for the pipeline dependency group.
+Fast, and needs only shapely (a core dependency) — no pipeline dependency group.
 
 Run:  uv run python pipeline/build_events.py
 Safe to re-run (overwrites only its own three outputs).
@@ -23,14 +23,12 @@ Safe to re-run (overwrites only its own three outputs).
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = REPO_ROOT / "data"
-OUT_DIR = REPO_ROOT / "src" / "rgv_flood" / "static" / "data"
+from layer_io import DATA_DIR, OUT_DIR
+from shapely.geometry import Point, shape
 
-COUNTIES = {"cameron": "Cameron", "hidalgo": "Hidalgo", "starr": "Starr", "willacy": "Willacy"}
+from rgv_flood.counties import SHORT_NAMES as COUNTY_NAMES
 
 RAINFALL_TOP_N = 15
 
@@ -47,52 +45,14 @@ RAINFALL_TOP_N = 15
 BOUNDARY_TOLERANCE_DEG = 0.01  # ~1.1 km
 
 
-def _county_ring(slug: str) -> list[tuple[float, float]]:
-    """The exterior ring of one county's TIGER boundary. These are simple
-    single-ring Polygons (verified: no holes, no MultiPolygon), so this does
-    not need to handle either."""
-    boundary = json.loads(
-        (DATA_DIR / f"{slug}-county" / "flood-hazard-layers" / "boundary.geojson").read_text(
-            encoding="utf-8"
-        )
-    )
-    geometry = boundary["features"][0]["geometry"]
-    if geometry["type"] != "Polygon":
-        raise ValueError(f"{slug}: expected a Polygon boundary, got {geometry['type']}")
-    return [(x, y) for x, y in geometry["coordinates"][0]]
+def _county_boundary(slug: str):
+    path = DATA_DIR / f"{slug}-county" / "flood-hazard-layers" / "boundary.geojson"
+    return shape(json.loads(path.read_text(encoding="utf-8"))["features"][0]["geometry"])
 
 
-def _point_in_ring(lon: float, lat: float, ring: list[tuple[float, float]]) -> bool:
-    """Standard ray-casting point-in-polygon test."""
-    inside = False
-    x1, y1 = ring[0]
-    for x2, y2 in ring[1:]:
-        if (y1 > lat) != (y2 > lat):
-            x_at_lat = (x2 - x1) * (lat - y1) / (y2 - y1) + x1
-            if lon < x_at_lat:
-                inside = not inside
-        x1, y1 = x2, y2
-    return inside
-
-
-def _distance_to_ring(lon: float, lat: float, ring: list[tuple[float, float]]) -> float:
-    """Shortest distance (degrees) from a point to any edge of the ring."""
-
-    def segment_distance(ax: float, ay: float, bx: float, by: float) -> float:
-        dx, dy = bx - ax, by - ay
-        if dx == 0 and dy == 0:
-            return math.hypot(lon - ax, lat - ay)
-        t = max(0.0, min(1.0, ((lon - ax) * dx + (lat - ay) * dy) / (dx * dx + dy * dy)))
-        return math.hypot(lon - (ax + t * dx), lat - (ay + t * dy))
-
-    return min(
-        segment_distance(ring[i][0], ring[i][1], ring[i + 1][0], ring[i + 1][1])
-        for i in range(len(ring) - 1)
-    )
-
-
-def _near_county(lon: float, lat: float, ring: list[tuple[float, float]]) -> bool:
-    return _point_in_ring(lon, lat, ring) or _distance_to_ring(lon, lat, ring) <= BOUNDARY_TOLERANCE_DEG
+def _near_county(lon: float, lat: float, boundary) -> bool:
+    """Inside the county, or within the reporting-error tolerance of its edge."""
+    return boundary.distance(Point(lon, lat)) <= BOUNDARY_TOLERANCE_DEG  # 0 when inside
 
 
 def _load(path: Path) -> list[dict]:
@@ -126,8 +86,8 @@ def _first_sentence(text: str) -> str:
 def build_events() -> int:
     features = []
     dropped_coords = 0
-    for slug, name in COUNTIES.items():
-        ring = _county_ring(slug)
+    for slug, name in COUNTY_NAMES.items():
+        boundary = _county_boundary(slug)
         path = DATA_DIR / f"{slug}-county" / "records" / "events-and-public-reports" / "noaa-storm-events.ndjson"
         for r in _load(path):
             if r.get("record_kind") != "flood_event":
@@ -147,7 +107,7 @@ def build_events() -> int:
             }
             if geometry and geometry.get("type") == "Point":
                 lon, lat = geometry["coordinates"][:2]
-                if not _near_county(lon, lat, ring):
+                if not _near_county(lon, lat, boundary):
                     geometry = None
                     props["geometry_note"] = (
                         f"The source coordinate falls outside {name} County and looks "
@@ -161,13 +121,13 @@ def build_events() -> int:
     )
     mapped = sum(1 for f in features if f["geometry"])
     note = f", {dropped_coords} bad coordinate(s) dropped" if dropped_coords else ""
-    print(f"flood-events.geojson: {len(features)} events across {len(COUNTIES)} counties ({mapped} mapped{note})")
+    print(f"flood-events.geojson: {len(features)} events across {len(COUNTY_NAMES)} counties ({mapped} mapped{note})")
     return len(features)
 
 
 def build_reports() -> int:
     reports = []
-    for slug in COUNTIES:
+    for slug in COUNTY_NAMES:
         path = DATA_DIR / f"{slug}-county" / "records" / "events-and-public-reports" / "noaa-storm-events.ndjson"
         for r in _load(path):
             if r.get("record_kind") != "public_report":
@@ -196,7 +156,7 @@ def build_reports() -> int:
 
 def build_rainfall() -> int:
     days = []
-    for slug in COUNTIES:
+    for slug in COUNTY_NAMES:
         path = DATA_DIR / f"{slug}-county" / "records" / "layers-and-weather" / "noaa-ghcn-daily-2000-2025.ndjson"
         for w in _load(path):
             attrs = w["original_attributes"]

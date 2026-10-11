@@ -40,7 +40,6 @@ data/*-county/sources/**/*.json
 # Overture Maps bridges/dams: same folder as the tracked FEMA/TWDB layers, but
 # unlike those, fully public and reproducible -- pipeline/import_overture_infrastructure.py
 data/*-county/flood-hazard-layers/overture-*.geojson
-data/*-county/flood-hazard-layers/overture-manifest.json
 
 # ML inputs/outputs: all public downloads (pipeline/fetch_ml_inputs.py) or
 # derived from them, so none of it is committed.
