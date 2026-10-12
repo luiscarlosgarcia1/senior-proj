@@ -21,9 +21,10 @@ emergency guidance.
 - **Flood events.** Click an event on the map or in the list to see NOAA's
   account of it, the rain nearby gauges recorded from the day before to the day
   after, and any local reports from the same days.
-- **Flood photos.** On the flood response photos layer, a dark dot opens the
-  drainage district's photo taken at that spot. Grey dots are photos the
-  district has not published (the images load from the district's own server).
+- **Flood photos.** On the flood photos layer, a magenta dot is a photo: click
+  it to see the drainage district's picture taken at that spot (it loads from
+  the district's own server). A grey dot is a photo location: a crew took a
+  photo there, but the district has not published the image.
 - **County.** The county selector moves the map and narrows the events,
   rainfall records, reports and live signals to that county.
 - **Sharing a view.** The page address keeps track of the county, the layers
@@ -132,7 +133,7 @@ uv run --group pipeline python pipeline/build_layers.py
 
 | Service / layer | Features | Becomes |
 | --- | --- | --- |
-| `Historical_Flooding_Layer` 0–3 (photos), `Hanna_Geotagged_Photos` | ~16k kept | Flood response photos. Layers 1 and 2 (June 2019, Sept 2018) also publish the image itself as an attachment, about 4,850 photos; the rest give only a path on the district's own network |
+| `Historical_Flooding_Layer` 0–3 (photos), `Hanna_Geotagged_Photos` | ~16k kept | Flood photos and photo locations. Layers 1 and 2 (June 2019, Sept 2018) also publish the image itself as an attachment, about 4,850 photos; the rest give only a path on the district's own network |
 | `Historical_Flooding_Layer` 4–9 (extents, 2008–2020) | ~1,200 | Mapped flooding |
 | `HCDD1_System`, `Future_System`, `Detention_Ponds`, `Gate_Pumps_New` | ~1,750 | Drainage network |
 | `2012_Bond_Program`, `2018_Bond_Program`, `2023_Bond` | ~200 | Drainage improvement projects |

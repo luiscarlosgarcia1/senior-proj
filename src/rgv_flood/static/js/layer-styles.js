@@ -29,8 +29,10 @@ export const INFRA = {
 
 export const OVERLAY = {
   extent: { color: "#14518c", weight: 1, fillColor: "#1e6bb8", fillOpacity: 0.5 },
-  // A dark dot opens the photo; a grey one marks a photo the district hasn't published.
-  photo: { radius: 3.5, color: "#ffffff", weight: 0.6, fillColor: "#0f172a", fillOpacity: 0.9 },
+  // Two different things, so two colors and two names: a photo you can open
+  // (magenta, a hue no other point on the map uses), and a place where the
+  // district took a photo it hasn't published (grey).
+  photo: { radius: 3.5, color: "#ffffff", weight: 0.8, fillColor: "#c026d3", fillOpacity: 0.95 },
   photo_location: { radius: 3, color: "#ffffff", weight: 0.6, fillColor: "#94a3b8", fillOpacity: 0.8 },
   channel: { color: "#475569", weight: 1.5 },
   planned_channel: { color: "#475569", weight: 1.5, dashArray: "5 4" },
@@ -47,7 +49,9 @@ const BOND_STATUS_COLORS = {
 };
 const CLAIMS_RAMP = ["#ffffff", "#fce7f3", "#f9a8d4", "#ec4899", "#be185d", "#831843"];
 
-/** Path style for a polygon or line feature. */
+/** Style for any feature. Leaflet applies this to every feature of a layer,
+ * points included, after they are created, so each kind needs a case here or
+ * it falls through to the grey "uncategorized" severity style. */
 export function styleFor(feature) {
   const p = feature.properties || {};
   if (p.original_category === "county boundary") return BOUNDARY;
@@ -56,6 +60,8 @@ export function styleFor(feature) {
   switch (p.overlay_type) {
     case "flood_extent":
       return OVERLAY.extent;
+    case "flood_photo":
+      return p.photo_url ? OVERLAY.photo : OVERLAY.photo_location;
     case "drainage":
       return OVERLAY[p.kind] || OVERLAY.channel;
     case "bond_project": {
@@ -73,7 +79,7 @@ export function styleFor(feature) {
 /** Marker style for a point feature (photos, gates, pumps, point-shaped dams). */
 export function pointStyleFor(feature) {
   const p = feature.properties || {};
-  if (p.overlay_type === "flood_photo") return p.photo_url ? OVERLAY.photo : OVERLAY.photo_location;
+  if (p.overlay_type === "flood_photo") return styleFor(feature);
   if (p.overlay_type === "drainage") return OVERLAY[p.kind] || OVERLAY.gate;
   return { radius: 5, ...(INFRA[p.infrastructure_type] || INFRA.bridge) };
 }
@@ -84,7 +90,7 @@ export const LEGENDS = {
   "hcdd1-flood-extents": [{ shape: "square", color: OVERLAY.extent.fillColor, label: "Mapped flooding" }],
   "hcdd1-flood-photos": [
     { shape: "dot", color: OVERLAY.photo.fillColor, label: "Flood photo (click to view)" },
-    { shape: "dot", color: OVERLAY.photo_location.fillColor, label: "Photo location, image not published" },
+    { shape: "dot", color: OVERLAY.photo_location.fillColor, label: "Photo location (image not published)" },
   ],
   "hcdd1-drainage": [
     { shape: "line", color: OVERLAY.channel.color, label: "Channel" },

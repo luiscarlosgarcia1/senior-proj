@@ -149,6 +149,9 @@ def build_hcdd1_flood_photos() -> MapLayer | None:
                 "geometry": {"type": "Point", "coordinates": [round(x, 5), round(y, 5)]},
                 "properties": properties,
             })
+    # The map draws features in order, so photos that can be opened go last:
+    # on top of, and clicked in preference to, the locations they overlap.
+    features.sort(key=lambda feature: "photo_url" in feature["properties"])
     return _layer(features)
 
 

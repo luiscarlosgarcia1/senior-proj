@@ -14,10 +14,9 @@ const DRAINAGE_KINDS = {
   pump: "Pump",
 };
 
-/** The photo itself, where the district publishes it: a small version from the
- * district's server, linked to the full-size original. */
+/** A small version of the photo from the district's server, linked to the
+ * full-size original. */
 function photo(p) {
-  if (!p.photo_url) return `${note("The district has not published the image for this photo.")}<br>`;
   const url = esc(p.photo_url);
   return (
     `<a class="popup-photo" href="${url}" target="_blank" rel="noopener" title="Open the full-size photo">` +
@@ -36,11 +35,17 @@ const POPUPS = {
     `District label for this event: ${esc(p.hcdd1_label)}<br>` +
     note(`${esc(p.source)}. The label is the district's own; whether it is rainfall or flood depth isn't stated.`),
 
+  // The district publishes the image for some photos and only where and when
+  // it was taken for the rest. They are named differently so neither misleads.
   flood_photo: (p) =>
-    `<strong>Flood response photo</strong><br>${esc(p.event)}<br>` +
-    (p.taken ? `Taken ${esc(p.taken)}<br>` : "") +
-    photo(p) +
-    note(`${HCDD1}. Shows where crews documented conditions, not necessarily standing water.`),
+    p.photo_url
+      ? `<strong>Flood photo</strong><br>${esc(p.event)}<br>` +
+        (p.taken ? `Taken ${esc(p.taken)}<br>` : "") +
+        photo(p) +
+        note(`${HCDD1}. Shows where crews documented conditions, not necessarily standing water.`)
+      : `<strong>Photo location</strong><br>${esc(p.event)}<br>` +
+        (p.taken ? `Photo taken ${esc(p.taken)}<br>` : "") +
+        note(`A crew from ${HCDD1} photographed conditions here. The district has not published the image.`),
 
   drainage: (p) => {
     const detail = p.acres ? `${p.acres} acres` : esc(p.owner);

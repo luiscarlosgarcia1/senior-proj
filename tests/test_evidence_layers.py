@@ -35,16 +35,18 @@ def test_flood_photos_carry_the_image_address_only_where_one_is_published(monkey
     layer = evidence_layers.build_hcdd1_flood_photos()
 
     assert layer.feature_count == 3  # the stray one is dropped
+    # The one that can be opened comes last, so the map draws it on top. And the
+    # district's internal file path and camera heading never leave the pipeline.
     assert [feature["properties"] for feature in json.loads(layer.geojson)["features"]] == [
+        {"overlay_type": "flood_photo", "event": "September 2018", "taken": ""},
+        {"overlay_type": "flood_photo", "event": "June 2018", "taken": "2018-06-21 17:56"},
         {
             "overlay_type": "flood_photo",
             "event": "September 2018",
             "taken": "2018-09-09 23:25",
             "photo_url": "https://example.test/layer/1/attachments/7",
         },
-        {"overlay_type": "flood_photo", "event": "September 2018", "taken": ""},
-        {"overlay_type": "flood_photo", "event": "June 2018", "taken": "2018-06-21 17:56"},
-    ]  # and the district's internal file path and camera heading never leave the pipeline
+    ]
 
 
 def test_image_urls_come_from_the_attachment_listing(tmp_path, monkeypatch):

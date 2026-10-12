@@ -161,12 +161,14 @@ LAYER_META: dict[str, dict] = {
         ],
     },
     "hcdd1-flood-photos": {
-        "title": "Flood response photos (Hidalgo)",
+        "title": "Flood photos and photo locations (Hidalgo)",
         "description": (
-            "Field photos the drainage district took while responding to four "
-            "floods. Each dot is a place where crews documented conditions. Dark "
-            "dots open the photo itself; the district has published those for "
-            "September 2018 and June 2019 only."
+            "Places where drainage district crews photographed conditions while "
+            "responding to four floods. Magenta dots are flood photos: click one "
+            "to see the picture, which the district has published for September "
+            "2018 and June 2019. Grey dots are photo locations: where and when a "
+            "photo was taken during June 2018 or Hurricane Hanna, without the "
+            "picture."
         ),
         "source": "Hidalgo County Drainage District No. 1 — geotagged flood photos",
         "vintage": "June 2018, Sept 2018, June 2019, Hurricane Hanna 2020",
