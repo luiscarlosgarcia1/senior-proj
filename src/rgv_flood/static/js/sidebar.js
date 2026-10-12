@@ -28,7 +28,8 @@ export function initCountySelect(map, { center, zoom }) {
     return county ? L.geoJSON(county).getBounds() : null;
   }
 
-  select.addEventListener("change", async () => {
+  select.addEventListener("change", async (e) => {
+    if (e.detail?.keepView) return; // a shared link that also says where the map should be (url-state.js)
     if (!select.value) {
       map.flyTo(center, zoom);
       return;

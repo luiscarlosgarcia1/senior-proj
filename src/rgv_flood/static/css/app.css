@@ -14,10 +14,21 @@
   --accent-hover: #a3301f;
   --radius: 4px;
 
-  --sev-high: #c0392b;
-  --sev-moderate: #d98a2c;
-  --sev-low: #3b6fd1;
-  --sev-uncategorized: #9aa0a8;
+  /* Relative severity. The one definition of these colors: the sidebar
+     swatches use them here and the map reads them (layer-styles.js). Each
+     class has a fill, the opacity the fill is drawn at, and an outline. */
+  --sev-high: #d64545;
+  --sev-high-line: #a83232;
+  --sev-high-opacity: 0.38;
+  --sev-moderate: #e0913a;
+  --sev-moderate-line: #b06d22;
+  --sev-moderate-opacity: 0.34;
+  --sev-low: #5b8bd6;
+  --sev-low-line: #3f68a8;
+  --sev-low-opacity: 0.28;
+  --sev-uncategorized: #aeb3c2;
+  --sev-uncategorized-line: #7c8296;
+  --sev-uncategorized-opacity: 0.25;
 
   --infra-bridge: #7c3aed;
   --infra-dam: #0d9488;
@@ -232,6 +243,30 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
   padding: 8px;
 }
 .layer-row:hover { background: var(--hover); }
+/* While a layer downloads, a spinner stands in for its checkbox. */
+.layer-row.loading .layer-toggle { visibility: hidden; }
+.layer-row.loading .layer-toggle-label::before {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: 0 2px;
+  border: 2px solid var(--border-2);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.layer-row.failed .layer-toggle-label::after {
+  content: "could not load";
+  margin-left: 2px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--accent);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .layer-row.loading .layer-toggle-label::before { animation-duration: 2.4s; }
+}
 .layer-toggle-label {
   display: flex;
   align-items: center;
@@ -321,10 +356,20 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
   text-transform: capitalize;
 }
 .swatch { width: 11px; height: 11px; flex-shrink: 0; display: inline-block; }
-.swatch-high { background: var(--sev-high); }
-.swatch-moderate { background: var(--sev-moderate); }
-.swatch-low { background: var(--sev-low); }
-.swatch-uncategorized { background: var(--sev-uncategorized); }
+/* Severity swatches are painted the way the map paints a zone: the fill at
+   its map opacity, inside the outline color. */
+.swatch-high { --fill: var(--sev-high); --line: var(--sev-high-line); --opacity: var(--sev-high-opacity); }
+.swatch-moderate { --fill: var(--sev-moderate); --line: var(--sev-moderate-line); --opacity: var(--sev-moderate-opacity); }
+.swatch-low { --fill: var(--sev-low); --line: var(--sev-low-line); --opacity: var(--sev-low-opacity); }
+.swatch-uncategorized {
+  --fill: var(--sev-uncategorized);
+  --line: var(--sev-uncategorized-line);
+  --opacity: var(--sev-uncategorized-opacity);
+}
+.swatch-high, .swatch-moderate, .swatch-low, .swatch-uncategorized {
+  background: color-mix(in srgb, var(--fill) calc(var(--opacity) * 100%), transparent);
+  border: 1px solid var(--line);
+}
 .swatch-bridge { background: var(--infra-bridge); }
 /* dynamic legend for the evidence / drainage / claims overlays (see map.js) */
 .overlay-legend { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider); }
@@ -486,6 +531,12 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 .rain-date { color: var(--muted-2); }
 .rain-station { color: var(--muted); }
 
+/* data sources */
+.source-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 300px; overflow-y: auto; }
+.source-list li { padding: 7px 0; border-bottom: 1px solid var(--divider); font-size: 12.5px; }
+.source-name { color: var(--text); line-height: 1.4; }
+.source-meta { color: var(--muted-2); font-size: 11px; margin-top: 2px; }
+
 /* local reports */
 .reports p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .reports ul { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
@@ -531,3 +582,51 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
 .leaflet-popup-content { font-size: 12.5px; line-height: 1.5; }
 .leaflet-popup-content strong { font-family: var(--display); color: var(--ink); }
 .popup-note { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--faint); }
+
+/* a district flood photo. The box is sized before the image arrives, so the
+   popup doesn't jump when it does. */
+.popup-photo {
+  position: relative;
+  display: block;
+  margin: 6px 0 2px;
+  aspect-ratio: 4 / 3;
+  background: var(--hover);
+}
+/* The district's server takes a few seconds to resize a photo; say so meanwhile. */
+.popup-photo::before {
+  content: "Loading photo…";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: var(--faint);
+}
+/* Shown whole, not cropped: drone shots are wider than phone shots. */
+.popup-photo img { position: relative; display: block; width: 100%; height: 100%; object-fit: contain; }
+
+/* what else is known about a flood event's days: gauge rain and local reports */
+.event-context { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--divider); }
+.leaflet-popup-content .event-context p { margin: 0; }
+.leaflet-popup-content .event-context .context-title {
+  margin-top: 10px;
+  font: 700 11px var(--display);
+  color: var(--ink);
+}
+.leaflet-popup-content .event-context .context-title:first-child { margin-top: 0; }
+.rain-table {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.rain-table th, .rain-table td { padding: 3px 4px; border-bottom: 1px solid var(--divider); text-align: right; }
+.rain-table th { font-weight: 500; color: var(--muted); white-space: nowrap; }
+.rain-table th:first-child { text-align: left; white-space: normal; }
+.rain-table tbody th { color: var(--text); }
+.rain-table .began { background: var(--hover); color: var(--ink); font-weight: 600; }
+.gauge-distance { color: var(--faint); font-size: 10.5px; white-space: nowrap; }
+.context-reports { list-style: none; margin: 4px 0 0; padding: 0; }
+.context-reports li { padding: 4px 0; border-bottom: 1px solid var(--divider); }
+.context-reports .popup-note { display: block; margin-top: 1px; }

@@ -9,6 +9,7 @@ import { initEventsLayer } from "./events-layer.js";
 import { initLayers } from "./layers.js";
 import { initLiveSignals } from "./live-signals.js";
 import { initAccordion, initCountySelect } from "./sidebar.js";
+import { initUrlState } from "./url-state.js";
 
 const config = window.RGV_CONFIG;
 const map = L.map("map").setView(config.center, config.zoom);
@@ -32,4 +33,5 @@ initEventsLayer(map);
 initAddressSearch(map, config);
 initAccordion();
 initCountySelect(map, config);
+initUrlState(map); // last: it restores a saved view by driving the controls set up above
 initLiveSignals(map).catch((error) => console.error("live signal fetch failed", error));

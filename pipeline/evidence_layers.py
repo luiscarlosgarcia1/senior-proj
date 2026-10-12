@@ -21,7 +21,7 @@ from pathlib import Path
 import geopandas as gpd
 from database import MapLayer
 from jsonio import feature_collection, read_ndjson
-from public_sources import census_tracts, hcdd1_layer, nfip_claims
+from public_sources import census_tracts, hcdd1_image_urls, hcdd1_layer, nfip_claims
 from shapely.geometry import mapping, shape
 
 from rgv_flood.counties import FIPS_TO_SLUG, RGV_BBOX, SHORT_NAMES
@@ -120,11 +120,14 @@ def _exif_to_text(exif_datetime: str) -> str:
 
 
 def build_hcdd1_flood_photos() -> MapLayer | None:
-    """Where and when the district photographed four floods. File paths and
-    camera headings in the source are deliberately dropped."""
+    """Where and when the district photographed four floods, with the address
+    of the image wherever the district publishes it (`photo_url`). The images
+    themselves are not copied. The district's internal file paths and camera
+    headings are deliberately dropped."""
     west, south, east, north = RGV_BBOX  # drops photos with stray GPS tags
     features = []
     for layer, event in FLOOD_PHOTOS:
+        image_urls = hcdd1_image_urls(layer)
         for f in hcdd1_layer(layer):
             geometry = f.get("geometry")
             if not geometry or geometry["type"] != "Point":
@@ -132,11 +135,19 @@ def build_hcdd1_flood_photos() -> MapLayer | None:
             x, y = geometry["coordinates"][:2]
             if not (west < x < east and south < y < north):
                 continue
-            taken = _exif_to_text(f["properties"].get("DateTime") or "")
+            source = f["properties"]
+            properties = {
+                "overlay_type": "flood_photo",
+                "event": event,
+                "taken": _exif_to_text(source.get("DateTime") or ""),
+            }
+            photo_url = image_urls.get(source.get("OBJECTID", source.get("FID")))
+            if photo_url:
+                properties["photo_url"] = photo_url
             features.append({
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [round(x, 5), round(y, 5)]},
-                "properties": {"overlay_type": "flood_photo", "event": event, "taken": taken},
+                "properties": properties,
             })
     return _layer(features)
 

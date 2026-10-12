@@ -42,8 +42,8 @@ TABLES: dict[str, tuple[str, ...]] = {
              source_url TEXT,
              visualizations_json TEXT NOT NULL,    -- [{"title": ..., "url": ...}], the publisher's own maps
              feature_count INTEGER NOT NULL,
-             geojson BLOB NOT NULL,                -- UTF-8 FeatureCollection, served to the browser as is
-             etag TEXT NOT NULL                    -- changes whenever geojson does
+             geojson_gzip BLOB NOT NULL,           -- gzipped UTF-8 FeatureCollection, sent to the browser as is
+             etag TEXT NOT NULL                    -- changes whenever the GeoJSON does
            )""",
     ),
     # Every flood-type event NOAA's Storm Events Database records for the four

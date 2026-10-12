@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import gzip
+
 from flask import Blueprint, Response, abort, jsonify, render_template, request
 
 from rgv_flood import data_access
@@ -33,17 +35,25 @@ def index():
 
 @bp.get("/api/layers/<layer_id>.geojson")
 def layer(layer_id: str):
-    """The layer's GeoJSON as the pipeline built it. Layers run to several MB, so
-    a browser that already holds the current version is told so (304) without
-    the geometry being read at all."""
+    """The layer's GeoJSON as the pipeline built it.
+
+    Layers run to several MB, so they are stored gzipped and sent that way to
+    any browser that accepts it (all of them), and a browser that already holds
+    the current version is told so (304) without the geometry being read at all.
+    """
     etag = data_access.layer_etag(layer_id)
     if etag is None:
         abort(404)
     if etag in request.if_none_match:
         response = Response(status=304)
     else:
-        response = Response(data_access.layer_geojson(layer_id), mimetype="application/json")
+        body = data_access.layer_geojson_gzip(layer_id)
+        if "gzip" in request.accept_encodings:
+            response = Response(body, mimetype="application/json", headers={"Content-Encoding": "gzip"})
+        else:
+            response = Response(gzip.decompress(body), mimetype="application/json")
     response.set_etag(etag)
+    response.vary.add("Accept-Encoding")
     return response
 
 
@@ -95,10 +105,32 @@ def events_partial():
     )
 
 
+@bp.get("/partials/events/<event_id>/context")
+def event_context_partial(event_id: str):
+    """What else the database holds about an event's days: rain at nearby
+    gauges and local reports. Shown inside the event's map popup."""
+    event = data_access.flood_event(event_id)
+    if event is None:
+        abort(404)
+    return render_template(
+        "partials/event-context.html",
+        county=COUNTIES[event["county"]],
+        rainfall=data_access.rainfall_near_event(event),
+        reports=data_access.reports_near_event(event),
+    )
+
+
 @bp.get("/partials/rainfall")
 def rainfall_partial():
-    county_slug, _ = _county_arg()
-    return render_template("partials/rainfall.html", days=data_access.rainfall_records(county_slug))
+    county_slug, county = _county_arg()
+    return render_template(
+        "partials/rainfall.html", days=data_access.rainfall_records(county_slug), county=county
+    )
+
+
+@bp.get("/partials/sources")
+def sources_partial():
+    return render_template("partials/sources.html", sources=data_access.data_sources())
 
 
 @bp.get("/partials/reports")

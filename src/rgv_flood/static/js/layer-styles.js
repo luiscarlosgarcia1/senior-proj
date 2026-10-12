@@ -1,27 +1,37 @@
 /* Colors and legends for every map layer.
  *
- * Severity (hazard) fills are lighter tints of the sidebar swatches (app.css
- * --sev-*), since they are drawn semi-transparent over the basemap.
- * Infrastructure and evidence overlays are not hazard ratings, so they use
- * separate hues that stay apart from that palette (app.css --infra-*).
+ * Severity (hazard) and infrastructure colors are defined once, in app.css
+ * (--sev-* and --infra-*), and read from there, so the sidebar swatches and the
+ * map can't drift apart. Infrastructure and evidence overlays are not hazard
+ * ratings, so they use hues that stay apart from the severity palette.
  */
 
-const SEVERITY = {
-  high: { color: "#a83232", weight: 1, fillColor: "#d64545", fillOpacity: 0.38 },
-  moderate: { color: "#b06d22", weight: 1, fillColor: "#e0913a", fillOpacity: 0.34 },
-  low: { color: "#3f68a8", weight: 1, fillColor: "#5b8bd6", fillOpacity: 0.28 },
-  uncategorized: { color: "#7c8296", weight: 1, fillColor: "#aeb3c2", fillOpacity: 0.25 },
-};
+const stylesheet = getComputedStyle(document.documentElement);
+const cssVar = (name) => stylesheet.getPropertyValue(name).trim();
+
+function severity(level) {
+  return {
+    color: cssVar(`--sev-${level}-line`),
+    weight: 1,
+    fillColor: cssVar(`--sev-${level}`),
+    fillOpacity: parseFloat(cssVar(`--sev-${level}-opacity`)),
+  };
+}
+const SEVERITY = Object.fromEntries(["high", "moderate", "low", "uncategorized"].map((level) => [level, severity(level)]));
 const BOUNDARY = { color: "#1b2a4a", weight: 1.5, fill: false, dashArray: "3 3" };
 
+const BRIDGE = cssVar("--infra-bridge");
+const DAM = cssVar("--infra-dam");
 export const INFRA = {
-  bridge: { color: "#7c3aed", weight: 2, fillColor: "#7c3aed", fillOpacity: 0.35 },
-  dam: { color: "#0d9488", weight: 1, fillColor: "#0d9488", fillOpacity: 0.45 },
+  bridge: { color: BRIDGE, weight: 2, fillColor: BRIDGE, fillOpacity: 0.35 },
+  dam: { color: DAM, weight: 1, fillColor: DAM, fillOpacity: 0.45 },
 };
 
 export const OVERLAY = {
   extent: { color: "#14518c", weight: 1, fillColor: "#1e6bb8", fillOpacity: 0.5 },
-  photo: { radius: 3, color: "#ffffff", weight: 0.6, fillColor: "#0f172a", fillOpacity: 0.85 },
+  // A dark dot opens the photo; a grey one marks a photo the district hasn't published.
+  photo: { radius: 3.5, color: "#ffffff", weight: 0.6, fillColor: "#0f172a", fillOpacity: 0.9 },
+  photo_location: { radius: 3, color: "#ffffff", weight: 0.6, fillColor: "#94a3b8", fillOpacity: 0.8 },
   channel: { color: "#475569", weight: 1.5 },
   planned_channel: { color: "#475569", weight: 1.5, dashArray: "5 4" },
   detention_pond: { color: "#0369a1", weight: 1, fillColor: "#38bdf8", fillOpacity: 0.45 },
@@ -63,7 +73,7 @@ export function styleFor(feature) {
 /** Marker style for a point feature (photos, gates, pumps, point-shaped dams). */
 export function pointStyleFor(feature) {
   const p = feature.properties || {};
-  if (p.overlay_type === "flood_photo") return OVERLAY.photo;
+  if (p.overlay_type === "flood_photo") return p.photo_url ? OVERLAY.photo : OVERLAY.photo_location;
   if (p.overlay_type === "drainage") return OVERLAY[p.kind] || OVERLAY.gate;
   return { radius: 5, ...(INFRA[p.infrastructure_type] || INFRA.bridge) };
 }
@@ -72,7 +82,10 @@ export function pointStyleFor(feature) {
 // infrastructure legends in the sidebar. Colors come from the styles above.
 export const LEGENDS = {
   "hcdd1-flood-extents": [{ shape: "square", color: OVERLAY.extent.fillColor, label: "Mapped flooding" }],
-  "hcdd1-flood-photos": [{ shape: "dot", color: OVERLAY.photo.fillColor, label: "Flood response photo" }],
+  "hcdd1-flood-photos": [
+    { shape: "dot", color: OVERLAY.photo.fillColor, label: "Flood photo (click to view)" },
+    { shape: "dot", color: OVERLAY.photo_location.fillColor, label: "Photo location, image not published" },
+  ],
   "hcdd1-drainage": [
     { shape: "line", color: OVERLAY.channel.color, label: "Channel" },
     { shape: "dash", color: OVERLAY.planned_channel.color, label: "Planned channel" },

@@ -3,6 +3,7 @@
 import { escapeHtml as esc } from "./html.js";
 
 const HCDD1 = "Hidalgo County Drainage District No. 1";
+export const PHOTO_WIDTH = 260; // CSS pixels; twice that is requested so it stays sharp on dense screens
 const note = (text) => `<span class="popup-note">${text}</span>`;
 
 const DRAINAGE_KINDS = {
@@ -12,6 +13,17 @@ const DRAINAGE_KINDS = {
   gate: "Gate",
   pump: "Pump",
 };
+
+/** The photo itself, where the district publishes it: a small version from the
+ * district's server, linked to the full-size original. */
+function photo(p) {
+  if (!p.photo_url) return `${note("The district has not published the image for this photo.")}<br>`;
+  const url = esc(p.photo_url);
+  return (
+    `<a class="popup-photo" href="${url}" target="_blank" rel="noopener" title="Open the full-size photo">` +
+    `<img src="${url}?w=${PHOTO_WIDTH * 2}" alt="District photo, ${esc(p.event)}" loading="lazy"></a>`
+  );
+}
 
 function yearRange(start, end) {
   if (start && end) return `${start}–${end}`;
@@ -27,6 +39,7 @@ const POPUPS = {
   flood_photo: (p) =>
     `<strong>Flood response photo</strong><br>${esc(p.event)}<br>` +
     (p.taken ? `Taken ${esc(p.taken)}<br>` : "") +
+    photo(p) +
     note(`${HCDD1}. Shows where crews documented conditions, not necessarily standing water.`),
 
   drainage: (p) => {

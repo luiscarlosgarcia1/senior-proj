@@ -93,6 +93,11 @@ def _fetch_arcgis_layer(service: str, layer: int) -> list[dict]:
         features += page
 
 
+def hcdd1_layer_url(name: str) -> str:
+    service, layer = HCDD1_LAYERS[name]
+    return f"{HCDD1_BASE}/{service}/FeatureServer/{layer}"
+
+
 def hcdd1_layer(name: str, cache_dir: Path = DOWNLOAD_CACHE / "hcdd1", *, force: bool = False) -> list[dict]:
     """The GeoJSON features of one drainage-district layer (a key of HCDD1_LAYERS)."""
     cached = cache_dir / f"{name}.geojson"
@@ -103,6 +108,44 @@ def hcdd1_layer(name: str, cache_dir: Path = DOWNLOAD_CACHE / "hcdd1", *, force:
         print(f"  [ok]   {name}: {len(features)} features", flush=True)
         return features
     return json.loads(cached.read_text(encoding="utf-8"))["features"]
+
+
+def _fetch_attachment_groups(layer_url: str) -> list[dict]:
+    """A layer's attachment listing: one group per feature that has files
+    attached. Empty for a layer that doesn't carry attachments at all."""
+    groups: list[dict] = []
+    while True:
+        params = {"definitionExpression": "1=1", "resultOffset": len(groups), "resultRecordCount": 2000, "f": "json"}
+        page = get_json(f"{layer_url}/queryAttachments?{urllib.parse.urlencode(params)}", timeout=120)
+        if "error" in page:  # "Layer does not support attachments."
+            return groups
+        groups += page.get("attachmentGroups", [])
+        if not page.get("exceededTransferLimit") or not page.get("attachmentGroups"):
+            return groups
+
+
+def hcdd1_image_urls(name: str, cache_dir: Path = DOWNLOAD_CACHE / "hcdd1", *, force: bool = False) -> dict[int, str]:
+    """Feature id -> address of the image the district attached to that feature.
+
+    The district publishes the actual photo for some of its photo layers and
+    only a path on its own network for the rest, so this is empty for those.
+    Only the listing is downloaded; the images stay on the district's server.
+    """
+    cached = cache_dir / f"{name}.attachments.json"
+    layer_url = hcdd1_layer_url(name)
+    if already_have(cached, force=force):
+        groups = json.loads(cached.read_text(encoding="utf-8"))
+    else:
+        groups = _fetch_attachment_groups(layer_url)
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        cached.write_text(json.dumps(groups), encoding="utf-8")
+        print(f"  [ok]   {name}: {len(groups)} features with attachments", flush=True)
+    urls = {}
+    for group in groups:
+        images = [a for a in group["attachmentInfos"] if a.get("contentType", "").startswith("image/")]
+        if images:
+            urls[group["parentObjectId"]] = f"{layer_url}/{group['parentObjectId']}/attachments/{images[0]['id']}"
+    return urls
 
 
 # ---- OpenFEMA ---------------------------------------------------------------

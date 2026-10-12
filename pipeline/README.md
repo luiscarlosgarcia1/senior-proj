@@ -21,7 +21,7 @@ Every table is defined in `database.py`. Every query the app runs is in
 
 | Table | One row per | Written by |
 | --- | --- | --- |
-| `layers` | map layer: title, description, source, limitation and links, plus the map-ready GeoJSON the browser draws | `build_layers.py` |
+| `layers` | map layer: title, description, source, limitation and links, plus the map-ready GeoJSON the browser draws (stored gzipped and sent as is) | `build_layers.py` |
 | `flood_events` | flood-type event in NOAA's Storm Events Database, 2000–2025, with NOAA's coordinate and the point the map plots | `build_events.py` |
 | `flood_reports` | hand-curated local-news or government report tied to a flood | `build_events.py` |
 | `weather_stations` | GHCN-Daily station used for a county | `build_events.py` |
@@ -100,6 +100,10 @@ builders, and the layer-id → builder table that drives `main()`),
 `evidence_layers.py` (drainage-district and insurance-claims layers), and
 `layer_meta.py` (descriptions, limitations and links to each publisher's own
 map).
+
+Flood photos carry a `photo_url` wherever the drainage district publishes the
+image (as an ArcGIS attachment). Only the listing of attachments is downloaded;
+the images stay on the district's server and the map links to them.
 
 If a publisher can't be reached and its files aren't cached, that one layer is
 left out, the rest are still written, and the script exits with an error naming

@@ -11,7 +11,35 @@ function eventPopup(p) {
   const record = p.source_url
     ? `<br><br><a href="${esc(p.source_url)}" target="_blank" rel="noopener">NOAA Storm Events record</a>`
     : "";
-  return `<strong>${esc(p.type)} — ${esc(span)}</strong><br>${esc(p.location)}<br><br>${esc(p.summary)}${record}`;
+  return (
+    `<strong>${esc(p.type)} — ${esc(span)}</strong><br>${esc(p.location)}<br><br>${esc(p.summary)}${record}` +
+    `<div class="event-context"><p class="popup-note">Loading gauge readings…</p></div>`
+  );
+}
+
+/** Bind a popup that, the first time it opens, asks the server what else is
+ * known about the event's days: rain at nearby gauges and local reports. */
+function bindEventPopup(feature, layer) {
+  const properties = feature.properties || {};
+  let node = null; // built on first open; kept so the loaded context survives a reopen
+
+  layer.bindPopup(
+    () => {
+      if (!node) {
+        node = document.createElement("div");
+        node.innerHTML = eventPopup(properties);
+      }
+      return node;
+    },
+    { maxHeight: 320, minWidth: 260 },
+  );
+
+  layer.once("popupopen", async (e) => {
+    const context = node.querySelector(".event-context");
+    const response = await fetch(`/partials/events/${encodeURIComponent(properties.id)}/context`);
+    context.outerHTML = response.ok ? await response.text() : "";
+    e.popup.update(); // the popup has grown: re-measure and keep it in view
+  });
 }
 
 export function initEventsLayer(map) {
@@ -25,7 +53,7 @@ export function initEventsLayer(map) {
         collection &&
         L.geoJSON(collection, {
           pointToLayer: (_feature, latlng) => L.circleMarker(latlng, MARKER),
-          onEachFeature: (feature, layer) => layer.bindPopup(eventPopup(feature.properties || {}), { maxHeight: 220 }),
+          onEachFeature: bindEventPopup,
         }),
     );
     return layerPromise;
@@ -48,7 +76,10 @@ export function initEventsLayer(map) {
     const lon = parseFloat(row.dataset.lon);
     if (Number.isNaN(lat) || Number.isNaN(lon)) return;
 
-    toggle.checked = true;
+    if (!toggle.checked) {
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event("change", { bubbles: true })); // so the page address records it
+    }
     await setVisible(true);
     map.flyTo([lat, lon], 13);
     map.once("moveend", async () => {

@@ -1,8 +1,9 @@
+import gzip
 import json
 from datetime import UTC, datetime
 
 import pytest
-from database import open_database, replace_table
+from database import open_database, record_sources, replace_table
 from live_signals import LiveSignal, LiveSignalStore
 
 import rgv_flood
@@ -42,32 +43,80 @@ EVENTS = [
     ),
     _event("noaa-storm-events-2", "2018-06-20", summary="test event without a point"),
 ]
-STATIONS = [
-    {
-        "station_id": "USC00419588",
-        "county": "hidalgo",
-        "name": "Weslaco",
-        "lon": -97.97,
-        "lat": 26.18,
-        "elevation_m": 22.9,
-        "source_url": "https://example.test/USC00419588.csv.gz",
+WESLACO, MCALLEN, RIO_GRANDE_CITY = "USC00419588", "USW00012959", "USC00417622"
+
+
+def _station(station_id: str, county: str, name: str, lon: float, lat: float) -> dict:
+    return {
+        "station_id": station_id, "county": county, "name": name, "lon": lon, "lat": lat,
+        "elevation_m": 20.0, "source_url": f"https://example.test/{station_id}.csv.gz",
     }
+
+
+STATIONS = [
+    _station(WESLACO, "hidalgo", "Weslaco", -97.97, 26.18),
+    _station(MCALLEN, "hidalgo", "McAllen Airport", -98.24, 26.18),
+    _station(RIO_GRANDE_CITY, "starr", "Rio Grande City", -98.81, 26.38),
 ]
 
 
-def _reading(date: str, element: str, value: int) -> dict:
+def _reading(station_id: str, date: str, element: str, value: int) -> dict:
     return {
-        "station_id": "USC00419588", "date": date, "element": element, "value": value,
+        "station_id": station_id, "date": date, "element": element, "value": value,
         "measurement_flag": None, "source_flag": "7", "observation_time_flag": None,
     }
 
 
 # PRCP is tenths of a millimetre: 2184 is 218.4 mm, or 8.6 inches.
 READINGS = [
-    _reading("2025-03-28", "PRCP", 2184),
-    _reading("2025-03-29", "PRCP", 100),
-    _reading("2025-03-30", "PRCP", 0),  # a dry day is not a rainfall record
-    _reading("2025-03-28", "TMAX", 9999),  # nor is a temperature
+    _reading(WESLACO, "2025-03-28", "PRCP", 2184),
+    _reading(WESLACO, "2025-03-29", "PRCP", 100),
+    _reading(WESLACO, "2025-03-30", "PRCP", 0),  # a dry day is not a rainfall record
+    _reading(WESLACO, "2025-03-28", "TMAX", 9999),  # nor is a temperature
+    _reading(RIO_GRANDE_CITY, "2010-07-01", "PRCP", 508),  # 2.0 in: Starr's own record
+    # around the 2020-07-25 event at (-98.2, 26.2): McAllen is the nearer gauge
+    _reading(WESLACO, "2020-07-24", "PRCP", 0),
+    _reading(WESLACO, "2020-07-26", "PRCP", 1270),  # 5.00 in
+    _reading(MCALLEN, "2020-07-25", "PRCP", 254),  # 1.00 in
+]
+
+
+def _report(report_id: str, event_date: str, **values) -> dict:
+    return {
+        "id": report_id,
+        "county": "hidalgo",
+        "headline": f"Headline of {report_id}.",
+        "detail": f"Headline of {report_id}. More detail.",
+        "location": "Weslaco, Hidalgo County, Texas",
+        "location_precision": "municipality",
+        "event_date": event_date,
+        "event_end": None,
+        "published_at": event_date,
+        "publisher": "KRGV Channel 5 News",
+        "channel": "local_news",
+        "source_url": f"https://example.test/{report_id}",
+        "original_content": None,
+        "duplicate_group": None,
+        "retrieved_at": "2026-09-04T03:17:42Z",
+        **values,
+    }
+
+
+REPORTS = [
+    _report("hanna-landfall", "2020-07-25", duplicate_group="hanna"),
+    _report("hanna-recovery", "2020-07-31", duplicate_group="hanna"),  # days later, same flood
+    _report("weslaco-streets", "2021-05-19"),
+]
+SOURCES = [
+    {
+        "id": "noaa-storm-events", "publisher": "NOAA NCEI", "dataset": "Storm Events Database",
+        "url": "https://example.test/storm", "retrieved_at": "2026-09-16T04:30:40Z", "record_count": 1425,
+        "notes": None,
+    },
+    {
+        "id": "layer:fema-nfhl", "publisher": "FEMA", "dataset": "FEMA effective flood hazard (NFHL)",
+        "url": None, "retrieved_at": None, "record_count": 20, "notes": None,
+    },
 ]
 
 
@@ -86,7 +135,7 @@ def _layer(layer_id: str, geojson: str = '{"type":"FeatureCollection","features"
         "source_url": None,
         "visualizations_json": "[]",
         "feature_count": 0,
-        "geojson": geojson.encode(),
+        "geojson_gzip": gzip.compress(geojson.encode()),
         "etag": f"etag-of-{layer_id}",
         **values,
     }
@@ -102,8 +151,10 @@ def client(tmp_path):
     database = tmp_path / "rgv-flood.sqlite3"
     with open_database(database) as connection:
         replace_table(connection, "flood_events", EVENTS)
+        replace_table(connection, "flood_reports", REPORTS)
         replace_table(connection, "weather_stations", STATIONS)
         replace_table(connection, "weather_observations", READINGS)
+        record_sources(connection, SOURCES)
     app = create_app({"TESTING": True, "DATABASE": database, "LIVE_SIGNALS_SCHEDULER_ENABLED": False})
     return app.test_client()
 
@@ -171,10 +222,9 @@ def test_all_four_counties_in_selector(client):
         assert name in body
 
 
-def test_reports_partial_empty(client):
-    res = client.get("/partials/reports")
-    assert res.status_code == 200
-    assert b"No reports" in res.data
+def test_reports_partial_lists_reports_and_says_when_a_county_has_none(client):
+    assert client.get("/partials/reports").data.count(b'class="report"') == 3
+    assert b"No reports" in client.get("/partials/reports?county_slug=starr").data
 
 
 def test_unknown_county_is_404(client):
@@ -322,14 +372,56 @@ def test_app_runs_before_the_database_is_built(tmp_path):
 def test_rainfall_partial_ranks_the_wettest_days(client):
     html = client.get("/partials/rainfall").get_data(as_text=True)
 
-    assert html.index("8.6 in") < html.index("0.4 in")  # 218.4 mm, then 10 mm
-    assert html.count("rain-amount") == 2  # the dry day and the temperature reading are not listed
-    assert "Weslaco" in html
+    assert html.index("8.6 in") < html.index("5.0 in") < html.index("2.0 in") < html.index("0.4 in")
+    assert "0.0 in" not in html  # a dry day is not a record, and neither is the temperature reading
+    assert "RGV gauges" in html
 
 
-def test_rainfall_partial_filters_by_county(client):
-    assert b"8.6 in" in client.get("/partials/rainfall?county_slug=hidalgo").data
-    assert b"No rainfall records" in client.get("/partials/rainfall?county_slug=starr").data
+def test_rainfall_partial_shows_a_countys_own_records(client, monkeypatch):
+    # With room for one record only, the overall list would be Weslaco's 8.6 in.
+    monkeypatch.setattr("rgv_flood.data_access.RAINFALL_TOP_N", 1)
+
+    html = client.get("/partials/rainfall?county_slug=starr").get_data(as_text=True)
+
+    assert "2.0 in" in html and "Rio Grande City" in html
+    assert "Starr County gauges" in html
+    assert "8.6 in" not in html
+    assert b"No rainfall records" in client.get("/partials/rainfall?county_slug=willacy").data
+
+
+def test_event_context_shows_rain_at_the_nearest_gauges(client):
+    html = client.get("/partials/events/noaa-storm-events-1/context").get_data(as_text=True)
+
+    assert all(day in html for day in ("Jul 24", "Jul 25", "Jul 26"))  # the day before to the day after
+    assert html.index("McAllen Airport") < html.index("Weslaco")  # 4 km away, then 23 km
+    assert "1.00" in html and "5.00" in html
+    assert "—" in html  # McAllen has no reading for the 24th or the 26th
+    assert "Rio Grande City" not in html  # another county's gauge
+
+
+def test_event_context_lists_every_report_of_a_flood_that_overlaps_the_event(client):
+    html = client.get("/partials/events/noaa-storm-events-1/context").get_data(as_text=True)
+
+    assert "Headline of hanna-landfall." in html
+    assert "Headline of hanna-recovery." in html  # same flood, though dated six days after the event
+    assert "weslaco-streets" not in html
+    assert "not confirmed to describe this exact event" in html
+
+
+def test_event_context_without_a_point_or_any_readings(client):
+    html = client.get("/partials/events/noaa-storm-events-2/context").get_data(as_text=True)
+
+    assert "No Hidalgo County gauge has a rainfall reading for these days" in html
+    assert "Local reports" not in html
+    assert client.get("/partials/events/no-such-event/context").status_code == 404
+
+
+def test_sources_partial_lists_where_the_data_came_from(client):
+    html = client.get("/partials/sources").get_data(as_text=True)
+
+    assert html.index("Storm Events Database") < html.index("FEMA effective flood hazard")  # layers come last
+    assert "1,425 records" in html and "downloaded 2026-09-16" in html
+    assert "kept in the repository" in html  # the seed-file layer has no download date
 
 
 def test_event_count_in_index(client):
@@ -370,6 +462,12 @@ def test_layer_geojson_is_served_as_built_and_revalidates(client):
     response = client.get("/api/layers/demo.geojson")
     assert response.get_data(as_text=True) == geojson
     assert response.mimetype == "application/json"
+
+    compressed = client.get("/api/layers/demo.geojson", headers={"Accept-Encoding": "gzip, br"})
+    assert compressed.headers["Content-Encoding"] == "gzip"
+    assert gzip.decompress(compressed.data).decode() == geojson
+    assert compressed.headers["ETag"] == response.headers["ETag"]
+    assert "Accept-Encoding" in compressed.headers["Vary"]
 
     repeat = client.get("/api/layers/demo.geojson", headers={"If-None-Match": response.headers["ETag"]})
     assert repeat.status_code == 304

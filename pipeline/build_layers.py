@@ -20,6 +20,7 @@ Safe to re-run (replaces the `layers` table only).
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import os
@@ -192,7 +193,9 @@ def _row(layer_id: str, position: int, layer: MapLayer) -> dict:
         "visualizations_json": json.dumps(meta.pop("visualizations", [])),
         **meta,
         "feature_count": layer.feature_count,
-        "geojson": geojson,
+        # Compressed once here so the app can send it without spending CPU per
+        # request. mtime=0 keeps the bytes the same from one build to the next.
+        "geojson_gzip": gzip.compress(geojson, mtime=0),
         "etag": hashlib.sha256(geojson).hexdigest()[:32],
     }
 
@@ -244,7 +247,8 @@ def main(database: Path = DATABASE) -> None:
         if layer is None or not layer.feature_count:
             continue
         row = _row(layer_id, position, layer)
-        print(f"  {layer_id}: {layer.feature_count} features, {len(row['geojson']) / 1024:,.0f} KB")
+        size, sent = len(layer.geojson.encode("utf-8")), len(row["geojson_gzip"])
+        print(f"  {layer_id}: {layer.feature_count} features, {size / 1024:,.0f} KB ({sent / 1024:,.0f} KB gzipped)")
         rows.append(row)
 
     with open_database(database) as connection:

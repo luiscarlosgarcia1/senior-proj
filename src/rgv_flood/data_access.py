@@ -10,8 +10,10 @@ sites at request time.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from contextlib import closing
+from datetime import date, timedelta
 from pathlib import Path
 
 from flask import current_app
@@ -23,9 +25,15 @@ LAYER_COLUMNS = (
 EVENT_COLUMNS = "id, county, date, date_end, type, location, precision, summary, source_url, geometry_note, lon, lat"
 # How many of the wettest gauge-days the rainfall panel ranks.
 RAINFALL_TOP_N = 15
+# An event's rainfall and report context looks this many days either side of it.
+# Daily rain totals usually run to a morning reading, so the rain that caused a
+# flood is often booked to the following day.
+CONTEXT_DAYS = 1
+# How many gauges to show for an event that has a point to measure from.
+NEAREST_GAUGES = 3
 
 
-def _rows(query: str, parameters: tuple = ()) -> list[dict] | None:
+def _rows(query: str, parameters: tuple | dict = ()) -> list[dict] | None:
     """Rows of a query as dicts, or None when the database hasn't been built yet."""
     database = Path(current_app.config["DATABASE"])
     if not database.exists():
@@ -36,7 +44,7 @@ def _rows(query: str, parameters: tuple = ()) -> list[dict] | None:
         return [dict(row) for row in connection.execute(query, parameters)]
 
 
-def _app_rows(query: str, parameters: tuple = ()) -> list[dict]:
+def _app_rows(query: str, parameters: tuple | dict = ()) -> list[dict]:
     return _rows(query, parameters) or []
 
 
@@ -73,10 +81,10 @@ def layer_etag(layer_id: str) -> str | None:
     return rows[0]["etag"] if rows else None
 
 
-def layer_geojson(layer_id: str) -> bytes | None:
-    """The layer's FeatureCollection, exactly as the pipeline built it."""
-    rows = _app_rows("select geojson from layers where id = ?", (layer_id,))
-    return rows[0]["geojson"] if rows else None
+def layer_geojson_gzip(layer_id: str) -> bytes | None:
+    """The layer's FeatureCollection, gzipped, exactly as the pipeline built it."""
+    rows = _app_rows("select geojson_gzip from layers where id = ?", (layer_id,))
+    return rows[0]["geojson_gzip"] if rows else None
 
 
 # ---- flood events, reports, rainfall ----
@@ -129,25 +137,119 @@ def flood_reports(county_slug: str | None = None) -> list[dict]:
     return _app_rows(f"select * from flood_reports{where} order by event_date, rowid", parameters)
 
 
-def rainfall_records(county_slug: str | None = None) -> list[dict]:
-    """The wettest single gauge-days on record (date, mm, inches, station).
+def _inches(tenths_of_mm: float, digits: int) -> float:
+    """GHCN-Daily stores rain in tenths of a millimetre."""
+    return round(tenths_of_mm / 254.0, digits)
 
-    The ranking is across all four counties; a county filter then shows which
-    of those record days happened there.
-    """
+
+def rainfall_records(county_slug: str | None = None) -> list[dict]:
+    """The wettest single gauge-days on record (date, mm, inches, station):
+    one county's own records when a county is given, otherwise the wettest
+    across all four."""
+    in_county, parameters = (" and s.county = ?", (county_slug,)) if county_slug else ("", ())
     wettest = _app_rows(
-        """select s.county, o.date, o.value as tenths_of_mm, s.name as station
-           from weather_observations o join weather_stations s using (station_id)
-           where o.element = 'PRCP' and o.value > 0
-           order by o.value desc, s.county, o.station_id, o.date
-           limit ?""",
-        (RAINFALL_TOP_N,),
+        f"""select s.county, o.date, o.value as tenths_of_mm, s.name as station
+            from weather_observations o join weather_stations s using (station_id)
+            where o.element = 'PRCP' and o.value > 0{in_county}
+            order by o.value desc, s.county, o.station_id, o.date
+            limit ?""",
+        (*parameters, RAINFALL_TOP_N),
     )
     days = []
     for row in wettest:
-        mm = round(row.pop("tenths_of_mm") / 10.0, 1)
-        days.append({**row, "mm": mm, "inches": round(mm / 25.4, 1)})
-    return [day for day in days if day["county"] == county_slug] if county_slug else days
+        tenths = row.pop("tenths_of_mm")
+        days.append({**row, "mm": round(tenths / 10.0, 1), "inches": _inches(tenths, 1)})
+    return days
+
+
+# ---- what else is known about one flood event ----
+
+
+def flood_event(event_id: str) -> dict | None:
+    rows = _events(" where id = ?", (event_id,))
+    return rows[0] if rows else None
+
+
+def _days_around(event: dict) -> tuple[date, date, date]:
+    """(first day, the day the event began, last day) of an event's context window."""
+    began = date.fromisoformat(event["date"])
+    ended = date.fromisoformat(event["date_end"] or event["date"])
+    return began - timedelta(days=CONTEXT_DAYS), began, max(began, ended) + timedelta(days=CONTEXT_DAYS)
+
+
+def _km_between(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """Great-circle distance (haversine)."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin((phi2 - phi1) / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    return 6371.0 * 2 * math.asin(math.sqrt(a))
+
+
+def rainfall_near_event(event: dict) -> dict:
+    """Daily rain at gauges in the event's county, from the day before it began
+    to the day after it ended.
+
+    With a point to measure from, the nearest few gauges that reported are
+    listed, nearest first; without one, every gauge in the county that reported.
+    """
+    first, began, last = _days_around(event)
+    days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
+    readings = _app_rows(
+        """select s.station_id, s.name, s.lon, s.lat, o.date, o.value
+           from weather_observations o join weather_stations s using (station_id)
+           where o.element = 'PRCP' and s.county = ? and o.date between ? and ?""",
+        (event["county"], first.isoformat(), last.isoformat()),
+    )
+    gauges: dict[str, dict] = {}
+    for row in readings:
+        gauge = gauges.setdefault(row["station_id"], {"name": row["name"], "distance_km": None, "by_day": {}})
+        gauge["by_day"][row["date"]] = _inches(row["value"], 2)
+        if event["lat"] is not None:
+            gauge["distance_km"] = round(_km_between(event["lon"], event["lat"], row["lon"], row["lat"]))
+
+    located = event["lat"] is not None
+    ordered = sorted(gauges.values(), key=lambda g: (g["distance_km"], g["name"]) if located else (0, g["name"]))
+    return {
+        "days": [{"date": day.isoformat(), "label": f"{day:%b} {day.day}", "began": day == began} for day in days],
+        "gauges": [
+            {**gauge, "inches": [gauge["by_day"].get(day.isoformat()) for day in days]}
+            for gauge in (ordered[:NEAREST_GAUGES] if located else ordered)
+        ],
+        "located": located,
+    }
+
+
+def reports_near_event(event: dict) -> list[dict]:
+    """Curated local reports from the event's county and the same days.
+
+    Reports about one flood share a group. If a group's dates overlap the
+    event's (give or take a day), the whole group is returned, so a report
+    written days into a long flood still appears with the event that began it.
+    Nothing links a report to one NOAA event, so this is a match on place and
+    date, and the page says so.
+    """
+    first, _, last = _days_around(event)
+    return _app_rows(
+        """with flood as (
+             select coalesce(duplicate_group, id) as name,
+                    min(event_date) as first_day,
+                    max(coalesce(event_end, event_date)) as last_day
+             from flood_reports where county = :county group by name
+           )
+           select r.* from flood_reports r
+           join flood on flood.name = coalesce(r.duplicate_group, r.id)
+           where r.county = :county and flood.first_day <= :last and flood.last_day >= :first
+           order by r.event_date, r.rowid""",
+        {"county": event["county"], "first": first.isoformat(), "last": last.isoformat()},
+    )
+
+
+# ---- provenance ----
+
+
+def data_sources() -> list[dict]:
+    """Every dataset in the database: who published it, when it was fetched,
+    how many records it holds. Events, weather and reports first, then layers."""
+    return _app_rows("select * from data_sources order by id like 'layer:%', dataset")
 
 
 # ---- live signals ----
