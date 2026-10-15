@@ -105,7 +105,7 @@ def test_weather_observations_keep_clean_readings_in_range(tmp_path):
         f"{station},20180621,PRCP,1234,,,7,",  # kept
         f"{station},20180621,TMAX,350,,,7,0700",  # kept, same day
         f"{station},20180622,PRCP,50,,G,7,",  # quality-flagged: dropped
-        f"{station},19991231,PRCP,10,,,7,",  # before 2000: dropped
+        f"{station},19771231,PRCP,10,,,7,",  # before 1978: dropped
         f"{station},20180623,SNOW,10,,,7,",  # element not retained
     ])
 
@@ -133,7 +133,7 @@ def test_weather_stations_lists_every_station_of_the_counties():
 
 
 def test_download_skips_the_listing_when_every_year_is_cached(tmp_path, monkeypatch):
-    for year in range(noaa.FIRST_YEAR, noaa.LAST_YEAR + 1):
+    for year in range(noaa.STORM_FIRST_YEAR, noaa.LAST_YEAR + 1):
         write_storm_file(tmp_path, [], year=year)
     monkeypatch.setattr(noaa, "get_text", lambda url: pytest.fail("NOAA's listing should not be fetched"))
     monkeypatch.setattr(noaa, "download", lambda url, dest: pytest.fail("nothing should be downloaded"))

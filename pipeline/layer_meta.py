@@ -27,6 +27,8 @@ FEMA_NFHL_VIEWER = _link(
     "https://hazards-fema.maps.arcgis.com/apps/webappviewer/index.html?id=8b0adb51996444d4879338b5529aa9cd",
 )
 OVERTURE_EXPLORER = _link("Overture Maps Explorer", "https://explore.overturemaps.org/")
+STATE_FLOOD_PLAN_VIEWER = _link("Interactive State Flood Plan Viewer", "https://texasstatefloodplan.org/")
+STATE_FLOOD_PLAN = "https://www.twdb.texas.gov/flood/planning/sfp/2024/index.asp"
 
 LAYER_META: dict[str, dict] = {
     "county-boundaries": {
@@ -219,6 +221,101 @@ LAYER_META: dict[str, dict] = {
             _link("2012 Bond dashboard", _ARCGIS_ITEM + "4bbb6b3959124f62bf7b30389a6dddce"),
             _link("HCDD1 District Projects", _ARCGIS_ITEM + "40da5a923154485cac2256bf3daec571"),
         ],
+    },
+    "waterways": {
+        "title": "Drains, canals and creeks",
+        "description": (
+            "The water lines that carry runoff across the valley: drainage "
+            "ditches and floodways, irrigation canals, resacas, and the creeks "
+            "and arroyos of Starr County. Kinds come from each line's own name "
+            "(a \"Drn\" is a drain, a \"Cnl\" a canal)."
+        ),
+        "source": "U.S. Census Bureau — TIGER/Line 2023 linear water",
+        "vintage": "2023",
+        "hazard_type": "n/a — drainage paths",
+        "coverage": "Cameron, Hidalgo, Starr, Willacy",
+        "limitation": (
+            "Census lines are drawn for map labeling, not engineering; small "
+            "private ditches and storm sewers are missing, and an unnamed canal "
+            "or ditch can't be told apart."
+        ),
+        "source_url": "https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html",
+    },
+    "flood-infrastructure": {
+        "title": "Flood infrastructure (state flood plan)",
+        "description": (
+            "Dams, levees, sea walls, storm drain systems, detention ponds and "
+            "low-water crossings the regional flood planning group inventoried "
+            "for the 2024 State Flood Plan."
+        ),
+        "source": "Texas Water Development Board — 2024 State Flood Plan, existing flood infrastructure",
+        "vintage": "2024 State Flood Plan (Region 15 inventory, 2023)",
+        "hazard_type": "n/a — flood infrastructure",
+        "coverage": "Cameron, Hidalgo, Starr, Willacy",
+        "limitation": (
+            "Only what local entities reported to the planning group; most "
+            "items have no condition or level-of-service rating. The plan also "
+            "maps wetlands as infrastructure; those are left out here."
+        ),
+        "source_url": STATE_FLOOD_PLAN,
+        "visualizations": [STATE_FLOOD_PLAN_VIEWER],
+    },
+    "city-drainage": {
+        "title": "City storm drainage (Harlingen, Brownsville)",
+        "description": (
+            "The storm sewers, drainage ditches and detention ponds Harlingen "
+            "publishes, and the drainage ditches Brownsville publishes, with "
+            "the district or owner of each ditch."
+        ),
+        "source": "City of Harlingen (storm drain system); City of Brownsville Engineering (drainage ownership)",
+        "vintage": "as last published by each city",
+        "hazard_type": "n/a — drainage infrastructure",
+        "coverage": "Harlingen and Brownsville (Cameron County)",
+        "limitation": (
+            "Only these two cities publish their drainage. Pipe sizes are as "
+            "recorded by the city and many records are incomplete."
+        ),
+        "source_url": "https://www.harlingentx.gov/",
+    },
+    "flood-projects": {
+        "title": "Flood projects (state flood plan)",
+        "description": (
+            "Drainage and flood-control projects in the 2024 State Flood Plan: "
+            "ongoing ones that cities, counties and districts reported, and "
+            "new ones the regional planning group recommended, with cost and "
+            "how many buildings each would take out of the 100-year floodplain."
+        ),
+        "source": "Texas Water Development Board — 2024 State Flood Plan",
+        "vintage": "2024 State Flood Plan (Region 15, 2023)",
+        "hazard_type": "n/a — planned and ongoing projects",
+        "coverage": "Cameron, Hidalgo, Starr, Willacy",
+        "limitation": (
+            "Status and costs are as reported for the plan in 2023. A "
+            "recommended project is a candidate for state funding, not a "
+            "commitment to build it."
+        ),
+        "source_url": STATE_FLOOD_PLAN,
+        "visualizations": [STATE_FLOOD_PLAN_VIEWER],
+    },
+    "nws-flood-reports": {
+        "title": "Reported flooding (National Weather Service)",
+        "description": (
+            "Flooding people reported to the National Weather Service in "
+            "Brownsville since 2005: flooded streets and homes, flash floods, "
+            "heavy rain totals. Each dot is one report, with who made it and "
+            "what they saw."
+        ),
+        "source": "NWS Brownsville Local Storm Reports (archive: Iowa Environmental Mesonet)",
+        "vintage": "2005 to present",
+        "hazard_type": "observed flooding (reports)",
+        "coverage": "Cameron, Hidalgo, Starr, Willacy",
+        "limitation": (
+            "Reports are not a complete record: they come from whoever "
+            "contacted the NWS, and a location is often a town or road, not "
+            "the exact flooded spot."
+        ),
+        "source_url": "https://mesonet.agron.iastate.edu/lsr/",
+        "visualizations": [_link("IEM Local Storm Report app", "https://mesonet.agron.iastate.edu/lsr/")],
     },
     "nfip-claims-by-tract": {
         "title": "Flood insurance claims by tract",

@@ -22,11 +22,15 @@ Every table is defined in `database.py`. Every query the app runs is in
 | Table | One row per | Written by |
 | --- | --- | --- |
 | `layers` | map layer: title, description, source, limitation and links, plus the map-ready GeoJSON the browser draws (stored gzipped and sent as is) | `build_layers.py` |
-| `flood_events` | flood-type event in NOAA's Storm Events Database, 2000–2025, with NOAA's coordinate and the point the map plots | `build_events.py` |
+| `flood_events` | flood-type event in NOAA's Storm Events Database, 1996–2025, with NOAA's coordinate and the point the map plots | `build_events.py` |
 | `flood_reports` | hand-curated local-news or government report tied to a flood | `build_events.py` |
 | `weather_stations` | GHCN-Daily station used for a county | `build_events.py` |
-| `weather_observations` | daily reading at a station (rain, max/min temperature, wind), 2000–2025 | `build_events.py` |
-| `data_sources` | dataset loaded into the database: publisher, URL, when it was downloaded, how many records | both build scripts |
+| `weather_observations` | daily reading at a station (rain, max/min temperature, wind), 1978–2025 | `build_events.py` |
+| `rainfall_station_years` | station and year: days with a rain reading, total, wettest day, days over 2 inches | `build_history.py` |
+| `nfip_claims` | NFIP flood-insurance claim in the four counties, 1978 on | `build_history.py` |
+| `nfip_policies_by_year` | county and year: NFIP policies in force, 2009 on | `build_history.py` |
+| `nws_flood_reports` | flood, flash flood, heavy rain or coastal flood report to NWS Brownsville, 2005 on | `build_history.py` |
+| `data_sources` | dataset loaded into the database: publisher, URL, when it was downloaded, how many records | every build script |
 | `live_signals` | current official alert, road condition or county notice | `run_*.py`, while the app runs |
 | `live_signal_runs`, `live_signal_tombstones` | bookkeeping for live-signal polls and expired signals | `run_*.py` |
 
@@ -42,9 +46,10 @@ sqlite3 data/generated/rgv-flood.sqlite3 "select id, publisher, retrieved_at, re
 | --- | --- |
 | NOAA Storm Events, NOAA GHCN-Daily | downloaded (`noaa.py`) |
 | Overture Maps bridges and dams | downloaded (`overture.py`) |
-| Hidalgo drainage district layers, FEMA NFIP claims, Census tracts | downloaded (`public_sources.py`) |
+| Hidalgo drainage district layers, FEMA NFIP claims, Census tracts and water lines, TWDB State Flood Plan, Harlingen and Brownsville drainage, NWS storm reports | downloaded (`public_sources.py`) |
 | FEMA NFHL, TWDB floodplain, Hidalgo 1981 FIRM, county boundaries | seed files in `data/seed/<county>/` |
 | Curated local flood reports | seed file `data/seed/hidalgo/public-reports.ndjson` |
+| NFIP policies per county and year | seed file `data/seed/nfip-policies-by-year.csv` (FEMA retired the source) |
 
 **Download cache.** Downloads are kept in the gitignored `tmp/` folder exactly
 as the publisher sent them, so a rebuild fetches only what is missing and works
@@ -72,6 +77,23 @@ are null, and `geometry_note` says why. Stations are listed in
 `noaa_stations.py`. Local reports exist for Hidalgo only; the other three
 counties have none because nobody has done that hand-curation pass yet.
 
+## `build_history.py` — claims, policies, reported flooding, gauge years
+
+```bash
+uv run python pipeline/build_history.py
+```
+
+Loads every NFIP claim FEMA publishes for the four counties, the yearly policy
+counts from the seed file, and the flood reports made to NWS Brownsville since
+2005 (from the Iowa Environmental Mesonet archive; a report NWS re-issued is
+kept once). Then works out each gauge's yearly totals from
+`weather_observations`, so it runs after `build_events.py`. The app's
+year-by-year page reads these tables; a gauge's year counts toward a year's
+rain only if it reported on at least 330 days.
+
+`seed_nfip_policies.py` regenerates the policy seed file from a saved copy of
+FEMA's retired v2 policies export; the build never runs it.
+
 ## `build_layers.py` — map layers
 
 ```bash
@@ -92,12 +114,19 @@ bounding box used to query Overture also covers a strip of Mexico.
 | `hidalgo-firm-1981` | Hidalgo County DD No. 1 digitized 1981 FIRM |
 | `twdb-cursory-1in100` / `-1in500` | TWDB 2025 cursory floodplain, all four |
 | `overture-bridges` / `overture-dams` | Overture Maps |
+| `waterways` | Census TIGER 2023 linear water: drains, canals, resacas and creeks, all four |
+| `flood-infrastructure` | TWDB State Flood Plan: dams, levees, sea walls, storm drains, ponds, low-water crossings |
+| `city-drainage` | Harlingen storm ditches, ponds and sewers; Brownsville drainage ditches |
 | `hcdd1-flood-extents`, `-flood-photos`, `-drainage`, `-bond-projects` | Hidalgo drainage district's published layers |
+| `flood-projects` | TWDB State Flood Plan: ongoing and recommended flood projects |
+| `nws-flood-reports` | the `nws_flood_reports` table, as points |
 | `nfip-claims-by-tract` | FEMA NFIP claims per census tract |
 
 The code is split by concern: `build_layers.py` (hazard and infrastructure
 builders, and the layer-id → builder table that drives `main()`),
-`evidence_layers.py` (drainage-district and insurance-claims layers), and
+`evidence_layers.py` (drainage-district and insurance-claims layers),
+`regional_layers.py` (the State Flood Plan, Census water, city drainage and NWS
+report layers, each labelled with the county holding it), and
 `layer_meta.py` (descriptions, limitations and links to each publisher's own
 map).
 

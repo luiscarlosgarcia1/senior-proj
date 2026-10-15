@@ -40,6 +40,17 @@ Notes:
 | Starr | 307 | 3,505 | 2,467 |
 | Willacy | 382 | 2,402 | 986 |
 
+## NFIP policies by year
+
+`nfip-policies-by-year.csv` (`county,year,policies`) counts the National Flood
+Insurance Program policies in force in each county and year, 2009 on, from
+FEMA's "FIMA NFIP Redacted Policies v2" dataset
+(<https://www.fema.gov/api/open/v2/FimaNfipPolicies>). A policy counts toward
+the year its term began. FEMA retired that dataset on 2026-10-15 and its
+replacement cannot be filtered by county, so the counts are kept here.
+`pipeline/seed_nfip_policies.py` regenerates the file from a saved copy of the
+export. 2026 is a partial year.
+
 ## Curated public reports
 
 `hidalgo/public-reports.ndjson` holds 16 local-news and local-government flood

@@ -41,6 +41,38 @@ export const OVERLAY = {
   pump: { radius: 4, color: "#ffffff", weight: 1, fillColor: "#be123c", fillOpacity: 1 },
 };
 
+// Drains, canals and creeks: blues, darkest for the lines built to carry
+// runoff away, dashed and lightest for natural creeks.
+export const WATERWAY = {
+  drain: { color: "#0f4c81", weight: 2.2 },
+  resaca: { color: "#2563eb", weight: 1.6 },
+  canal: { color: "#0891b2", weight: 1.4 },
+  canal_or_ditch: { color: "#64748b", weight: 1 },
+  creek: { color: "#60a5fa", weight: 1.2, dashArray: "4 3" },
+};
+
+// Flood works in the state flood plan. Ponds match the district's detention ponds.
+export const FLOOD_WORKS = {
+  dam: { radius: 5, color: "#ffffff", weight: 1, fillColor: "#92400e", fillOpacity: 1 },
+  low_water_crossing: { radius: 5, color: "#ffffff", weight: 1, fillColor: "#dc2626", fillOpacity: 1 },
+  levee: { color: "#78350f", weight: 3 },
+  sea_wall: { color: "#57534e", weight: 3 },
+  storm_drain: { color: "#334155", weight: 1.4 },
+  pond: OVERLAY.detention_pond,
+  other: { radius: 4, color: "#78716c", weight: 1.5, fillColor: "#a8a29e", fillOpacity: 0.35 },
+};
+
+export const PROJECT_STAGE_COLORS = { ongoing: "#ea580c", recommended: "#4f46e5" };
+
+export const CITY_DRAINAGE = {
+  storm_sewer: { color: "#475569", weight: 0.8 },
+  ditch: { color: "#1e3a8a", weight: 1.8 },
+  detention_pond: OVERLAY.detention_pond,
+};
+
+// Flood reports to the NWS, by what was reported.
+export const REPORT_COLORS = { flash_flood: "#1d4ed8", flood: "#0ea5e9", heavy_rain: "#64748b", coastal_flood: "#0f766e" };
+
 const BOND_STATUS_COLORS = {
   "Pre-design": "#94a3b8",
   Design: "#8b5cf6",
@@ -68,6 +100,18 @@ export function styleFor(feature) {
       const color = BOND_STATUS_COLORS[p.status] || BOND_STATUS_COLORS["Pre-design"];
       return { color, weight: 1.2, fillColor: color, fillOpacity: 0.35 };
     }
+    case "waterway":
+      return WATERWAY[p.kind] || WATERWAY.canal_or_ditch;
+    case "flood_infrastructure":
+      return FLOOD_WORKS[p.kind] || FLOOD_WORKS.other;
+    case "flood_project": {
+      const color = PROJECT_STAGE_COLORS[p.stage] || PROJECT_STAGE_COLORS.recommended;
+      return { color, weight: 1.2, fillColor: color, fillOpacity: 0.3 };
+    }
+    case "city_drainage":
+      return CITY_DRAINAGE[p.kind] || CITY_DRAINAGE.ditch;
+    case "storm_report":
+      return { radius: 4.5, color: "#ffffff", weight: 1, fillColor: REPORT_COLORS[p.kind] || REPORT_COLORS.flood, fillOpacity: 0.95 };
     case "claims": {
       const level = p.claims_class || 0;
       return { color: "#b08aa0", weight: 0.6, fillColor: CLAIMS_RAMP[level], fillOpacity: level ? 0.5 : 0 };
@@ -76,12 +120,9 @@ export function styleFor(feature) {
   return SEVERITY[p.relative_class] || SEVERITY.uncategorized;
 }
 
-/** Marker style for a point feature (photos, gates, pumps, point-shaped dams). */
+/** Marker style for a point feature: its style, sized as a dot. */
 export function pointStyleFor(feature) {
-  const p = feature.properties || {};
-  if (p.overlay_type === "flood_photo") return styleFor(feature);
-  if (p.overlay_type === "drainage") return OVERLAY[p.kind] || OVERLAY.gate;
-  return { radius: 5, ...(INFRA[p.infrastructure_type] || INFRA.bridge) };
+  return { radius: 5, ...styleFor(feature) };
 }
 
 // Legend rows for the layers that aren't covered by the static severity /
@@ -104,6 +145,36 @@ export const LEGENDS = {
     color,
     label: `Project: ${status.toLowerCase()}`,
   })),
+  waterways: [
+    { shape: "line", color: WATERWAY.drain.color, label: "Drain or floodway" },
+    { shape: "line", color: WATERWAY.resaca.color, label: "Resaca" },
+    { shape: "line", color: WATERWAY.canal.color, label: "Irrigation canal" },
+    { shape: "line", color: WATERWAY.canal_or_ditch.color, label: "Canal or ditch (unnamed)" },
+    { shape: "dash", color: WATERWAY.creek.color, label: "Creek or arroyo" },
+  ],
+  "flood-infrastructure": [
+    { shape: "dot", color: FLOOD_WORKS.dam.fillColor, label: "Dam" },
+    { shape: "dot", color: FLOOD_WORKS.low_water_crossing.fillColor, label: "Low-water crossing" },
+    { shape: "line", color: FLOOD_WORKS.levee.color, label: "Levee" },
+    { shape: "line", color: FLOOD_WORKS.sea_wall.color, label: "Sea wall" },
+    { shape: "line", color: FLOOD_WORKS.storm_drain.color, label: "Storm drain system" },
+    { shape: "square", color: FLOOD_WORKS.pond.fillColor, label: "Pond" },
+  ],
+  "city-drainage": [
+    { shape: "line", color: CITY_DRAINAGE.ditch.color, label: "Drainage ditch" },
+    { shape: "line", color: CITY_DRAINAGE.storm_sewer.color, label: "Storm sewer" },
+    { shape: "square", color: CITY_DRAINAGE.detention_pond.fillColor, label: "Detention pond" },
+  ],
+  "flood-projects": [
+    { shape: "square", color: PROJECT_STAGE_COLORS.ongoing, label: "Ongoing project" },
+    { shape: "square", color: PROJECT_STAGE_COLORS.recommended, label: "Recommended in the state plan" },
+  ],
+  "nws-flood-reports": [
+    { shape: "dot", color: REPORT_COLORS.flash_flood, label: "Flash flood report" },
+    { shape: "dot", color: REPORT_COLORS.flood, label: "Flood report" },
+    { shape: "dot", color: REPORT_COLORS.heavy_rain, label: "Heavy rain report" },
+    { shape: "dot", color: REPORT_COLORS.coastal_flood, label: "Coastal flood report" },
+  ],
   "nfip-claims-by-tract": [
     { ramp: CLAIMS_RAMP.slice(1), label: "Insurance claims per tract (fewer → more)" },
   ],

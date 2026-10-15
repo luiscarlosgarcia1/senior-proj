@@ -36,6 +36,7 @@ import geopandas as gpd
 import overture
 import pandas as pd
 import pyogrio
+import regional_layers
 from database import MapLayer, open_database, record_sources, replace_table
 from layer_meta import LAYER_META
 from net import NETWORK_ERRORS, fetched_at
@@ -175,10 +176,15 @@ BUILDERS = {
     "twdb-cursory-1in500": lambda: build_twdb("1in500", "0.2% annual chance"),
     "overture-bridges": lambda: build_overture_infrastructure("bridge"),
     "overture-dams": lambda: build_overture_infrastructure("dam"),
+    "waterways": regional_layers.build_waterways,
+    "flood-infrastructure": regional_layers.build_flood_infrastructure,
+    "city-drainage": regional_layers.build_city_drainage,
     "hcdd1-flood-extents": evidence_layers.build_hcdd1_flood_extents,
     "hcdd1-flood-photos": evidence_layers.build_hcdd1_flood_photos,
     "hcdd1-drainage": evidence_layers.build_hcdd1_drainage,
     "hcdd1-bond-projects": evidence_layers.build_hcdd1_bond_projects,
+    "flood-projects": regional_layers.build_flood_projects,
+    "nws-flood-reports": regional_layers.build_nws_flood_reports,
     "nfip-claims-by-tract": evidence_layers.build_nfip_claims_by_tract,
 }
 
@@ -210,6 +216,11 @@ DOWNLOADED_INTO = {
     "hcdd1-drainage": ("hcdd1",),
     "hcdd1-bond-projects": ("hcdd1",),
     "nfip-claims-by-tract": ("nfip", "tracts"),
+    "waterways": ("tiger",),
+    "flood-infrastructure": ("twdb",),
+    "flood-projects": ("twdb",),
+    "city-drainage": ("cities",),
+    "nws-flood-reports": ("nws",),
 }
 
 

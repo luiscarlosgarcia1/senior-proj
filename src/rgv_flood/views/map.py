@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+from datetime import UTC, datetime
 
 from flask import Blueprint, Response, abort, jsonify, render_template, request
 
@@ -125,6 +126,23 @@ def rainfall_partial():
     county_slug, county = _county_arg()
     return render_template(
         "partials/rainfall.html", days=data_access.rainfall_records(county_slug), county=county
+    )
+
+
+@bp.get("/analysis")
+def analysis():
+    """Flood-insurance claims beside rainfall, year by year. The data for all
+    four counties and each one is embedded, so switching county needs no request."""
+    last_year = datetime.now(UTC).year - 1  # the current year isn't over
+    histories = {"all": data_access.history_by_year(None, last_year)}
+    histories |= {slug: data_access.history_by_year(slug, last_year) for slug in COUNTIES}
+    return render_template(
+        "analysis.html",
+        counties=COUNTIES,
+        histories=histories,
+        first_year=data_access.HISTORY_FIRST_YEAR,
+        last_year=last_year,
+        complete_days=data_access.COMPLETE_GAUGE_DAYS,
     )
 
 

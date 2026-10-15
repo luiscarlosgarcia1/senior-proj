@@ -7,8 +7,9 @@ Sergei Chuprov.
 
 A browser map for comparing flood-hazard information across Cameron, Hidalgo,
 Starr, and Willacy counties. Includes hazard layers, at-risk infrastructure
-(bridges, dams), documented flood events, rainfall, local reports, official
-live signals, and address search.
+(bridges, dams), drainage and flood-control works, documented flood events,
+rainfall, local reports, official live signals, and address search, plus a page
+that sets flood-insurance claims beside rainfall year by year since 1978.
 
 Educational and comparative only. Not for emergency routing, engineering,
 insurance, flood-depth estimates, or flood-zone certification. Follow official
@@ -25,6 +26,21 @@ emergency guidance.
   it to see the drainage district's picture taken at that spot (it loads from
   the district's own server). A grey dot is a photo location: a crew took a
   photo there, but the district has not published the image.
+- **Drainage and flood works in every county.** Drains, canals, resacas and
+  creeks (Census) and the dams, levees, ponds, storm drains and low-water
+  crossings in the State Flood Plan (TWDB) cover all four counties, as do the
+  plan's ongoing and recommended flood projects. Harlingen and Brownsville add
+  their own storm ditches, ponds and sewers. Hidalgo's drainage district layers
+  (photos, mapped flooding, its own network) have no published counterpart in
+  the other three counties.
+- **Reported flooding.** Flood, flash flood, heavy rain and coastal flood
+  reports made to the National Weather Service in Brownsville since 2005, each
+  with the time, place and what was seen.
+- **Claims and rainfall by year.** The link in the header opens a page of
+  yearly charts for the four counties or any one: flood-insurance claims (or
+  dollars paid, or claims per 1,000 policies), the year's rain and its wettest
+  day, with the storm FEMA named for each busy year and a table of every year.
+  Claims follow the wettest day of a year more closely than its total rain.
 - **County.** The county selector moves the map and narrows the events,
   rainfall records, reports and live signals to that county.
 - **Sharing a view.** The page address keeps track of the county, the layers
@@ -56,7 +72,8 @@ Open <http://127.0.0.1:5000>.
 
 `build_all.py` is the one build command. It pulls every source into memory and
 writes it to a single SQLite database, `data/generated/rgv-flood.sqlite3`: map
-layers, flood events, local reports, weather records and live signals. The app
+layers, flood events, local reports, weather records, insurance claims and
+live signals. The app
 reads only that database, never data files. Re-run the build after changing
 pipeline inputs or rules; it is safe to run while the app is up. The first run
 downloads about 400 MB into the `tmp/` cache, and later runs reuse it. See
@@ -70,8 +87,9 @@ Flask refreshes official live signals at startup and every 15 minutes. Set
 
 - `uv` errors: run `uv sync --group dev --group pipeline` again.
 - Map has no layers or events: run `build_all.py` (it builds `data/generated/rgv-flood.sqlite3`).
-- Build fails on a download: confirm network access to NOAA, Overture, FEMA, the Census Bureau and
-  the Hidalgo drainage district, then re-run; finished downloads are kept in `tmp/`.
+- Build fails on a download: confirm network access to NOAA, Overture, FEMA, TWDB, the Census Bureau,
+  Iowa Environmental Mesonet, the cities' ArcGIS services and the Hidalgo drainage district, then re-run;
+  finished downloads are kept in `tmp/`.
 - A layer is missing after a build: its publisher was unreachable. The build says which; re-run it.
 - Live signals unavailable: source outages are logged; the app remains usable.
 
@@ -82,16 +100,19 @@ Everything lives in one SQLite file, `data/generated/rgv-flood.sqlite3`:
 | Table | Holds |
 | --- | --- |
 | `layers` | Every map layer: its description and the GeoJSON the map draws |
-| `flood_events` | Flood-type events from NOAA's Storm Events Database, 2000–2025 |
+| `flood_events` | Flood-type events from NOAA's Storm Events Database, 1996–2025 |
 | `flood_reports` | Hand-curated local-news and government flood reports |
-| `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily readings, 2000–2025 |
+| `nws_flood_reports` | Flooding reported to the National Weather Service in Brownsville, 2005 on |
+| `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily readings, 1978–2025 |
+| `rainfall_station_years` | Each gauge's yearly rain, wettest day and days reported |
+| `nfip_claims`, `nfip_policies_by_year` | Every NFIP flood-insurance claim since 1978; policies per county and year since 2009 |
 | `data_sources` | Where each dataset came from and when it was downloaded |
 | `live_signals` | Current official alerts, road conditions and notices, refreshed while the app runs |
 
 The build scripts download from the publishers, hold the data in memory and
 write these tables. The only data files in the repository are the seed files in
-`data/seed/`: flood-hazard geometry and curated reports that no publisher offers
-as a scripted download. Set `RGV_DATABASE` to point the app at a database
+`data/seed/`: flood-hazard geometry, curated reports and yearly NFIP policy
+counts that no publisher offers as a scripted download. Set `RGV_DATABASE` to point the app at a database
 somewhere else, which is all a deployment needs alongside the code.
 
 `pipeline/fetch_ml_inputs.py` is separate from the app: it gathers the public
@@ -194,7 +215,7 @@ publishing this project outside the course.
 | `src/rgv_flood/` | The Flask app: `views/`, `data_access.py` (every database query), templates, and the map's ES modules in `static/js/` | yes |
 | `pipeline/` | The build scripts and the live-signal pollers; see [pipeline/README.md](pipeline/README.md) | yes |
 | `tests/` | Tests for the app and the pipeline | yes |
-| `data/seed/` | Seed files: FEMA, TWDB and county-boundary GeoJSON and Hidalgo's 16 curated reports. The only data in the repository; see [data/seed/README.md](data/seed/README.md) | yes |
+| `data/seed/` | Seed files: FEMA, TWDB and county-boundary GeoJSON, Hidalgo's 16 curated reports and NFIP policies by year. The only data in the repository; see [data/seed/README.md](data/seed/README.md) | yes |
 | `data/generated/` | The database, `rgv-flood.sqlite3` | no |
 | `tmp/` | Download cache: publishers' files as downloaded, so a rebuild does not fetch them again. Safe to delete | no |
 | `data/ml/raw/` | Downloads from `fetch_ml_inputs.py` for the planned model | no |
@@ -215,9 +236,12 @@ conditions.
 ## Sources, Contributing, License, and Acknowledgments
 
 Source coverage is documented in the data and pipeline artifacts. Hazard data
-comes from FEMA, Hidalgo County Drainage District No. 1, and TWDB; boundaries
-from Census TIGER/Line; events and weather from NOAA; bridges and dams from
-Overture Maps Foundation; live signals from NWS, TxDOT, and Hidalgo County.
+comes from FEMA, Hidalgo County Drainage District No. 1, and TWDB; drainage and
+flood works from TWDB's State Flood Plan, Census TIGER/Line and the cities of
+Harlingen and Brownsville; boundaries from Census TIGER/Line; events and weather
+from NOAA; reported flooding from NWS (archived by Iowa Environmental Mesonet);
+insurance claims and policies from OpenFEMA; bridges and dams from Overture Maps
+Foundation; live signals from NWS, TxDOT, and Hidalgo County.
 Local reports currently cover Hidalgo County only.
 
 Contributions should preserve source attribution, include focused tests, and

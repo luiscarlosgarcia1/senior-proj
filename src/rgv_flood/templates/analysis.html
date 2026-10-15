@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Claims and rainfall by year · RGV Flood Impact Visualizer{% endblock %}
+
+{% block content %}
+<div class="analysis-page">
+  <header class="topbar">
+    <a class="brand brand-link" href="{{ url_for('map.index') }}">RGV Flood Impact Visualizer</a>
+    <nav class="topbar-controls">
+      <a class="nav-link" href="{{ url_for('map.index') }}">&larr; Back to the map</a>
+    </nav>
+  </header>
+
+  <main class="analysis">
+    <div class="analysis-intro">
+      <h1>Flood-insurance claims and rainfall, year by year</h1>
+      <p>
+        Every flood-insurance claim FEMA has published for the four counties, set beside each year's
+        rain at NOAA's long-running gauges, {{ first_year }} to {{ last_year }}. Hover a year to see
+        everything recorded for it; the table below lists every year.
+      </p>
+    </div>
+
+    {# Filters: one row, above everything they scope. #}
+    <form class="analysis-filters" id="analysis-filters">
+      <label class="filter">
+        <span class="filter-label">County</span>
+        <select name="county">
+          <option value="all">All four counties</option>
+          {% for slug, county in counties.items() %}
+          <option value="{{ slug }}">{{ county.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <fieldset class="filter filter-segmented">
+        <legend class="filter-label">Claims shown as</legend>
+        <label><input type="radio" name="metric" value="claims" checked> Number of claims</label>
+        <label><input type="radio" name="metric" value="paid"> Dollars paid</label>
+        <label><input type="radio" name="metric" value="rate"> Per 1,000 policies</label>
+      </fieldset>
+    </form>
+
+    <section class="stat-row" id="stat-row" aria-live="polite"></section>
+
+    <section class="chart-card" aria-labelledby="claims-title">
+      <h2 id="claims-title" class="chart-title"></h2>
+      <p class="chart-note" id="claims-note"></p>
+      <div class="chart" id="claims-chart"></div>
+    </section>
+
+    <section class="chart-card" aria-labelledby="rain-title">
+      <h2 id="rain-title" class="chart-title">Rain over the year (inches)</h2>
+      <p class="chart-note">
+        Average of the gauges that reported on at least {{ complete_days }} days that year, so missing days
+        aren't counted as dry ones. A gap means no gauge in the county kept a full year.
+      </p>
+      <div class="chart" id="rain-chart"></div>
+    </section>
+
+    <section class="chart-card" aria-labelledby="wettest-title">
+      <h2 id="wettest-title" class="chart-title">Wettest single day (inches)</h2>
+      <p class="chart-note">The most rain any of those gauges caught in one day that year.</p>
+      <div class="chart" id="wettest-chart"></div>
+    </section>
+
+    <section class="chart-card" aria-labelledby="table-title">
+      <h2 id="table-title" class="chart-title">Every year</h2>
+      <div class="table-scroll">
+        <table class="history-table" id="history-table">
+          <thead>
+            <tr>
+              <th scope="col">Year</th>
+              <th scope="col">Claims</th>
+              <th scope="col">Paid</th>
+              <th scope="col">Policies</th>
+              <th scope="col">Claims per 1,000 policies</th>
+              <th scope="col">Rain (in)</th>
+              <th scope="col">Wettest day (in)</th>
+              <th scope="col">NOAA flood events</th>
+              <th scope="col">NWS flood reports</th>
+              <th scope="col">Flood FEMA named</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="chart-note">
+        Policies are counted from 2009, NOAA flood events from 1996 and NWS flood reports from 2005: blank
+        cells are years before a record began. Claims are counted in the year of the loss; payments on a
+        claim can come years later. Dollars are as paid, not adjusted for inflation.
+      </p>
+    </section>
+
+    <p class="sources-line">
+      Sources: FEMA OpenFEMA (NFIP claims and policies), NOAA NCEI (GHCN-Daily, Storm Events Database),
+      National Weather Service Brownsville Local Storm Reports. Educational and comparative only.
+    </p>
+  </main>
+
+  <div class="viz-tooltip" id="viz-tooltip" role="status" hidden></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="history-data">{{ histories | tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/analysis.js') }}"></script>
+{% endblock %}

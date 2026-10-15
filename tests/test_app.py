@@ -472,3 +472,86 @@ def test_layer_geojson_is_served_as_built_and_revalidates(client):
     repeat = client.get("/api/layers/demo.geojson", headers={"If-None-Match": response.headers["ETag"]})
     assert repeat.status_code == 304
     assert client.get("/api/layers/missing.geojson").status_code == 404
+
+
+def _claim(claim_id: str, county: str, date: str, paid: float, flood_event: str | None = None) -> dict:
+    return {
+        "id": claim_id, "county": county, "date_of_loss": date, "year_of_loss": int(date[:4]),
+        "flood_event": flood_event, "cause_of_damage": None, "paid_building": paid, "paid_contents": 0.0,
+        "paid_increased_cost_of_compliance": 0.0, "building_damage": None, "contents_damage": None,
+        "rated_flood_zone": None, "occupancy_type": None, "census_tract": None, "lon": None, "lat": None,
+    }
+
+
+def _gauge_year(station_id: str, year: int, days: int, total: float, wettest: float) -> dict:
+    return {"station_id": station_id, "year": year, "days_reported": days, "total_tenths_mm": total,
+            "wettest_day_tenths_mm": wettest, "days_over_2_inches": 0}
+
+
+@pytest.fixture()
+def history_client(client):
+    with open_database(client.application.config["DATABASE"]) as connection:
+        replace_table(connection, "nfip_claims", [
+            _claim("a", "hidalgo", "2020-07-26", 1000, "Hurricane Hanna"),
+            _claim("b", "hidalgo", "2020-07-27", 500, "Hurricane Hanna"),
+            _claim("c", "starr", "2020-09-01", 250),
+            _claim("d", "hidalgo", "2018-06-20", 100),
+        ])
+        replace_table(connection, "nfip_policies_by_year", [
+            {"county": "hidalgo", "year": 2020, "policies": 1000},
+            {"county": "starr", "year": 2020, "policies": 1000},
+        ])
+        replace_table(connection, "rainfall_station_years", [
+            _gauge_year(WESLACO, 2020, 365, 2540, 1270),  # 10 in; wettest day 5 in
+            _gauge_year(MCALLEN, 2020, 360, 5080, 254),  # 20 in
+            _gauge_year(MCALLEN, 2018, 200, 99999, 9999),  # too many days missing to count
+        ])
+    return client
+
+
+def test_history_counts_claims_and_rain_year_by_year(history_client):
+    with history_client.application.app_context():
+        from rgv_flood import data_access
+
+        history = data_access.history_by_year("hidalgo", 2020)
+
+    by_year = {y["year"]: y for y in history["years"]}
+    assert history["years"][0]["year"] == data_access.HISTORY_FIRST_YEAR
+    hanna = by_year[2020]
+    assert (hanna["claims"], hanna["paid"], hanna["flood_event"], hanna["busiest_month"]) == (2, 1500, "Hurricane Hanna", 7)
+    assert hanna["claims_per_1000_policies"] == 2.0
+    assert hanna["rain_inches"] == 15.0  # the average of the two complete gauges
+    assert hanna["wettest_day_inches"] == 5.0
+    assert hanna["noaa_flood_events"] == 1  # the 2020-07-25 flash flood
+    assert by_year[2018]["rain_inches"] is None  # the only gauge missed too many days
+    assert by_year[2018]["noaa_flood_events"] == 1
+    assert by_year[1990]["noaa_flood_events"] is None  # before NOAA's flood records
+    assert history["totals"] == {
+        "claims": 3, "paid": 1600, "worst_year": 2020, "worst_year_claims": 2, "worst_year_event": "Hurricane Hanna",
+    }
+
+
+def test_rank_correlation():
+    from rgv_flood.data_access import rank_correlation
+
+    assert rank_correlation([1, 2, 3, 4], [10, 20, 30, 1000]) == 1.0  # one extreme year doesn't matter
+    assert rank_correlation([1, 2, 3], [3, 2, 1]) == -1.0
+    assert rank_correlation([1, 2], [1, 2]) is None  # too few years
+    assert rank_correlation([1, 2, 3], [5, 5, 5]) is None  # nothing varies
+
+
+def test_analysis_page_embeds_every_countys_history(history_client):
+    html = history_client.get("/analysis").get_data(as_text=True)
+
+    assert "Hurricane Hanna" in html
+    histories = json.loads(html.split('id="history-data">')[1].split("</script>")[0])
+    assert set(histories) == {"all", "cameron", "hidalgo", "starr", "willacy"}
+    assert histories["all"]["totals"]["claims"] == 4
+    assert histories["starr"]["totals"]["claims"] == 1
+    assert b"Claims &amp; rainfall by year" in history_client.get("/").data
+
+
+def test_analysis_page_before_the_database_is_built(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE": tmp_path / "none.sqlite3", "LIVE_SIGNALS_SCHEDULER_ENABLED": False})
+
+    assert app.test_client().get("/analysis").status_code == 200

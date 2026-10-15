@@ -1,9 +1,10 @@
-"""Public datasets that more than one script downloads: the Hidalgo drainage
-district's ArcGIS layers, FEMA's NFIP claims, and Census tracts.
+"""Public datasets the build downloads: ArcGIS layers from the Hidalgo drainage
+district, the state flood plan and two cities; FEMA's NFIP claims; Census
+tracts and water lines; and the National Weather Service's storm reports.
 
 Each function returns data that is downloaded once and kept in a cache folder
-exactly as the publisher sent it. The map build (`evidence_layers.py`) uses the
-default cache under `tmp/`; `fetch_ml_inputs.py` passes its own folder.
+exactly as the publisher sent it. The map build uses the default cache under
+`tmp/`; `fetch_ml_inputs.py` passes its own folder for the layers it shares.
 """
 
 from __future__ import annotations
@@ -11,13 +12,48 @@ from __future__ import annotations
 import json
 import shutil
 import urllib.parse
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from jsonio import feature_collection
 from net import already_have, download, get_json
 from paths import DOWNLOAD_CACHE
 
-from rgv_flood.counties import COUNTIES
+from rgv_flood.counties import COUNTIES, RGV_BBOX
+
+# ---- ArcGIS feature layers ----------------------------------------------------
+
+
+def fetch_arcgis_features(layer_url: str, *, where: str = "1=1", in_rgv: bool = False) -> list[dict]:
+    """Every feature of one ArcGIS layer as GeoJSON, paged because servers cap
+    how many features one response may carry. `in_rgv` asks the server for only
+    the features touching the four-county bounding box."""
+    params = {"where": where, "outFields": "*", "outSR": "4326", "f": "geojson", "resultRecordCount": 1000}
+    if in_rgv:
+        params |= {
+            "geometry": ",".join(map(str, RGV_BBOX)),
+            "geometryType": "esriGeometryEnvelope",
+            "inSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects",
+        }
+    features: list[dict] = []
+    while True:
+        page = get_json(f"{layer_url}/query?{urllib.parse.urlencode(params | {'resultOffset': len(features)})}", timeout=120)
+        if not page.get("features"):
+            return features
+        features += page["features"]
+
+
+def _cached_features(cached: Path, fetch: Callable[[], list[dict]], *, force: bool = False) -> list[dict]:
+    """Features fetched once and then read back from `cached`."""
+    if already_have(cached, force=force):
+        return json.loads(cached.read_text(encoding="utf-8"))["features"]
+    features = fetch()
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_text(json.dumps(feature_collection(features)), encoding="utf-8")
+    print(f"  [ok]   {cached.stem}: {len(features)} features", flush=True)
+    return features
 
 # ---- Hidalgo County Drainage District No. 1 ---------------------------------
 
@@ -73,26 +109,6 @@ HCDD1_LAYERS = {
 }
 
 
-def _fetch_arcgis_layer(service: str, layer: int) -> list[dict]:
-    """Every feature of one ArcGIS layer as GeoJSON, paged because servers cap
-    how many features one response may carry."""
-    base = f"{HCDD1_BASE}/{service}/FeatureServer/{layer}/query"
-    features: list[dict] = []
-    while True:
-        params = {
-            "where": "1=1",
-            "outFields": "*",
-            "outSR": "4326",
-            "f": "geojson",
-            "resultOffset": len(features),
-            "resultRecordCount": 1000,
-        }
-        page = get_json(f"{base}?{urllib.parse.urlencode(params)}", timeout=120)["features"]
-        if not page:
-            return features
-        features += page
-
-
 def hcdd1_layer_url(name: str) -> str:
     service, layer = HCDD1_LAYERS[name]
     return f"{HCDD1_BASE}/{service}/FeatureServer/{layer}"
@@ -100,14 +116,7 @@ def hcdd1_layer_url(name: str) -> str:
 
 def hcdd1_layer(name: str, cache_dir: Path = DOWNLOAD_CACHE / "hcdd1", *, force: bool = False) -> list[dict]:
     """The GeoJSON features of one drainage-district layer (a key of HCDD1_LAYERS)."""
-    cached = cache_dir / f"{name}.geojson"
-    if not already_have(cached, force=force):
-        features = _fetch_arcgis_layer(*HCDD1_LAYERS[name])
-        cached.parent.mkdir(parents=True, exist_ok=True)
-        cached.write_text(json.dumps(feature_collection(features)), encoding="utf-8")
-        print(f"  [ok]   {name}: {len(features)} features", flush=True)
-        return features
-    return json.loads(cached.read_text(encoding="utf-8"))["features"]
+    return _cached_features(cache_dir / f"{name}.geojson", lambda: fetch_arcgis_features(hcdd1_layer_url(name)), force=force)
 
 
 def _fetch_attachment_groups(layer_url: str) -> list[dict]:
@@ -146,6 +155,71 @@ def hcdd1_image_urls(name: str, cache_dir: Path = DOWNLOAD_CACHE / "hcdd1", *, f
         if images:
             urls[group["parentObjectId"]] = f"{layer_url}/{group['parentObjectId']}/attachments/{images[0]['id']}"
     return urls
+
+
+# ---- Texas Water Development Board: the 2024 State Flood Plan ---------------
+
+TWDB_FLOOD_PLAN = "https://gis2.twdb.texas.gov/server/rest/services/OOP_FP_SFPV/Data_Download/FeatureServer"
+
+# Our name -> (layer id, which features to ask for). The plan maps wetlands as
+# "infrastructure" too, by the thousand; they are natural features, not flood
+# works, so they are never downloaded.
+TWDB_LAYERS = {
+    "infrastructure_points": (9, "1=1"),
+    "infrastructure_lines": (7, "1=1"),
+    "infrastructure_polygons": (8, "INFRA_TYPE <> 'Wetland'"),
+    "ongoing_projects": (10, "1=1"),
+    "recommended_projects": (12, "1=1"),
+}
+
+
+def twdb_flood_plan_layer(name: str, cache_dir: Path = DOWNLOAD_CACHE / "twdb", *, force: bool = False) -> list[dict]:
+    """One State Flood Plan layer's features around the four counties."""
+    layer, where = TWDB_LAYERS[name]
+
+    def fetch() -> list[dict]:
+        return fetch_arcgis_features(f"{TWDB_FLOOD_PLAN}/{layer}", where=where, in_rgv=True)
+
+    return _cached_features(cache_dir / f"{name}.geojson", fetch, force=force)
+
+
+# ---- City storm drainage (Cameron County) ----------------------------------
+
+HARLINGEN_STORM_DRAIN = "https://services3.arcgis.com/gSCPzHZGMdbiljnH/arcgis/rest/services/Storm_Drain/FeatureServer"
+BROWNSVILLE_DRAINAGE = "https://services2.arcgis.com/6oaLMZEZlktbQpyi/arcgis/rest/services/Drainage_Ownership/FeatureServer"
+CITY_DRAINAGE_LAYERS = {
+    "harlingen_ditches": f"{HARLINGEN_STORM_DRAIN}/6",
+    "harlingen_detention_ponds": f"{HARLINGEN_STORM_DRAIN}/9",
+    "harlingen_storm_sewers": f"{HARLINGEN_STORM_DRAIN}/7",
+    "brownsville_ditches": f"{BROWNSVILLE_DRAINAGE}/1",
+}
+
+
+def city_drainage_layer(name: str, cache_dir: Path = DOWNLOAD_CACHE / "cities", *, force: bool = False) -> list[dict]:
+    """One of the cities' published drainage layers (a key of CITY_DRAINAGE_LAYERS)."""
+    return _cached_features(
+        cache_dir / f"{name}.geojson", lambda: fetch_arcgis_features(CITY_DRAINAGE_LAYERS[name]), force=force
+    )
+
+
+# ---- National Weather Service storm reports -------------------------------
+
+# Iowa Environmental Mesonet keeps the full archive of NWS Local Storm Reports.
+# NWS Brownsville (BRO) covers all four counties; its online archive starts in 2005.
+IEM_STORM_REPORTS = "https://mesonet.agron.iastate.edu/geojson/lsr.php"
+STORM_REPORTS_SINCE = "2005-01-01"
+STORM_REPORTS_FILE = DOWNLOAD_CACHE / "nws" / "local-storm-reports-bro.geojson"
+
+
+def nws_storm_reports(cached: Path = STORM_REPORTS_FILE, *, force: bool = False) -> list[dict]:
+    """Every Local Storm Report NWS Brownsville has issued, as GeoJSON features.
+    (Hail, wind and the rest included; the caller keeps the kinds it wants.)"""
+    def fetch() -> list[dict]:
+        until = datetime.now(UTC).strftime("%Y-%m-%dT%H:%MZ")
+        params = {"wfos": "BRO", "sts": f"{STORM_REPORTS_SINCE}T00:00Z", "ets": until}
+        return get_json(f"{IEM_STORM_REPORTS}?{urllib.parse.urlencode(params)}", timeout=180, attempts=3)["features"]
+
+    return _cached_features(cached, fetch, force=force)
 
 
 # ---- OpenFEMA ---------------------------------------------------------------
@@ -205,4 +279,13 @@ def census_tracts(vintage: int, cache_dir: Path = DOWNLOAD_CACHE / "tracts", *, 
     url = TRACT_FILES[vintage]
     cached = cache_dir / url.rsplit("/", 1)[-1]
     download(url, cached, force=force)
+    return cached
+
+
+def census_water_lines(slug: str, cache_dir: Path = DOWNLOAD_CACHE / "tiger", *, force: bool = False) -> Path:
+    """The Census TIGER 2023 linear-water shapefile (zipped) for one county:
+    canals, ditches, drains, creeks and rivers."""
+    name = f"tl_2023_{COUNTIES[slug]['fips']}_linearwater.zip"
+    cached = cache_dir / name
+    download(f"https://www2.census.gov/geo/tiger/TIGER2023/LINEARWATER/{name}", cached, force=force)
     return cached

@@ -310,3 +310,123 @@ def active_official_signals(county_slug: str | None = None) -> list[dict]:
         if county_slug is None or county_slug in row["county_slugs"]:
             signals.append(row)
     return signals
+
+
+# ---- year by year: claims beside rainfall ----
+
+# Claims start in 1978; so does every county's long rain record. The current
+# year is left out until it is over.
+HISTORY_FIRST_YEAR = 1978
+# A gauge's year counts toward yearly rainfall only if it reported rain on at
+# least this many days; otherwise missing days would read as dry ones.
+COMPLETE_GAUGE_DAYS = 330
+
+
+def _by_year(query: str, county_slug: str | None, county_column: str = "county") -> dict[int, dict]:
+    """Rows of a per-year query, keyed by year, optionally for one county."""
+    where = f" and {county_column} = :county" if county_slug else ""
+    rows = _app_rows(query.format(where=where), {"county": county_slug, "first": HISTORY_FIRST_YEAR})
+    return {row.pop("year"): row for row in rows}
+
+
+def _ranks(values: list[float]) -> list[float]:
+    """Ranks from 1, ties sharing the average of the ranks they span."""
+    order = sorted(range(len(values)), key=values.__getitem__)
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        for k in range(i, j + 1):
+            ranks[order[k]] = (i + j) / 2 + 1
+        i = j + 1
+    return ranks
+
+
+def rank_correlation(xs: list[float], ys: list[float]) -> float | None:
+    """Spearman's rank correlation: how closely two series rise and fall
+    together, from -1 to 1, without letting one extreme year dominate."""
+    if len(xs) < 3:
+        return None
+    rx, ry = _ranks(xs), _ranks(ys)
+    mean = (len(xs) + 1) / 2
+    covariance = sum((a - mean) * (b - mean) for a, b in zip(rx, ry, strict=True))
+    spread = (sum((a - mean) ** 2 for a in rx) * sum((b - mean) ** 2 for b in ry)) ** 0.5
+    return round(covariance / spread, 2) if spread else None
+
+
+def history_by_year(county_slug: str | None, last_year: int) -> dict:
+    """Every year from 1978 to `last_year`: flood-insurance claims and what they
+    paid, policies in force, the year's rain, its wettest day, and how many
+    flood events and flood reports were recorded."""
+    claims = _by_year(
+        """select year_of_loss as year, count(*) as claims,
+                  sum(paid_building + paid_contents + paid_increased_cost_of_compliance) as paid
+           from nfip_claims where year_of_loss >= :first{where} group by year_of_loss""",
+        county_slug,
+    )
+    named = _by_year(
+        """select year_of_loss as year, flood_event, count(*) as n from nfip_claims
+           where year_of_loss >= :first and flood_event is not null{where}
+           group by year_of_loss, flood_event order by n""",  # the last row per year wins: the biggest
+        county_slug,
+    )
+    busiest_month = _by_year(
+        """select year_of_loss as year, substr(date_of_loss, 6, 2) as month, count(*) as n from nfip_claims
+           where year_of_loss >= :first and date_of_loss is not null{where}
+           group by year_of_loss, month order by n""",  # the last row per year wins: the busiest
+        county_slug,
+    )
+    policies = _by_year("select year, sum(policies) as policies from nfip_policies_by_year where 1=1{where} group by year", county_slug)
+    rain = _by_year(
+        f"""select r.year,
+                   avg(case when r.days_reported >= {COMPLETE_GAUGE_DAYS} then r.total_tenths_mm end) as total_tenths_mm,
+                   sum(r.days_reported >= {COMPLETE_GAUGE_DAYS}) as complete_gauges,
+                   max(case when r.days_reported >= {COMPLETE_GAUGE_DAYS} then r.wettest_day_tenths_mm end)
+                       as wettest_tenths_mm
+            from rainfall_station_years r join weather_stations s using (station_id)
+            where r.year >= :first{{where}} group by r.year""",
+        county_slug,
+        county_column="s.county",
+    )
+    events = _by_year("select cast(substr(date, 1, 4) as integer) as year, count(*) as n from flood_events where 1=1{where} group by year", county_slug)
+    reports = _by_year("select cast(substr(reported_at, 1, 4) as integer) as year, count(*) as n from nws_flood_reports where 1=1{where} group by year", county_slug)
+
+    years = []
+    for year in range(HISTORY_FIRST_YEAR, last_year + 1):
+        c, p, r = claims.get(year, {}), policies.get(year), rain.get(year, {})
+        count = c.get("claims", 0)
+        annual = r.get("total_tenths_mm") if r.get("complete_gauges") else None
+        years.append({
+            "year": year,
+            "claims": count,
+            "paid": round(c.get("paid") or 0),
+            "flood_event": (named.get(year) or {}).get("flood_event"),
+            "busiest_month": int(busiest_month[year]["month"]) if count and year in busiest_month else None,
+            "policies": p["policies"] if p else None,
+            "claims_per_1000_policies": round(1000 * count / p["policies"], 1) if p and p["policies"] else None,
+            "rain_inches": round(annual / 254, 1) if annual is not None else None,
+            "complete_gauges": r.get("complete_gauges") or 0,
+            "wettest_day_inches": round(r["wettest_tenths_mm"] / 254, 2) if r.get("wettest_tenths_mm") else None,
+            "noaa_flood_events": events.get(year, {}).get("n", 0) if year >= 1996 else None,
+            "nws_flood_reports": reports.get(year, {}).get("n", 0) if year >= 2005 else None,
+        })
+
+    with_rain = [y for y in years if y["rain_inches"] is not None and y["wettest_day_inches"] is not None]
+    worst = max(years, key=lambda y: y["claims"])
+    return {
+        "years": years,
+        "totals": {
+            "claims": sum(y["claims"] for y in years),
+            "paid": sum(y["paid"] for y in years),
+            "worst_year": worst["year"] if worst["claims"] else None,
+            "worst_year_claims": worst["claims"],
+            "worst_year_event": worst["flood_event"],
+        },
+        "correlation": {
+            "years": len(with_rain),
+            "with_annual_rain": rank_correlation([y["claims"] for y in with_rain], [y["rain_inches"] for y in with_rain]),
+            "with_wettest_day": rank_correlation([y["claims"] for y in with_rain], [y["wettest_day_inches"] for y in with_rain]),
+        },
+    }

@@ -29,7 +29,98 @@ function yearRange(start, end) {
   return start ? `started ${start}` : "";
 }
 
+const TWDB = "Texas Water Development Board, 2024 State Flood Plan";
+const dollars = (n) => `$${Math.round(n).toLocaleString()}`;
+
+const WATERWAY_KINDS = {
+  drain: "Drain or floodway",
+  resaca: "Resaca",
+  canal: "Irrigation canal",
+  canal_or_ditch: "Canal or ditch",
+  creek: "Creek or arroyo",
+};
+const FLOOD_WORK_KINDS = {
+  dam: "Dam",
+  levee: "Levee",
+  sea_wall: "Sea wall",
+  storm_drain: "Storm drain system",
+  pond: "Pond",
+  low_water_crossing: "Low-water crossing",
+  other: "Flood infrastructure",
+};
+const CITY_DRAINAGE_KINDS = { ditch: "Drainage ditch", storm_sewer: "Storm sewer", detention_pond: "Detention pond" };
+const REPORT_KINDS = {
+  flash_flood: "Flash flood",
+  flood: "Flood",
+  heavy_rain: "Heavy rain",
+  coastal_flood: "Coastal flood",
+};
+
+/** A UTC timestamp as the time it was in the valley. */
+function valleyTime(iso) {
+  return new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", dateStyle: "medium", timeStyle: "short" });
+}
+
+function floodProjectFacts(p) {
+  if (p.stage === "ongoing") {
+    return [p.cost ? `Cost ${dollars(p.cost)}` : "", p.funding ? `funded by ${esc(p.funding)}` : "", p.year ? `due ${esc(p.year)}` : ""];
+  }
+  const buildings =
+    p.structures_at_risk != null
+      ? `Buildings in the 100-year floodplain: ${p.structures_at_risk.toLocaleString()} now, ` +
+        `${(p.structures_still_at_risk ?? 0).toLocaleString()} after`
+      : "";
+  return [esc(p.project_type || ""), p.cost ? `estimated ${dollars(p.cost)}` : "", buildings];
+}
+
 const POPUPS = {
+  waterway: (p) => {
+    const kind = WATERWAY_KINDS[p.kind] || "Waterway";
+    return (
+      `<strong>${esc(p.name || kind)}</strong><br>${kind} · ${esc(p.county)} County<br>` +
+      note("U.S. Census Bureau water lines. The kind is read from the line's own name.")
+    );
+  },
+
+  flood_infrastructure: (p) => {
+    const kind = FLOOD_WORK_KINDS[p.kind] || "Flood infrastructure";
+    return (
+      `<strong>${esc(p.name || kind)}</strong><br>${kind} · ${esc(p.county)} County` +
+      (p.description && p.description !== p.name ? `<br>${esc(p.description)}` : "") +
+      (p.condition ? `<br>Condition: ${esc(p.condition)}` : "") +
+      `<br>${note(TWDB)}`
+    );
+  },
+
+  flood_project: (p) => {
+    const stage = p.stage === "ongoing" ? "Ongoing project" : "Recommended in the state flood plan";
+    const facts = floodProjectFacts(p).filter(Boolean);
+    return (
+      `<strong>${esc(p.name || "Flood project")}</strong><br>${stage} · ${esc(p.county)} County` +
+      (facts.length ? `<br>${facts.join(" · ")}` : "") +
+      (p.description ? `<br><br>${esc(p.description)}` : "") +
+      `<br>${note(TWDB)}`
+    );
+  },
+
+  city_drainage: (p) => {
+    const kind = CITY_DRAINAGE_KINDS[p.kind] || "Drainage";
+    const pipe = [p.size, p.material].filter(Boolean).map(esc).join(" ");
+    return (
+      `<strong>${esc(p.name || kind)}</strong><br>${kind} · ${esc(p.city)}` +
+      (p.owner ? `<br>Owner: ${esc(p.owner)}` : "") +
+      (pipe ? `<br>Pipe: ${pipe}` : "") +
+      `<br>${note(`City of ${esc(p.city)}`)}`
+    );
+  },
+
+  storm_report: (p) =>
+    `<strong>${REPORT_KINDS[p.kind] || "Flood"} report</strong><br>` +
+    `${esc(valleyTime(p.reported_at))}${p.city ? ` · ${esc(p.city)}` : ""}, ${esc(p.county)} County` +
+    (p.magnitude ? `<br>Rain reported: ${esc(p.magnitude)} in` : "") +
+    (p.remark ? `<br><br>${esc(p.remark)}` : "") +
+    `<br>${note(`Reported to NWS Brownsville${p.source ? ` by: ${esc(p.source)}` : ""}`)}`,
+
   flood_extent: (p) =>
     `<strong>Mapped flooding — ${esc(p.year)}</strong><br>` +
     `District label for this event: ${esc(p.hcdd1_label)}<br>` +

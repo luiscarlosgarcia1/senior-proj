@@ -5,7 +5,8 @@ everything the Flask app reads:
 
   build_layers.py   fills  layers
   build_events.py   fills  flood_events, flood_reports, weather_stations,
-                           weather_observations
+                           weather_observations, rainfall_station_years,
+                           nws_flood_reports, nfip_claims, nfip_policies_by_year
   both              note what they loaded in  data_sources
   run_*.py          keep   live_signals (and its two bookkeeping tables) current
                            while the app runs
@@ -117,6 +118,68 @@ TABLES: dict[str, tuple[str, ...]] = {
              PRIMARY KEY (station_id, date, element)
            ) WITHOUT ROWID""",
         "CREATE INDEX IF NOT EXISTS weather_observations_by_value ON weather_observations(element, value)",
+    ),
+    # One row per station and year: how complete its rain record is and what it
+    # recorded, so yearly rainfall can be compared only where the record is whole.
+    "rainfall_station_years": (
+        """CREATE TABLE IF NOT EXISTS rainfall_station_years (
+             station_id TEXT NOT NULL REFERENCES weather_stations(station_id),
+             year INTEGER NOT NULL,
+             days_reported INTEGER NOT NULL,       -- days with a rain reading NOAA didn't flag
+             total_tenths_mm REAL NOT NULL,
+             wettest_day_tenths_mm REAL NOT NULL,
+             days_over_2_inches INTEGER NOT NULL,
+             PRIMARY KEY (station_id, year)
+           ) WITHOUT ROWID""",
+    ),
+    # Flooding the public, police, emergency managers and spotters reported to
+    # NWS Brownsville (Local Storm Reports), 2005 on.
+    "nws_flood_reports": (
+        """CREATE TABLE IF NOT EXISTS nws_flood_reports (
+             id TEXT PRIMARY KEY,
+             county TEXT NOT NULL,
+             kind TEXT NOT NULL,                   -- flash_flood, flood, heavy_rain or coastal_flood
+             reported_at TEXT NOT NULL,            -- UTC
+             city TEXT,
+             remark TEXT,
+             source TEXT,                          -- who reported it
+             magnitude REAL,                       -- inches, for heavy rain reports
+             lon REAL,
+             lat REAL
+           )""",
+        "CREATE INDEX IF NOT EXISTS nws_flood_reports_by_county_time ON nws_flood_reports(county, reported_at)",
+    ),
+    # Every NFIP flood-insurance claim FEMA publishes for the four counties, 1978 on.
+    "nfip_claims": (
+        """CREATE TABLE IF NOT EXISTS nfip_claims (
+             id TEXT PRIMARY KEY,                  -- FEMA's own claim id
+             county TEXT NOT NULL,
+             date_of_loss TEXT,
+             year_of_loss INTEGER NOT NULL,
+             flood_event TEXT,                     -- FEMA's name for the flood, where it gave one
+             cause_of_damage TEXT,
+             paid_building REAL NOT NULL,
+             paid_contents REAL NOT NULL,
+             paid_increased_cost_of_compliance REAL NOT NULL,
+             building_damage REAL,
+             contents_damage REAL,
+             rated_flood_zone TEXT,
+             occupancy_type INTEGER,
+             census_tract TEXT,
+             lon REAL,                             -- rounded by FEMA to protect privacy
+             lat REAL
+           )""",
+        "CREATE INDEX IF NOT EXISTS nfip_claims_by_county_year ON nfip_claims(county, year_of_loss)",
+    ),
+    # NFIP policies in force per county and year (from data/seed/), the
+    # denominator that turns a claim count into a rate.
+    "nfip_policies_by_year": (
+        """CREATE TABLE IF NOT EXISTS nfip_policies_by_year (
+             county TEXT NOT NULL,
+             year INTEGER NOT NULL,
+             policies INTEGER NOT NULL,
+             PRIMARY KEY (county, year)
+           ) WITHOUT ROWID""",
     ),
     # Where each dataset in this database came from and when it was fetched.
     "data_sources": (

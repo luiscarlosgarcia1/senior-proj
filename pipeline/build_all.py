@@ -4,12 +4,15 @@
 Every source is pulled into memory and written straight to the database; no
 data files are generated along the way. Steps, in order:
 
-  1. build_events.py   flood events, local reports, weather stations and their
-                       daily readings (NOAA Storm Events and GHCN-Daily, plus the
-                       curated reports in data/seed/)
-  2. build_layers.py   every map layer (seed GeoJSON in data/seed/, Overture
-                       bridges and dams, the Hidalgo drainage district's layers,
-                       FEMA insurance claims by census tract)
+  1. build_events.py    flood events, local reports, weather stations and their
+                        daily readings (NOAA Storm Events and GHCN-Daily, plus the
+                        curated reports in data/seed/)
+  2. build_history.py   the year-by-year record: NFIP claims and policies, NWS
+                        flood reports, each rain gauge's yearly totals
+  3. build_layers.py    every map layer (seed GeoJSON in data/seed/, waterways,
+                        the state flood plan, city drainage, Overture bridges
+                        and dams, the Hidalgo drainage district's layers, NWS
+                        flood reports, FEMA insurance claims by census tract)
 
 The publishers' own files are kept in the gitignored `tmp/` download cache, so a
 rebuild only fetches what is missing; delete that folder to download everything
@@ -28,6 +31,7 @@ from paths import DATABASE, REPO_ROOT
 
 STEPS = [
     ("flood events, reports and weather", "pipeline/build_events.py"),
+    ("claims, policies and the yearly record", "pipeline/build_history.py"),
     ("map layers", "pipeline/build_layers.py"),
 ]
 

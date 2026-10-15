@@ -31,12 +31,18 @@ RAW_DIR = DOWNLOAD_CACHE / "noaa"
 PUBLISHER = "NOAA National Centers for Environmental Information"
 STORM_EVENTS_BASE = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles"
 GHCN_BASE = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_station"
-FIRST_YEAR, LAST_YEAR = 2000, 2025
+LAST_YEAR = 2025
+# The Storm Events Database has recorded flood events since 1996; before that it
+# kept only tornadoes, thunderstorm wind and hail.
+STORM_FIRST_YEAR = 1996
+# The first year of FEMA's NFIP claims. Every county has a long-running rain
+# gauge reaching that far back, so yearly rain can be set beside yearly claims.
+GHCN_FIRST_YEAR = 1978
 
 # Some Storm Events narratives are longer than the csv module's default field limit.
 csv.field_size_limit(sys.maxsize)
 
-STORM_FILE = re.compile(r"^StormEvents_details-ftp_v1\.0_d(20\d{2})_c\d+\.csv\.gz$")
+STORM_FILE = re.compile(r"^StormEvents_details-ftp_v1\.0_d(\d{4})_c\d+\.csv\.gz$")
 FLOOD_EVENT_TYPES = {"Flood", "Flash Flood", "Heavy Rain", "Coastal Flood", "Lakeshore Flood", "Debris Flow"}
 
 MONTHS = {
@@ -46,7 +52,7 @@ MONTHS = {
     )
 }
 GHCN_ELEMENTS = ("PRCP", "TMAX", "TMIN", "AWND")
-GHCN_FIRST_DAY, GHCN_LAST_DAY = "20000101", "20251231"
+GHCN_FIRST_DAY, GHCN_LAST_DAY = f"{GHCN_FIRST_YEAR}0101", f"{LAST_YEAR}1231"
 
 
 # ---- download ---------------------------------------------------------------
@@ -56,19 +62,25 @@ def _storm_event_file_names() -> list[str]:
     """The newest detail file for each year, read from NOAA's directory listing."""
     html = get_text(f"{STORM_EVENTS_BASE}/")
     by_year = {}
-    for match in re.finditer(r"StormEvents_details-ftp_v1\.0_d(20\d{2})_c\d+\.csv\.gz", html):
+    for match in re.finditer(r"StormEvents_details-ftp_v1\.0_d(\d{4})_c\d+\.csv\.gz", html):
         year = int(match.group(1))
-        if FIRST_YEAR <= year <= LAST_YEAR:
+        if STORM_FIRST_YEAR <= year <= LAST_YEAR:
             by_year[year] = match.group(0)
-    missing = [y for y in range(FIRST_YEAR, LAST_YEAR + 1) if y not in by_year]
+    missing = [y for y in range(STORM_FIRST_YEAR, LAST_YEAR + 1) if y not in by_year]
     if missing:
         raise RuntimeError(f"Storm Events index is missing year(s): {', '.join(map(str, missing))}")
     return list(by_year.values())
 
 
 def _storm_files(raw_dir: Path) -> list[Path]:
+    """The cached yearly Storm Events files inside the window."""
     directory = raw_dir / "storm-events"
-    return sorted(p for p in directory.iterdir() if STORM_FILE.match(p.name)) if directory.is_dir() else []
+    if not directory.is_dir():
+        return []
+    return sorted(
+        path for path in directory.iterdir()
+        if (match := STORM_FILE.match(path.name)) and STORM_FIRST_YEAR <= int(match.group(1)) <= LAST_YEAR
+    )
 
 
 def _station_file(raw_dir: Path, slug: str, station_id: str) -> Path:
@@ -82,7 +94,7 @@ def download_raw_files(counties: list[str], raw_dir: Path = RAW_DIR) -> None:
     NOAA's listing, so a cached build works offline.
     """
     years = {int(STORM_FILE.match(path.name).group(1)) for path in _storm_files(raw_dir)}
-    if years >= set(range(FIRST_YEAR, LAST_YEAR + 1)):
+    if years >= set(range(STORM_FIRST_YEAR, LAST_YEAR + 1)):
         print(f"Storm Events: all {len(years)} yearly files already in {raw_dir / 'storm-events'}")
     else:
         print(f"Storm Events -> {raw_dir / 'storm-events'}")
@@ -171,7 +183,7 @@ def _read_storm_file(path: Path, slug_by_cz_name: dict[str, str]) -> Iterator[di
 
 
 def storm_events(counties: list[str], raw_dir: Path = RAW_DIR) -> list[dict]:
-    """Every flood-type Storm Events record for the counties, 2000-2025."""
+    """Every flood-type Storm Events record for the counties, 1996 on."""
     slug_by_cz_name = {SHORT_NAMES[slug].upper(): slug for slug in counties}
     return [event for path in _storm_files(raw_dir) for event in _read_storm_file(path, slug_by_cz_name)]
 
@@ -187,7 +199,7 @@ def storm_events_source(count: int, raw_dir: Path = RAW_DIR) -> dict:
         "retrieved_at": fetched_at(files),
         "record_count": count,
         "notes": (
-            f"{len(files)} annual detail files, {FIRST_YEAR}-{LAST_YEAR}; Texas rows for the four counties with "
+            f"{len(files)} annual detail files, {STORM_FIRST_YEAR}-{LAST_YEAR}; Texas rows for the four counties with "
             f"event type {', '.join(sorted(FLOOD_EVENT_TYPES))}. Stated locations and coordinates are kept as published."
         ),
     }
@@ -222,7 +234,7 @@ def _number(text: str) -> int | float:
 
 def _read_station(path: Path, station_id: str) -> Iterator[dict]:
     """`weather_observations` rows from one station file: the retained elements,
-    2000-2025, skipping any reading NOAA flagged for quality."""
+    1978 on, skipping any reading NOAA flagged for quality."""
     with gzip.open(path, "rt", encoding="utf-8", errors="replace") as handle:
         for line in handle:
             fields = line.strip().split(",") + [""] * 8
@@ -268,7 +280,7 @@ def weather_source(count: int, counties: list[str], raw_dir: Path = RAW_DIR) -> 
         "retrieved_at": fetched_at(files),
         "record_count": count,
         "notes": (
-            f"{len(files)} station files, {FIRST_YEAR}-{LAST_YEAR}; elements {', '.join(GHCN_ELEMENTS)}. Readings "
+            f"{len(files)} station files, {GHCN_FIRST_YEAR}-{LAST_YEAR}; elements {', '.join(GHCN_ELEMENTS)}. Readings "
             "with a NOAA quality flag are excluded; values and the remaining flags are kept without unit conversion."
         ),
     }
