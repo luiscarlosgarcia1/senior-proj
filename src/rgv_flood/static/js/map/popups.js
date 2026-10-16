@@ -209,11 +209,11 @@ export async function select(lngLat) {
   drawSelection(await mapReady);
 }
 
-const interactiveLayers = (map) =>
-  (map.getStyle()?.layers || [])
-    .filter((layer) => layer.id.startsWith("lyr-") && layer.id !== "lyr-selection" && !layer.id.startsWith("lyr-county-boundaries"))
-    .filter((layer) => map.getLayoutProperty(layer.id, "visibility") !== "none")
-    .map((layer) => layer.id);
+// Our clickable style layers that are showing. getLayersOrder() lists ids only;
+// getStyle() would serialize the whole basemap on every mouse move.
+const interactiveLayers = (map) => map.getLayersOrder().filter((id) =>
+  id.startsWith("lyr-") && id !== "lyr-selection" && !id.startsWith("lyr-county-boundaries")
+  && map.getLayoutProperty(id, "visibility") !== "none");
 
 const layerIdOf = (styleLayerId) => styleLayerId.replace(/^lyr-/, "").replace(/-(fill|line|point)$/, "");
 

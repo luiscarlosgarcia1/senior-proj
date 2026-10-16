@@ -3,8 +3,8 @@
 from layer_meta import LAYER_META
 
 GROUPS = {"base", "hazard", "works", "evidence", "projects"}
-SHAPES = {"poly", "dash", "line", "dot", "fema", "ring", "sq", "sqf", "dia", "diaf", "ramp", "sev"}
-COLORS = {"nfhl", "firm", "twdb", "drain", "infra", "city", "hdrain", "bridge", "mapped", "photos",
+SHAPES = {"poly", "line", "dot", "fema", "ring", "sq", "sqf", "dia", "diaf", "ramp", "sev"}
+COLORS = {"nfhl", "firm", "drain", "infra", "city", "hdrain", "bridge", "mapped", "photos",
           "fema", "nws", "proj", "sfp", "claims", "county", "sev-high", "warn", "dam"}
 
 

@@ -31,6 +31,11 @@ function withParts(spec, entry) {
   return ["all", spec.filter, kept.length ? ["any", ...kept] : ["==", 1, 0]];
 }
 
+/** A registered layer's style layers, with its parts and visibility applied. */
+const specsFor = (entry, colors) => styleLayersFor(entry.info, colors).map((spec) => (
+  { ...spec, filter: withParts(spec, entry), layout: { ...spec.layout, visibility: entry.visible ? "visible" : "none" } }
+));
+
 /** Our sources and style layers, as they should be with the current colors. */
 export function ownStyle() {
   const colors = readColors();
@@ -38,9 +43,7 @@ export function ownStyle() {
   const layers = [];
   for (const [id, entry] of registry) {
     sources[`src-${id}`] = entry.source;
-    for (const spec of styleLayersFor(entry.info, colors)) {
-      layers.push({ ...spec, filter: withParts(spec, entry), layout: { ...spec.layout, visibility: entry.visible ? "visible" : "none" } });
-    }
+    layers.push(...specsFor(entry, colors));
   }
   return { sources, layers };
 }
@@ -60,16 +63,15 @@ export function beginStyleSwitch(map) {
 /** Add whatever of a registered layer the map doesn't have yet. */
 function ensureOnMap(map, id) {
   if (switchingStyle) return; // the new style brings everything in the registry with it
-  const { sources, layers } = ownStyle();
-  if (!map.getSource(`src-${id}`)) map.addSource(`src-${id}`, sources[`src-${id}`]);
-  for (const layer of layers.filter((spec) => spec.source === `src-${id}`)) {
-    if (!map.getLayer(layer.id)) map.addLayer(layer);
+  const entry = registry.get(id);
+  if (!map.getSource(`src-${id}`)) map.addSource(`src-${id}`, entry.source);
+  for (const spec of specsFor(entry, readColors())) {
+    if (!map.getLayer(spec.id)) map.addLayer(spec);
   }
 }
 
-function styleLayerIds(map, id) {
-  return (map.getStyle()?.layers || []).filter((layer) => layer.source === `src-${id}`).map((layer) => layer.id);
-}
+/** The ids of a layer's style layers that are on the map (see styles.js for the naming). */
+const styleLayerIds = (map, id) => ["fill", "line", "point"].map((kind) => `lyr-${id}-${kind}`).filter((layerId) => map.getLayer(layerId));
 
 /** Show a layer, downloading it the first time. */
 export async function showLayer(map, info) {

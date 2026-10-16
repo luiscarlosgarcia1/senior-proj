@@ -30,11 +30,11 @@
   </div>
 
   <div class="mt-4 flex flex-col rounded-lg border border-line bg-panel shadow-1">
-    {% for chart in ("claims", "rain", "wettest") %}
+    {% for chart, dot in (("claims", "bg-layer-claims"), ("rain", "bg-layer-nfhl"), ("wettest", "bg-layer-firm")) %}
     <section class="relative px-2 py-1 {{ 'border-b border-line' if not loop.last }}" data-chart-card="{{ chart }}">
       <div class="flex items-center justify-between gap-3 px-2 pt-2 text-sm">
         <div class="flex items-center gap-2">
-          <i class="h-2 w-2 rounded-sm bg-layer-{{ {'claims': 'claims', 'rain': 'nfhl', 'wettest': 'firm'}[chart] }}" aria-hidden="true"></i>
+          <i class="h-2 w-2 rounded-sm {{ dot }}" aria-hidden="true"></i>
           <b class="font-semibold" data-chart-title x-text="title('{{ chart }}')"></b>
           <span class="text-muted" x-text="unit('{{ chart }}')"></span>
         </div>

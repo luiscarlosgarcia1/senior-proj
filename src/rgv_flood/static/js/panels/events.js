@@ -8,6 +8,7 @@ import { select } from "../map/popups.js";
 import { day, eventSeverity } from "./format.js";
 
 const RECENT_YEARS = 5;
+const contextOf = (id) => getJson(`events/${encodeURIComponent(id)}/context`);
 
 document.addEventListener("alpine:init", () => {
   const Alpine = window.Alpine;
@@ -28,13 +29,13 @@ document.addEventListener("alpine:init", () => {
       if (this.selectedId === event.id) return this.clear();
       this.selectedId = event.id;
       this.showTable = false;
-      if (event.lat !== null && event.lat !== undefined) {
+      if (event.lat != null) {
         const map = await mapReady;
         map.flyTo({ center: [event.lon, event.lat], zoom: 11, duration: 800 });
         select([event.lon, event.lat]);
       }
       try {
-        this.context = await getJson(`events/${encodeURIComponent(event.id)}/context`);
+        this.context = await contextOf(event.id);
       } catch (error) {
         if (!isAbort(error)) console.warn("event context unavailable", error);
       }
@@ -42,7 +43,7 @@ document.addEventListener("alpine:init", () => {
     /** Select an event known only by id (from a shared link); unknown ids are ignored. */
     async openById(id, { fly = true } = {}) {
       try {
-        const context = await getJson(`events/${encodeURIComponent(id)}/context`);
+        const context = await contextOf(id);
         this.selectedId = id;
         this.context = context;
         if (fly && context.event.lat !== null) select([context.event.lon, context.event.lat]);

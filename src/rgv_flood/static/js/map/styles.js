@@ -5,12 +5,13 @@
  * `lyr-<id>-point`. Colors come from the design tokens (the CSS variables in
  * input.css), so a theme switch only needs `readColors()` again. */
 
-const TOKENS = {
-  nfhl: "--c-nfhl", firm: "--c-firm", twdb: "--c-twdb", drain: "--c-drain", infra: "--c-infra", city: "--c-city",
+/** Color key (a layer's legend color, or one the styles below use) -> its CSS variable. */
+export const TOKENS = {
+  nfhl: "--c-nfhl", firm: "--c-firm", drain: "--c-drain", infra: "--c-infra", city: "--c-city",
   hdrain: "--c-hdrain", bridge: "--c-bridge", mapped: "--c-mapped", photos: "--c-photos", fema: "--c-fema",
   nws: "--c-nws", proj: "--c-proj", sfp: "--c-sfp", claims: "--c-claims", county: "--county", dam: "--c-dam",
   "sev-high": "--sev-high", "sev-mod": "--sev-mod", "sev-low": "--sev-low", "sev-unc": "--sev-unc",
-  warn: "--warn", bg: "--bg", panel: "--panel", brand: "--brand",
+  warn: "--warn", bg: "--bg",
   r1: "--r1", r2: "--r2", r3: "--r3", r4: "--r4", r5: "--r5",
 };
 
@@ -81,13 +82,8 @@ export function styleLayersFor(info, colors) {
   }
 
   const layers = [];
-  if (shape === "poly" || shape === "ramp") {
-    const opacity = info.id === "hcdd1-flood-extents" ? 0.5 : 0.24;
-    layers.push(at("fill", "fill", POLYGONS, { "fill-color": color, "fill-opacity": opacity }));
-  }
-  const dashed = shape === "dash" ? { "line-dasharray": [3, 2] } : {};
-  const width = shape === "line" ? 1.4 : 1;
-  layers.push(at("line", "line", LINES, { "line-color": color, "line-width": width, ...dashed }));
+  if (shape === "poly") layers.push(at("fill", "fill", POLYGONS, { "fill-color": color, "fill-opacity": 0.5 }));
+  layers.push(at("line", "line", LINES, { "line-color": color, "line-width": shape === "line" ? 1.4 : 1 }));
   layers.push(at("point", "circle", POINTS, pointPaint(shape, color, colors)));
   return layers;
 }

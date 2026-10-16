@@ -10,6 +10,11 @@
 import { getJson, isAbort } from "../api.js";
 import { hideLayer, setPartVisible, showLayer } from "../map/layers.js";
 import { mapReady } from "../map/main.js";
+import { TOKENS } from "../map/styles.js";
+
+/** A row's legend swatch: its shape class and color (the same tokens the map reads). */
+const swatchClass = (legend) => `sw sw-${legend.shape}`;
+const swatchStyle = (legend) => `--sw: var(${TOKENS[legend.color] || TOKENS.nfhl})`;
 
 /** Rows of a group: consecutive layers with the same panel_row become one row. */
 function rowsOf(group) {
@@ -137,10 +142,10 @@ document.addEventListener("alpine:init", () => {
       setPartVisible(await mapReady, layer.id, part.id, event.target.checked);
     },
     swatchClass() {
-      return `sw sw-${this.row.legend.shape}`;
+      return swatchClass(this.row.legend);
     },
     swatchStyle() {
-      return `--sw: var(${COLOR_VARS[this.row.legend.color] || "--c-nfhl"})`;
+      return swatchStyle(this.row.legend);
     },
     rowCount() {
       return this.row.count ? this.row.count.toLocaleString() : "";
@@ -158,10 +163,10 @@ document.addEventListener("alpine:init", () => {
       return Boolean(store().on["nfip-claims-by-tract"]);
     },
     swatchClass() {
-      return `sw sw-${this.row.legend.shape}`;
+      return swatchClass(this.row.legend);
     },
     swatchStyle() {
-      return `--sw: var(${COLOR_VARS[this.row.legend.color] || "--c-nfhl"})`;
+      return swatchStyle(this.row.legend);
     },
     shortLabel() {
       return this.row.label.split(",")[0];
@@ -180,11 +185,3 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 });
-
-// Legend color key -> CSS variable (the same tokens the map reads).
-const COLOR_VARS = {
-  nfhl: "--c-nfhl", firm: "--c-firm", twdb: "--c-twdb", drain: "--c-drain", infra: "--c-infra", city: "--c-city",
-  hdrain: "--c-hdrain", bridge: "--c-bridge", mapped: "--c-mapped", photos: "--c-photos", fema: "--c-fema",
-  nws: "--c-nws", proj: "--c-proj", sfp: "--c-sfp", claims: "--c-claims", county: "--county", dam: "--c-dam",
-  "sev-high": "--sev-high", warn: "--warn",
-};
