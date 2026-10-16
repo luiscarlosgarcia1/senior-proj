@@ -1,0 +1,10 @@
+{# One county selector, used in the header and the phone search row. `size` "sm" is the header's compact form. #}
+{% macro county_select(id, size="sm") -%}
+<label class="flex items-center gap-2 rounded-md border border-line bg-bg px-2.5 {{ 'h-8' if size == 'sm' else 'h-11 rounded-lg' }}" x-data="countySelect">
+  <span class="text-xs uppercase tracking-[.8px] text-muted">{{ t("county.label") }}</span>
+  <select id="county-{{ id }}" class="cursor-pointer border-0 bg-transparent font-medium outline-none" x-bind:value="county" x-on:change="choose">
+    <option value="" class="bg-panel">{{ t("county.all") }}</option>
+    {% for slug in counties %}<option value="{{ slug }}" class="bg-panel">{{ short_names[slug] }}</option>{% endfor %}
+  </select>
+</label>
+{%- endmacro %}

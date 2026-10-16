@@ -1,6 +1,6 @@
 """Static assets: content-versioned URLs, the static file mount, the CSS build.
 
-`asset_url("css/app.css")` gives `/static/css/app.css?v=<content hash>`. A URL
+`asset_url("css/site.css")` gives `/static/css/site.css?v=<content hash>`. A URL
 with `?v=` never changes meaning, so it is cached for a year; anything else is
 revalidated. The stylesheet is compiled ahead of time by Tailwind's standalone
 binary (through pytailwindcss, so no Node), from `static/css/input.css`.

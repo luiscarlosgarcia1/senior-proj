@@ -18,6 +18,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 
+from rgv_flood import pages
 from rgv_flood.api import api_router, geocode
 from rgv_flood.api import health as health_api
 from rgv_flood.assets import STATIC_ROOT, VersionedStaticFiles
@@ -106,8 +107,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return response
 
     app.add_middleware(GZipMiddleware, minimum_size=1024)
-    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware, inline_script_hashes=pages.inline_script_hashes())
     app.include_router(health_api.router)
     app.include_router(api_router)
+    app.include_router(pages.router)
     app.mount("/static", VersionedStaticFiles(directory=STATIC_ROOT), name="static")
     return app

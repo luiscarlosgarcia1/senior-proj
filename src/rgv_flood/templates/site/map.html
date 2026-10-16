@@ -1,0 +1,18 @@
+{% extends "site/base.html" %}
+{% block body_class %}h-screen overflow-hidden{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ asset_url('vendor/maplibre/maplibre-gl.css') }}">{% endblock %}
+{% block page %}
+<div class="flex h-full flex-col">
+  {% include "site/components/header.html" %}
+  {% if not data_ready %}{% include "site/components/no_data.html" %}{% endif %}
+  <div class="flex min-h-0 flex-1" id="map-page">
+    <main class="relative min-w-0 flex-1">
+      <div id="map" class="absolute inset-0"
+           data-basemap-light="{{ settings.basemap_light_style }}" data-basemap-dark="{{ settings.basemap_dark_style }}"></div>
+      <div class="absolute inset-x-0 bottom-0 z-[500] flex h-7 items-center justify-between gap-4 border-t border-line bg-panel px-4 text-[11.5px] text-muted">
+        {% include "site/components/disclaimer.html" %}
+      </div>
+    </main>
+  </div>
+</div>
+{% endblock %}
