@@ -30,3 +30,5 @@ docs/
 src/rgv_flood/static/css/site.css
 src/rgv_flood/static/vendor/
 src/rgv_flood/static/fonts/
+
+deploy/
