@@ -25,6 +25,7 @@ import gzip
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 
 # Some FEMA NFHL records are single polygons with enormous ring counts; GDAL's
@@ -34,6 +35,7 @@ os.environ.setdefault("OGR_GEOJSON_MAX_OBJ_SIZE", "0")
 
 import evidence_layers
 import geopandas as gpd
+import layer_tiles
 import overture
 import pandas as pd
 import pyogrio
@@ -204,6 +206,8 @@ def _row(layer_id: str, position: int, layer: MapLayer) -> dict:
         "parts_json": json.dumps(meta.pop("parts")),
         **meta,
         "feature_count": layer.feature_count,
+        "delivery": "geojson",  # main() switches a big layer to "tiles"
+        "tiles_hash": None,
         # Compressed once here so the app can send it without spending CPU per
         # request. mtime=0 keeps the bytes the same from one build to the next.
         "geojson_gzip": gzip.compress(geojson, mtime=0),
@@ -251,7 +255,7 @@ def _source(layer_id: str, feature_count: int) -> dict:
 
 def main(database: Path = DATABASE) -> None:
     print("building map layers ->", database)
-    rows, skipped = [], []
+    rows, skipped, tiles = [], [], []
     for position, (layer_id, build) in enumerate(BUILDERS.items()):
         try:
             layer = build()
@@ -263,12 +267,19 @@ def main(database: Path = DATABASE) -> None:
         if layer is None or not layer.feature_count:
             continue
         row = _row(layer_id, position, layer)
+        if layer_tiles.delivery_for(len(row["geojson_gzip"])) == "tiles":
+            with tempfile.TemporaryDirectory() as workdir:
+                cut = layer_tiles.cut_tiles(layer_id, layer.geojson, Path(workdir))
+            tiles += [{"layer_id": layer_id, "z": z, "x": x, "y": y, "data": data} for z, x, y, data in cut]
+            row["delivery"], row["tiles_hash"] = "tiles", row["etag"][:12]
+            print(f"  {layer_id}: {len(cut)} vector tiles, zoom {layer_tiles.MIN_ZOOM}-{layer_tiles.MAX_ZOOM}")
         size, sent = len(layer.geojson.encode("utf-8")), len(row["geojson_gzip"])
         print(f"  {layer_id}: {layer.feature_count} features, {size / 1024:,.0f} KB ({sent / 1024:,.0f} KB gzipped)")
         rows.append(row)
 
     with open_database(database) as connection:
         replace_table(connection, "layers", rows)
+        replace_table(connection, "layer_tiles", tiles)
         # Like the layers themselves: a layer no longer built loses its source row.
         connection.execute("DELETE FROM data_sources WHERE id LIKE 'layer:%'")
         record_sources(connection, [_source(row["id"], row["feature_count"]) for row in rows])

@@ -31,6 +31,17 @@ TABLES: dict[str, tuple[str, ...]] = {
     # One row per map layer: its sidebar/source-card text and the GeoJSON the map draws.
     # Facts about the build itself; `built_at` is when build_all.py last finished.
     "build_info": ("CREATE TABLE IF NOT EXISTS build_info (key TEXT PRIMARY KEY, value TEXT NOT NULL)",),
+    # Vector tiles of the big layers (see layer_tiles.py): gzipped MVT, XYZ numbering.
+    "layer_tiles": (
+        """CREATE TABLE IF NOT EXISTS layer_tiles (
+             layer_id TEXT NOT NULL,
+             z INTEGER NOT NULL,
+             x INTEGER NOT NULL,
+             y INTEGER NOT NULL,
+             data BLOB NOT NULL,
+             PRIMARY KEY (layer_id, z, x, y)
+           ) WITHOUT ROWID""",
+    ),
     "layers": (
         """CREATE TABLE IF NOT EXISTS layers (
              id TEXT PRIMARY KEY,
