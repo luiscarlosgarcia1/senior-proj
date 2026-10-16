@@ -1,9 +1,106 @@
 {% extends "site/base.html" %}
+{% from "site/components/county_select.html" import county_select %}
+{% from "site/components/stat_tile.html" import stat_tile %}
+{% from "site/components/segmented.html" import segmented %}
 {% block title %}{{ t("app.claims_title") }}{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="claims-page">
-  <footer class="mt-4 text-[11.5px] leading-relaxed text-muted" data-claims-footer>
+<div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="claims-page" x-data="claimsPage">
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+    {{ county_select("claims") }}
+    {{ segmented("metric", [("claims", t("claims.metric.claims")), ("paid", t("claims.metric.paid")), ("rate", t("claims.metric.rate"))]) }}
+    <p class="text-sm text-muted lg:ml-auto" x-text="span"></p>
+  </div>
+
+  <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {{ stat_tile("claims", t("claims.tile.claims"), "tileClaims", "tileClaimsSub") }}
+    {{ stat_tile("paid", t("claims.tile.paid"), "tilePaid", "tilePaidSub") }}
+    {{ stat_tile("worst", t("claims.tile.worst"), "tileWorst", "tileWorstSub") }}
+    <div class="rounded-lg border border-line2 bg-panel p-4 shadow-1" data-tile="correlation">
+      <div class="text-xs font-semibold uppercase tracking-[.9px] text-muted">{{ t("claims.tile.correlation") }}</div>
+      <p class="mt-1.5 text-sm leading-snug" x-text="correlationText"></p>
+      <div class="mt-2 flex flex-col gap-1.5 font-mono text-xs">
+        <div class="flex items-center gap-2"><span class="w-20 text-muted">{{ t("claims.wettest") }}</span>
+          <div class="h-1.5 flex-1 rounded-sm bg-line"><div class="h-1.5 rounded-sm bg-layer-claims" x-bind:style="wettestBar"></div></div>
+          <span x-text="wettestR"></span></div>
+        <div class="flex items-center gap-2"><span class="w-20 text-muted">{{ t("claims.total_rain") }}</span>
+          <div class="h-1.5 flex-1 rounded-sm bg-line"><div class="h-1.5 rounded-sm bg-layer-nfhl" x-bind:style="rainBar"></div></div>
+          <span x-text="rainR"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4 flex flex-col rounded-lg border border-line bg-panel shadow-1">
+    {% for chart in ("claims", "rain", "wettest") %}
+    <section class="relative px-2 py-1 {{ 'border-b border-line' if not loop.last }}" data-chart-card="{{ chart }}">
+      <div class="flex items-center justify-between gap-3 px-2 pt-2 text-sm">
+        <div class="flex items-center gap-2">
+          <i class="h-2 w-2 rounded-sm bg-layer-{{ {'claims': 'claims', 'rain': 'nfhl', 'wettest': 'firm'}[chart] }}" aria-hidden="true"></i>
+          <b class="font-semibold" data-chart-title x-text="title('{{ chart }}')"></b>
+          <span class="text-muted" x-text="unit('{{ chart }}')"></span>
+        </div>
+        <button type="button" class="text-xs text-muted underline decoration-line2 underline-offset-2 hover:text-ink"
+                data-view-table data-for="{{ chart }}" x-on:click="toggleTable()">{{ t("events.view_table") }}</button>
+      </div>
+      <div data-chart="{{ chart }}" x-show="!tables['{{ chart }}']" class="w-full"></div>
+      <div x-show="tables['{{ chart }}']" x-cloak class="max-h-[220px] overflow-auto px-2 pb-2">
+        <table class="w-full border-collapse font-mono text-sm">
+          <thead class="sticky top-0 bg-panel text-xs text-muted"><tr><th class="py-1 text-left">{{ t("claims.col.year") }}</th><th class="py-1 text-right" x-text="title('{{ chart }}')"></th></tr></thead>
+          <tbody>
+            <template x-for="row in tableRows('{{ chart }}')" x-bind:key="row.year">
+              <tr class="border-t border-line"><td class="py-1" x-text="row.year"></td><td class="py-1 text-right" x-text="row.value"></td></tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+  <div class="mt-4 overflow-hidden rounded-lg border border-line bg-panel shadow-1">
+    <div class="flex items-baseline justify-between border-b border-line px-4 py-3">
+      <h2 class="text-md font-semibold">{{ t("claims.table.title") }}</h2>
+      <p class="text-sm text-muted" x-text="tableNote"></p>
+    </div>
+    <div class="max-h-[300px] overflow-auto">
+      <table class="w-full min-w-[760px] border-collapse font-mono text-sm">
+        <thead class="sticky top-0 bg-panel2 text-xs uppercase tracking-[.9px] text-muted">
+          <tr class="font-sans font-semibold">
+            <th class="px-4 py-2 text-left">{{ t("claims.col.year") }}</th>
+            <th class="px-3 text-right">{{ t("claims.col.claims") }}</th>
+            <th class="px-3 text-right">{{ t("claims.col.paid") }}</th>
+            <th class="px-3 text-right">{{ t("claims.col.rate") }}</th>
+            <th class="px-3 text-right">{{ t("claims.col.rain") }}</th>
+            <th class="px-3 text-right">{{ t("claims.col.wettest") }}</th>
+            <th class="px-4 text-left">{{ t("claims.col.event") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="row in rows" x-bind:key="row.year">
+            <tr class="border-t border-line text-muted" x-bind:class="rowClass()">
+              <td class="px-4 py-1.5 text-ink" x-text="row.year"></td>
+              <td class="px-3 text-right" x-text="row.claims"></td>
+              <td class="px-3 text-right" x-text="row.paid"></td>
+              <td class="px-3 text-right" x-text="row.rate"></td>
+              <td class="px-3 text-right" x-text="row.rain"></td>
+              <td class="px-3 text-right" x-text="row.wettest"></td>
+              <td class="px-4 font-sans" x-text="row.event"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="mt-4 flex flex-col gap-1 text-[11.5px] leading-relaxed text-muted" data-claims-footer>
+    <p>{{ t("claims.footnote") }}</p>
+    <p><span>{{ t("claims.sources") }}</span>
+      <template x-for="source in sources" x-bind:key="source.id"><span> · <a x-bind:href="source.url" target="_blank" rel="noopener" x-text="source.dataset"></a></span></template>
+    </p>
     {% if built_label %}<p>{{ built_label }}</p>{% endif %}
   </footer>
 </div>
+{% endblock %}
+{% block scripts %}
+<script defer src="{{ asset_url('vendor/plotly/plotly-basic.min.js') }}"></script>
+<script type="module" src="{{ asset_url('js/pages/claims.js') }}"></script>
 {% endblock %}

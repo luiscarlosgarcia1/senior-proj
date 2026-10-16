@@ -1,0 +1,8 @@
+{# A figure tile: label, big number, one line under it (all from the page component). #}
+{% macro stat_tile(id, label, value, sub) -%}
+<div class="rounded-lg border border-line bg-panel p-4 shadow-1" data-tile="{{ id }}">
+  <div class="text-xs font-semibold uppercase tracking-[.9px] text-muted">{{ label }}</div>
+  <div class="mt-2 font-mono text-xl font-medium tracking-tight" data-value x-text="{{ value }}"></div>
+  <div class="mt-1.5 text-sm text-muted" x-text="{{ sub }}"></div>
+</div>
+{%- endmacro %}
