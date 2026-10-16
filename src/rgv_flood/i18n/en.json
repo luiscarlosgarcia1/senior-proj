@@ -1,0 +1,10 @@
+{
+  "layers.group.hazard": "Flood hazard",
+  "layers.group.works": "Drainage & flood works",
+  "layers.group.evidence": "Evidence of flooding",
+  "layers.group.projects": "Projects",
+  "layers.virtual.events.title": "NOAA flood events",
+  "layers.virtual.events.source": "NOAA Storm Events Database",
+  "layers.virtual.alerts.title": "Live official alerts",
+  "layers.virtual.alerts.source": "National Weather Service, TxDOT DriveTexas, Hidalgo County"
+}

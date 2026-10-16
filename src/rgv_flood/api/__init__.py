@@ -4,4 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from rgv_flood.api import layers, tiles
+
 api_router = APIRouter(prefix="/api/v1")
+for module in (layers, tiles):
+    api_router.include_router(module.router)

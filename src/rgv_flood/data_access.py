@@ -17,7 +17,8 @@ from rgv_flood.db import Database
 
 LAYER_COLUMNS = (
     "id, title, description, source, vintage, hazard_type, coverage, limitation, source_url, "
-    "visualizations_json, feature_count"
+    "visualizations_json, feature_count, layer_group, panel_row, row_label, short_label, legend_json, "
+    "parts_json, delivery, tiles_hash"
 )
 EVENT_COLUMNS = "id, county, date, date_end, type, location, precision, summary, source_url, geometry_note, lon, lat"
 # How many of the wettest gauge-days the rainfall panel ranks.
@@ -42,7 +43,8 @@ def _where(equals: dict[str, str | None]) -> tuple[str, tuple]:
 
 
 def _layer(row: dict) -> dict:
-    row["visualizations"] = json.loads(row.pop("visualizations_json"))
+    for name in ("visualizations", "legend", "parts"):
+        row[name] = json.loads(row.pop(f"{name}_json"))
     return row
 
 
@@ -67,6 +69,15 @@ def layer_geojson_gzip(db: Database, layer_id: str) -> bytes | None:
     """The layer's FeatureCollection, gzipped, exactly as the pipeline built it."""
     rows = db.app_rows("select geojson_gzip from layers where id = ?", (layer_id,))
     return rows[0]["geojson_gzip"] if rows else None
+
+
+def is_tiled(db: Database, layer_id: str) -> bool:
+    return db.scalar("select delivery = 'tiles' from layers where id = ?", (layer_id,)) == 1
+
+
+def layer_tile(db: Database, layer_id: str, z: int, x: int, y: int) -> bytes | None:
+    """One vector tile (gzipped MVT), or None where the layer has nothing."""
+    return db.scalar("select data from layer_tiles where layer_id = ? and z = ? and x = ? and y = ?", (layer_id, z, x, y))
 
 
 # ---- flood events, reports, rainfall ----

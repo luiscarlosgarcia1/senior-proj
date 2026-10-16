@@ -180,6 +180,32 @@ GAUGE_YEARS = [
 ]
 
 
+PHOTOS_GEOJSON = (
+    '{"type":"FeatureCollection","features":['
+    '{"type":"Feature","geometry":{"type":"Point","coordinates":[-98.2,26.2]},'
+    '"properties":{"overlay_type":"flood_photo","event":"June 2019","photo_url":"https://services7.arcgis.com/x/1"}},'
+    '{"type":"Feature","geometry":{"type":"Point","coordinates":[-98.1,26.3]},'
+    '"properties":{"overlay_type":"flood_photo","event":"June 2018"}}]}'
+)
+LAYERS = [
+    _layer("county-boundaries", position=0, layer_group="base", short_label="County boundaries",
+           legend_json='{"shape": "line", "color": "county"}'),
+    _layer("fema-nfhl", position=1, title="FEMA effective flood hazard (NFHL)", feature_count=20),
+    _layer("twdb-cursory-1in100", position=2, panel_row="twdb", row_label="TWDB modeled flood extent",
+           short_label="1% annual chance", delivery="tiles", tiles_hash="abc123def456"),
+    _layer("twdb-cursory-1in500", position=3, panel_row="twdb", row_label="TWDB modeled flood extent",
+           short_label="0.2% annual chance"),
+    _layer("waterways", position=4, layer_group="works", legend_json='{"shape": "line", "color": "drain"}'),
+    _layer("hcdd1-flood-photos", PHOTOS_GEOJSON, position=5, layer_group="evidence", feature_count=2,
+           legend_json='{"shape": "dot", "color": "photos"}',
+           parts_json='[{"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"]},'
+                      ' {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]]}]'),
+    _layer("flood-projects", position=6, layer_group="projects", legend_json='{"shape": "sqf", "color": "sfp"}'),
+]
+# One real-looking tile of twdb-cursory-1in100 (the bytes only need to be gzip).
+TILES = [{"layer_id": "twdb-cursory-1in100", "z": 10, "x": 232, "y": 434, "data": gzip.compress(b"mvt")}]
+
+
 def build_fixture_database(path, *, history: bool = False):
     """Write the fixture database to `path` and return it. `history` adds claims,
     policies and gauge-years for the year-by-year page."""
@@ -189,6 +215,9 @@ def build_fixture_database(path, *, history: bool = False):
         replace_table(connection, "weather_stations", STATIONS)
         replace_table(connection, "weather_observations", READINGS)
         record_sources(connection, SOURCES)
+        replace_table(connection, "layers", LAYERS)
+        replace_table(connection, "layer_tiles", TILES)
+        replace_table(connection, "build_info", [{"key": "built_at", "value": "2026-10-15T12:00:00Z"}])
         if history:
             replace_table(connection, "nfip_claims", CLAIMS)
             replace_table(connection, "nfip_policies_by_year", POLICIES)
