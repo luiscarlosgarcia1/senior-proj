@@ -8,8 +8,8 @@ relevant). The rest of the theme (power grid, barriers, parking, street
 furniture, ...) is not flood-specific and would only clutter the map.
 
 The query is a bounding box, which also covers a strip of Mexico: the border
-follows the Rio Grande, so no rectangle can avoid it. `in_counties` is what
-keeps a feature only where it really touches a county.
+follows the Rio Grande, so no rectangle can avoid it. The layers built from it
+keep a feature only where it really touches a county.
 """
 
 from __future__ import annotations
@@ -23,10 +23,9 @@ import pyarrow.parquet as pq
 import shapely
 from net import already_have
 from overturemaps import record_batch_reader
-from paths import DOWNLOAD_CACHE, county_boundary
-from shapely.geometry import shape
+from paths import DOWNLOAD_CACHE
 
-from rgv_flood.counties import COUNTIES, RGV_BBOX
+from rgv_flood.counties import RGV_BBOX
 
 KEPT_CLASSES = ("bridge", "dam")
 CACHE_FILE = DOWNLOAD_CACHE / "overture" / "bridges-and-dams.parquet"
@@ -56,16 +55,3 @@ def bridges_and_dams(cache_file: Path = CACHE_FILE) -> Iterator[tuple[shapely.Ge
     geometries = shapely.from_wkb(table.column("geometry").to_pylist())
     attributes = table.drop_columns(["geometry", "bbox"]).to_pylist()
     yield from zip(geometries, attributes, strict=True)
-
-
-def in_counties(features: Iterator[tuple[shapely.Geometry, dict]]) -> Iterator[tuple[str, shapely.Geometry, dict]]:
-    """(county slug, geometry, attributes) for every county a feature touches,
-    tested against the county's real TIGER boundary. A feature outside all four
-    (Mexico, or a neighbouring Texas county) is dropped."""
-    polygons = {slug: shape(county_boundary(slug)) for slug in COUNTIES}
-    for polygon in polygons.values():
-        shapely.prepare(polygon)  # many intersects tests against the same polygon
-    for geometry, attributes in features:
-        for slug, polygon in polygons.items():
-            if polygon.intersects(geometry):
-                yield slug, geometry, attributes

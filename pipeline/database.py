@@ -3,11 +3,13 @@
 One SQLite file (`paths.DATABASE`) holds everything the build produces and
 everything the app reads:
 
-  build_layers.py   fills  layers
   build_events.py   fills  flood_events, flood_reports, weather_stations,
-                           weather_observations, rainfall_station_years,
-                           nws_flood_reports, nfip_claims, nfip_policies_by_year
-  both              note what they loaded in  data_sources
+                           weather_observations
+  build_history.py  fills  rainfall_station_years, nws_flood_reports,
+                           nfip_claims, nfip_policies_by_year
+  build_layers.py   fills  layers, layer_tiles
+  build_all.py      fills  build_info
+  all three builds  note what they loaded in  data_sources
   run_*.py          keep   live_signals (and its two bookkeeping tables) current
                            while the app runs
 
@@ -28,7 +30,6 @@ from paths import DATABASE
 
 # Table name -> the statements that create it (and its indexes).
 TABLES: dict[str, tuple[str, ...]] = {
-    # One row per map layer: its sidebar/source-card text and the GeoJSON the map draws.
     # Facts about the build itself; `built_at` is when build_all.py last finished.
     "build_info": ("CREATE TABLE IF NOT EXISTS build_info (key TEXT PRIMARY KEY, value TEXT NOT NULL)",),
     # Vector tiles of the big layers (see layer_tiles.py): gzipped MVT, XYZ numbering.
@@ -42,6 +43,7 @@ TABLES: dict[str, tuple[str, ...]] = {
              PRIMARY KEY (layer_id, z, x, y)
            ) WITHOUT ROWID""",
     ),
+    # One row per map layer: its sidebar/source-card text and the GeoJSON the map draws.
     "layers": (
         """CREATE TABLE IF NOT EXISTS layers (
              id TEXT PRIMARY KEY,

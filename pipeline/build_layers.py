@@ -150,8 +150,10 @@ def build_twdb(freq: str, chance: str) -> MapLayer:
 def build_overture_bridges() -> MapLayer | None:
     """Bridges, kept as individual features (no dissolve, no severity: these
     are structures at risk, not hazard zones). A bridge that spans two
-    counties is listed under each. (Overture's dams go into the flood
-    infrastructure layer, where the state does not already list them.)"""
+    counties is listed under each; one outside all four is left out.
+    (Overture's dams go into the dams layer, where the state does not already
+    list them.)"""
+    polygons = regional_layers.county_polygons()
     rows = [
         {
             "geometry": geometry,
@@ -159,8 +161,10 @@ def build_overture_bridges() -> MapLayer | None:
             "county": SHORT_NAMES[slug],
             "name": (attributes.get("names") or {}).get("primary"),  # Overture: {"primary": ...}
         }
-        for slug, geometry, attributes in overture.in_counties(overture.bridges_and_dams())
+        for geometry, attributes in overture.bridges_and_dams()
         if attributes["class"] == "bridge"
+        for slug, polygon in polygons.items()
+        if polygon.intersects(geometry)
     ]
     if not rows:
         return None

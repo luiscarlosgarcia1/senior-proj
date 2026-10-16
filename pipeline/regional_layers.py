@@ -44,10 +44,11 @@ from rgv_flood.counties import COUNTIES, SHORT_NAMES
 TOLERANCE = 0.00005
 
 
-def _county_polygons() -> dict[str, shapely.Geometry]:
+def county_polygons() -> dict[str, shapely.Geometry]:
+    """Each county's real TIGER boundary, prepared for many intersects tests."""
     polygons = {slug: shape(county_boundary(slug)) for slug in COUNTIES}
     for polygon in polygons.values():
-        shapely.prepare(polygon)  # many intersects tests against the same polygon
+        shapely.prepare(polygon)
     return polygons
 
 
@@ -229,14 +230,14 @@ def _state_flood_works(polygons) -> list[dict]:
 def build_flood_infrastructure() -> MapLayer | None:
     """Levees, sea walls, storm drain systems, low-water crossings and coastal
     works the 2024 State Flood Plan inventories (dams have their own layer)."""
-    features = [f for f in _state_flood_works(_county_polygons()) if f["properties"]["kind"] != "dam"]
+    features = [f for f in _state_flood_works(county_polygons()) if f["properties"]["kind"] != "dam"]
     return _layer(features)
 
 
 def build_dams() -> MapLayer | None:
     """Every dam in the four counties: the State Flood Plan's inventory, plus
     the named dams it lacks that Overture Maps has."""
-    polygons = _county_polygons()
+    polygons = county_polygons()
     state = [f for f in _state_flood_works(polygons) if f["properties"]["kind"] == "dam"]
     extra = _dams_the_state_lacks([shape(f["geometry"]) for f in state], polygons)
     return _layer(state + extra)
@@ -273,7 +274,7 @@ def _recommended_project(p: dict) -> dict:
 def build_flood_projects() -> MapLayer | None:
     """Flood projects the state plan lists: ongoing ones local governments
     reported, and new ones the regional planning group recommended."""
-    polygons = _county_polygons()
+    polygons = county_polygons()
     features = _in_counties(twdb_flood_plan_layer("ongoing_projects"), _ongoing_project, polygons)
     features += _in_counties(twdb_flood_plan_layer("recommended_projects"), _recommended_project, polygons)
     return _layer(features)
@@ -306,7 +307,7 @@ def _ditch_name(name: object, owner_code: object = None) -> str | None:
 
 def build_city_drainage() -> MapLayer | None:
     """The storm drainage the cities of Harlingen and Brownsville publish."""
-    polygons = _county_polygons()
+    polygons = county_polygons()
 
     def harlingen_ditch(p: dict) -> dict:
         return {"overlay_type": "city_drainage", "kind": "ditch", "city": "Harlingen",
@@ -399,7 +400,7 @@ def _flood_photo(photo: dict) -> tuple[str, dict] | None:
 
 def build_fema_flood_photos() -> MapLayer | None:
     """FEMA's photos of flooding in the four counties, one dot per town."""
-    polygons, places = _county_polygons(), _places()
+    polygons, places = county_polygons(), _places()
     by_town: dict[str, list[dict]] = {}
     for source in commons_flood_photos():
         if found := _flood_photo(source):

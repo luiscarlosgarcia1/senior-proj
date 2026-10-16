@@ -124,7 +124,7 @@ def test_fema_photos_of_flooding_are_grouped_by_the_town_their_caption_names(mon
     monkeypatch.setattr(regional_layers, "commons_flood_photos", lambda: photos)
     monkeypatch.setattr(regional_layers, "_places", lambda: {
         "Raymondville": Point(-97.78, 26.48), "Weslaco": Point(-97.99, 26.16), "Edinburg": Point(-98.16, 26.32)})
-    monkeypatch.setattr(regional_layers, "_county_polygons", lambda: {
+    monkeypatch.setattr(regional_layers, "county_polygons", lambda: {
         "willacy": box(-98.0, 26.4, -97.3, 26.6), "hidalgo": box(-98.6, 26.0, -97.9, 26.4)})
 
     layer = regional_layers.build_fema_flood_photos()
@@ -157,7 +157,7 @@ def _patch_sources(monkeypatch):
     from shapely.geometry import Point
 
     monkeypatch.setattr(regional_layers, "twdb_flood_plan_layer", lambda name: _state_features()[name])
-    monkeypatch.setattr(regional_layers, "_county_polygons", lambda: {"hidalgo": box(-98.5, 26.0, -98.0, 26.5)})
+    monkeypatch.setattr(regional_layers, "county_polygons", lambda: {"hidalgo": box(-98.5, 26.0, -98.0, 26.5)})
     monkeypatch.setattr(regional_layers.overture, "bridges_and_dams", lambda: iter([
         (Point(-98.4, 26.1), {"class": "dam", "names": {"primary": "Retamal Diversion Dam"}}),
     ]))
