@@ -238,3 +238,12 @@ class Source(BaseModel):
 class SourcesResponse(BaseModel):
     built_at: str | None
     sources: list[Source]
+
+
+# ---- address search ----
+
+
+class Place(BaseModel):
+    label: str
+    lon: float
+    lat: float
