@@ -22,3 +22,11 @@ data/ml/
 .DS_Store
 .idea/
 .vscode/
+
+docs/
+
+# Front-end build output and fetched third-party files (scripts/vendor.py,
+# the Tailwind build). Recreated by `uv run dev` / `uv run serve`.
+src/rgv_flood/static/css/app.css
+src/rgv_flood/static/vendor/
+src/rgv_flood/static/fonts/

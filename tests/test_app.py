@@ -4,141 +4,22 @@ from datetime import UTC, datetime
 
 import pytest
 from database import open_database, record_sources, replace_table
+from fixture_db import (
+    EVENTS,
+    MCALLEN,
+    READINGS,
+    REPORTS,
+    SOURCES,
+    STATIONS,
+    WESLACO,
+    _claim,
+    _gauge_year,
+    _layer,
+)
 from live_signals import LiveSignal, LiveSignalStore
 
 import rgv_flood
 from rgv_flood import create_app
-
-
-def _event(event_id: str, date: str, **values) -> dict:
-    return {
-        "id": event_id,
-        "county": "hidalgo",
-        "date": date,
-        "date_end": None,
-        "type": "Flood",
-        "location": "Hidalgo County, Texas",
-        "precision": "county",
-        "summary": "test event",
-        "narrative": "test narrative",
-        "source_url": "https://example.test/noaa",
-        "source_lon": values.get("lon"),
-        "source_lat": values.get("lat"),
-        "geometry_note": None,
-        "lon": None,
-        "lat": None,
-        **values,
-    }
-
-
-EVENTS = [
-    _event(
-        "noaa-storm-events-1",
-        "2020-07-25",
-        type="Flash flood",
-        location="WESLACO, Hidalgo County, Texas",
-        source_url="https://example.test/1",
-        lon=-98.2,
-        lat=26.2,
-    ),
-    _event("noaa-storm-events-2", "2018-06-20", summary="test event without a point"),
-]
-WESLACO, MCALLEN, RIO_GRANDE_CITY = "USC00419588", "USW00012959", "USC00417622"
-
-
-def _station(station_id: str, county: str, name: str, lon: float, lat: float) -> dict:
-    return {
-        "station_id": station_id, "county": county, "name": name, "lon": lon, "lat": lat,
-        "elevation_m": 20.0, "source_url": f"https://example.test/{station_id}.csv.gz",
-    }
-
-
-STATIONS = [
-    _station(WESLACO, "hidalgo", "Weslaco", -97.97, 26.18),
-    _station(MCALLEN, "hidalgo", "McAllen Airport", -98.24, 26.18),
-    _station(RIO_GRANDE_CITY, "starr", "Rio Grande City", -98.81, 26.38),
-]
-
-
-def _reading(station_id: str, date: str, element: str, value: int) -> dict:
-    return {
-        "station_id": station_id, "date": date, "element": element, "value": value,
-        "measurement_flag": None, "source_flag": "7", "observation_time_flag": None,
-    }
-
-
-# PRCP is tenths of a millimetre: 2184 is 218.4 mm, or 8.6 inches.
-READINGS = [
-    _reading(WESLACO, "2025-03-28", "PRCP", 2184),
-    _reading(WESLACO, "2025-03-29", "PRCP", 100),
-    _reading(WESLACO, "2025-03-30", "PRCP", 0),  # a dry day is not a rainfall record
-    _reading(WESLACO, "2025-03-28", "TMAX", 9999),  # nor is a temperature
-    _reading(RIO_GRANDE_CITY, "2010-07-01", "PRCP", 508),  # 2.0 in: Starr's own record
-    # around the 2020-07-25 event at (-98.2, 26.2): McAllen is the nearer gauge
-    _reading(WESLACO, "2020-07-24", "PRCP", 0),
-    _reading(WESLACO, "2020-07-26", "PRCP", 1270),  # 5.00 in
-    _reading(MCALLEN, "2020-07-25", "PRCP", 254),  # 1.00 in
-]
-
-
-def _report(report_id: str, event_date: str, **values) -> dict:
-    return {
-        "id": report_id,
-        "county": "hidalgo",
-        "headline": f"Headline of {report_id}.",
-        "detail": f"Headline of {report_id}. More detail.",
-        "location": "Weslaco, Hidalgo County, Texas",
-        "location_precision": "municipality",
-        "event_date": event_date,
-        "event_end": None,
-        "published_at": event_date,
-        "publisher": "KRGV Channel 5 News",
-        "channel": "local_news",
-        "source_url": f"https://example.test/{report_id}",
-        "original_content": None,
-        "duplicate_group": None,
-        "retrieved_at": "2026-09-04T03:17:42Z",
-        **values,
-    }
-
-
-REPORTS = [
-    _report("hanna-landfall", "2020-07-25", duplicate_group="hanna"),
-    _report("hanna-recovery", "2020-07-31", duplicate_group="hanna"),  # days later, same flood
-    _report("weslaco-streets", "2021-05-19"),
-]
-SOURCES = [
-    {
-        "id": "noaa-storm-events", "publisher": "NOAA NCEI", "dataset": "Storm Events Database",
-        "url": "https://example.test/storm", "retrieved_at": "2026-09-16T04:30:40Z", "record_count": 1425,
-        "notes": None,
-    },
-    {
-        "id": "layer:fema-nfhl", "publisher": "FEMA", "dataset": "FEMA effective flood hazard (NFHL)",
-        "url": None, "retrieved_at": None, "record_count": 20, "notes": None,
-    },
-]
-
-
-def _layer(layer_id: str, geojson: str = '{"type":"FeatureCollection","features":[]}', **values) -> dict:
-    """A `layers` row with every column the app reads."""
-    return {
-        "id": layer_id,
-        "position": 0,
-        "title": layer_id.title(),
-        "description": None,
-        "source": "Somewhere",
-        "vintage": None,
-        "hazard_type": None,
-        "coverage": None,
-        "limitation": None,
-        "source_url": None,
-        "visualizations_json": "[]",
-        "feature_count": 0,
-        "geojson_gzip": gzip.compress(geojson.encode()),
-        "etag": f"etag-of-{layer_id}",
-        **values,
-    }
 
 
 def _set_layers(client, *layers: dict) -> None:
@@ -472,20 +353,6 @@ def test_layer_geojson_is_served_as_built_and_revalidates(client):
     repeat = client.get("/api/layers/demo.geojson", headers={"If-None-Match": response.headers["ETag"]})
     assert repeat.status_code == 304
     assert client.get("/api/layers/missing.geojson").status_code == 404
-
-
-def _claim(claim_id: str, county: str, date: str, paid: float, flood_event: str | None = None) -> dict:
-    return {
-        "id": claim_id, "county": county, "date_of_loss": date, "year_of_loss": int(date[:4]),
-        "flood_event": flood_event, "cause_of_damage": None, "paid_building": paid, "paid_contents": 0.0,
-        "paid_increased_cost_of_compliance": 0.0, "building_damage": None, "contents_damage": None,
-        "rated_flood_zone": None, "occupancy_type": None, "census_tract": None, "lon": None, "lat": None,
-    }
-
-
-def _gauge_year(station_id: str, year: int, days: int, total: float, wettest: float) -> dict:
-    return {"station_id": station_id, "year": year, "days_reported": days, "total_tenths_mm": total,
-            "wettest_day_tenths_mm": wettest, "days_over_2_inches": 0}
 
 
 @pytest.fixture()
