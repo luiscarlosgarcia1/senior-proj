@@ -1,0 +1,24 @@
+{# NOAA flood events: counts, filter chips (types and recent years), the list. #}
+<div class="flex items-baseline justify-between">
+  <h2 class="text-md font-semibold">{{ t("events.title") }}</h2>
+  <p class="text-xs text-muted"><span class="font-mono text-ink" x-text="total"></span> {{ t("events.noaa") }} · {{ t("events.showing") }} <span class="font-mono" x-text="events.length"></span></p>
+</div>
+<div class="my-2.5 flex flex-wrap gap-1.5">
+  <template x-for="c in chips" x-bind:key="c.id">
+    <button type="button" class="rounded-full border border-line px-2.5 py-[3px] text-sm text-muted hover:text-ink"
+            x-bind:class="chipClass()" x-bind:data-chip="c.id" x-on:click="pickChip()" x-text="c.label"></button>
+  </template>
+</div>
+<ul class="overflow-hidden rounded-md border border-line">
+  <template x-for="event in events" x-bind:key="event.id">
+    <li class="border-t border-line first:border-t-0">
+      <button type="button" class="flex w-full items-center gap-2 px-2.5 py-2 text-left hover:bg-panel2"
+              x-bind:class="rowClass()" x-bind:data-event="event.id" x-on:click="choose()">
+        <span class="h-2 w-2 shrink-0 rounded-full" x-bind:style="dot()" aria-hidden="true"></span>
+        <span class="flex-1 font-medium" x-text="title()"></span>
+        <span class="font-mono text-xs text-muted" x-text="date()"></span>
+      </button>
+    </li>
+  </template>
+  <li x-show="empty" x-cloak class="px-2.5 py-3 text-sm text-muted">{{ t("events.none") }}</li>
+</ul>

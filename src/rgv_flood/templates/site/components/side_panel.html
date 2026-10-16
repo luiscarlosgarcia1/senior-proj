@@ -1,0 +1,31 @@
+{# The map page's side panel: live alerts first, then flood events and the selected
+   event, rainfall records, local reports, and where the data came from. #}
+<section class="px-4 pb-3 pt-3.5" x-data="alertsPanel" data-panel="alerts">
+  <div class="mb-2.5 flex items-baseline justify-between">
+    <h2 class="flex items-center gap-2 text-md font-semibold"><span class="h-[7px] w-[7px] rounded-full bg-warn" aria-hidden="true"></span>{{ t("alerts.title") }}</h2>
+    <p class="text-xs text-muted" x-text="updated"></p>
+  </div>
+  <ul class="flex flex-col gap-2">
+    <template x-for="signal in signals" x-bind:key="signal.source + signal.native_id">
+      {% include "site/components/alert_card.html" %}
+    </template>
+  </ul>
+  <p class="text-sm text-muted" x-show="empty" x-cloak>{{ t("alerts.none") }}</p>
+</section>
+
+<section class="border-t border-line px-4 pb-3 pt-3.5" x-data="eventsPanel" data-panel="events">
+  {% include "site/components/event_list.html" %}
+  {% include "site/components/event_detail.html" %}
+</section>
+
+<section class="border-t border-line px-4 pb-3 pt-3.5" x-data="rainfallPanel" data-panel="rainfall">
+  {% include "site/components/rainfall_list.html" %}
+</section>
+
+<section class="border-t border-line px-4 pb-3 pt-3.5" x-data="reportsPanel" data-panel="reports">
+  {% include "site/components/report_list.html" %}
+</section>
+
+<section class="border-t border-line px-4 pb-6 pt-3.5" x-data="sourcesPanel" data-panel="sources">
+  {% include "site/components/source_list.html" %}
+</section>

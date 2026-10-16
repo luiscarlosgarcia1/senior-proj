@@ -86,3 +86,13 @@ def test_no_logo_mark_in_the_header(api_client):
 
     assert "bg-brand" not in header  # the old droplet mark
     assert "RGV Flood Impact Visualizer" in header
+
+
+def test_map_page_loads_one_entry_module(api_client):
+    """Modules imported by other modules must not also get their own (versioned) script
+    tag: the browser would run them twice, e.g. registering two click handlers."""
+    html = api_client.get("/").text
+
+    modules = [line for line in html.splitlines() if 'type="module"' in line]
+    assert len(modules) == 2  # store.js and the page entry
+    assert "/static/js/pages/map.js?v=" in html

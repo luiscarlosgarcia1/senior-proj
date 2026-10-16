@@ -21,10 +21,10 @@
       {% include "site/components/source_details.html" %}
       {% include "site/components/popup.html" %}
     </main>
+    <aside class="hidden min-h-0 w-full shrink-0 overflow-auto border-l border-line bg-panel lg:block lg:w-[344px]" data-view="events">
+      {% include "site/components/side_panel.html" %}
+    </aside>
   </div>
 </div>
 {% endblock %}
-{% block scripts %}
-<script type="module" src="{{ asset_url('js/panels/layer-panel.js') }}"></script>
-<script type="module" src="{{ asset_url('js/map/popups.js') }}"></script>
-{% endblock %}
+{% block scripts %}<script type="module" src="{{ asset_url('js/pages/map.js') }}"></script>{% endblock %}

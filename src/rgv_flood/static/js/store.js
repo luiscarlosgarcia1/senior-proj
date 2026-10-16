@@ -17,7 +17,6 @@ document.addEventListener("alpine:init", () => {
     county: "",
     theme: document.documentElement.dataset.theme || "dark",
     loading: false,
-    alertCount: 0,
     setCounty(slug) {
       if (slug === this.county) return;
       this.county = slug;
@@ -53,20 +52,38 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // Live official alerts, polled once a minute for the whole page: the header
+  // pill counts them and the map page's alerts panel lists them.
+  Alpine.store("alerts", {
+    signals: [],
+    refreshedAt: null,
+    loaded: false,
+    started: false,
+    async refresh() {
+      try {
+        const body = await getJson("live-signals");
+        this.signals = body.signals;
+        this.refreshedAt = body.refreshed_at;
+      } catch (error) {
+        if (!isAbort(error)) console.warn("live alerts unavailable", error);
+      } finally {
+        this.loaded = true;
+      }
+    },
+    start() {
+      if (this.started) return;
+      this.started = true;
+      this.refresh();
+      setInterval(() => this.refresh(), 60_000);
+    },
+  });
+
   Alpine.data("alertPill", () => ({
     get label() {
-      return t("alerts.pill", { n: Alpine.store("app").alertCount });
+      return t("alerts.pill", { n: Alpine.store("alerts").signals.length });
     },
-    async init() {
-      const refresh = async () => {
-        try {
-          Alpine.store("app").alertCount = (await getJson("live-signals")).signals.length;
-        } catch (error) {
-          if (!isAbort(error)) console.warn("live alerts unavailable", error);
-        }
-      };
-      await refresh();
-      setInterval(refresh, 60_000);
+    init() {
+      Alpine.store("alerts").start();
     },
   }));
 });

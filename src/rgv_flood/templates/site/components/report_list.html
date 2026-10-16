@@ -1,0 +1,11 @@
+{# Curated local news and government reports of past floods. #}
+<h2 class="mb-2.5 text-md font-semibold">{{ t("reports.title") }}</h2>
+<ul class="flex flex-col gap-2.5">
+  <template x-for="report in items" x-bind:key="report.id">
+    <li class="leading-snug">
+      <div class="mb-0.5 font-mono text-xs text-muted" x-text="meta()"></div>
+      <a x-bind:href="report.source_url" target="_blank" rel="noopener" x-text="report.headline"></a>
+    </li>
+  </template>
+</ul>
+<p class="text-sm text-muted" x-show="empty" x-cloak>{{ t("reports.none") }}</p>

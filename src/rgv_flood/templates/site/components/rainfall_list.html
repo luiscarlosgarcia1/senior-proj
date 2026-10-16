@@ -1,0 +1,17 @@
+{# The wettest single days at the gauges, longest bar first. #}
+<div class="mb-2.5 flex items-baseline justify-between">
+  <h2 class="text-md font-semibold">{{ t("rainfall.title") }}</h2>
+  <p class="text-xs text-muted">{{ t("rainfall.subtitle") }}</p>
+</div>
+<ul class="flex flex-col gap-2.5">
+  <template x-for="record in items" x-bind:key="record.station + record.date">
+    <li data-record>
+      <div class="flex items-baseline justify-between gap-2">
+        <span class="font-medium"><span x-text="record.station"></span> <span class="text-xs font-normal text-muted">· <span x-text="when()"></span></span></span>
+        <span class="font-mono text-base font-medium"><span x-text="inches()"></span> <span class="text-xs text-muted">in</span></span>
+      </div>
+      <div class="mt-1 h-[3px] rounded-sm bg-line"><div class="h-[3px] rounded-sm bg-layer-nfhl" x-bind:style="bar()"></div></div>
+    </li>
+  </template>
+</ul>
+<p class="text-sm text-muted" x-show="empty" x-cloak>{{ t("rainfall.none") }}</p>

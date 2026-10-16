@@ -1,0 +1,57 @@
+{# The selected event: rain at the nearest gauges on its day (bars, or the full table), and reports. #}
+<div x-data="eventDetail" x-show="open" x-cloak data-event-detail
+     class="mt-2.5 rounded-md border border-line2 bg-panel2 p-3 shadow-[inset_2px_0_var(--brand)]">
+  <template x-if="open">
+    <div>
+      <div class="text-xs font-semibold uppercase tracking-[1px] text-muted">{{ t("events.selected") }}</div>
+      <div class="mt-1 text-md font-semibold" x-text="heading"></div>
+      <div class="mt-0.5 text-sm text-muted" x-text="subheading"></div>
+      <div class="mt-3 flex items-center justify-between text-xs text-muted">
+        <span>{{ t("events.gauge_rain") }}</span>
+        <button type="button" class="underline decoration-line2 underline-offset-2 hover:text-ink" data-view-table x-on:click="toggleTable()">{{ t("events.view_table") }}</button>
+      </div>
+      <div x-show="!showTable">
+        <div class="mt-2 flex h-[84px] items-end gap-2 border-b border-line2">
+          <template x-for="bar in bars" x-bind:key="bar.id">
+            <div class="flex h-full flex-1 flex-col items-center justify-end gap-[3px]" data-gauge>
+              <span class="font-mono text-xs font-medium" x-text="bar.value"></span>
+              <div class="w-full max-w-7 rounded-t-sm bg-layer-nfhl" x-bind:style="bar.height"></div>
+              <span class="sr-only" x-text="bar.name"></span>
+            </div>
+          </template>
+        </div>
+        <div class="mt-1 flex gap-2">
+          <template x-for="bar in bars" x-bind:key="bar.id">
+            <div class="flex-1 truncate text-center text-[10px] text-muted" x-text="bar.name" x-bind:title="bar.distance"></div>
+          </template>
+        </div>
+      </div>
+      <table x-show="showTable" class="mt-2 w-full border-collapse font-mono text-xs">
+        <thead class="text-muted"><tr>
+          <th class="py-1 text-left font-sans font-semibold">{{ t("events.gauge") }}</th>
+          <template x-for="d in days" x-bind:key="d.date"><th class="py-1 text-right font-sans font-semibold" x-text="d.label"></th></template>
+        </tr></thead>
+        <tbody>
+          <template x-for="gauge in context.rain.gauges" x-bind:key="gauge.name">
+            <tr class="border-t border-line">
+              <td class="py-1 font-sans" x-text="gauge.name"></td>
+              <template x-for="cell in cells()" x-bind:key="cell.id"><td class="py-1 text-right" x-text="cell.text"></td></template>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <div class="mt-3 border-t border-line pt-2.5 text-xs text-muted">{{ t("events.related") }}</div>
+      <ul class="mt-1.5 flex flex-col gap-1.5 text-sm leading-snug">
+        <template x-for="report in context.reports" x-bind:key="report.id">
+          <li class="flex gap-2"><span class="text-layer-photos" aria-hidden="true">●</span>
+            <span><a x-bind:href="report.source_url" target="_blank" rel="noopener" x-text="report.headline"></a> <span class="text-muted" x-text="reportMeta()"></span></span></li>
+        </template>
+        <template x-for="nws in context.nws_reports" x-bind:key="nws.id">
+          <li class="flex gap-2"><span class="text-layer-nws" aria-hidden="true">◇</span>
+            <span><span x-text="nws.remark"></span> <span class="text-muted" x-text="nwsMeta()"></span></span></li>
+        </template>
+        <li class="text-muted" x-show="!context.reports.length && !context.nws_reports.length">{{ t("events.no_related") }}</li>
+      </ul>
+    </div>
+  </template>
+</div>

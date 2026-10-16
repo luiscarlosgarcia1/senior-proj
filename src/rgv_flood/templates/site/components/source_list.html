@@ -1,0 +1,13 @@
+{# Every dataset behind the map, with the date it was downloaded, and the build date. #}
+<div class="mb-2.5 flex items-baseline justify-between">
+  <h2 class="text-md font-semibold">{{ t("sources.title") }}</h2>
+  <p class="text-xs text-muted" x-text="built"></p>
+</div>
+<ul class="flex flex-col gap-1.5 text-sm">
+  <template x-for="source in sources" x-bind:key="source.id">
+    <li class="flex justify-between gap-2">
+      <a x-bind:href="source.url" target="_blank" rel="noopener" x-text="source.dataset || source.publisher"></a>
+      <span class="shrink-0 font-mono text-xs text-muted" x-text="retrieved()"></span>
+    </li>
+  </template>
+</ul>
