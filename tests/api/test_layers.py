@@ -5,6 +5,8 @@ import json
 
 from fixture_db import PHOTOS_GEOJSON
 
+from rgv_flood.db import Database
+
 
 def test_layers_grouped_in_order(api_client):
     body = api_client.get("/api/v1/layers").json()
@@ -51,14 +53,15 @@ def test_virtual_layers_in_evidence(api_client):
     assert virtual["live-alerts"]["legend"] == {"shape": "dia", "color": "warn"}
 
 
-def test_layer_geojson_gzip_passthrough(api_client):
+def test_layer_geojson_gzip_passthrough(api_client, fixture_db):
     with api_client.stream("GET", "/api/v1/layers/hcdd1-flood-photos.geojson", headers={"Accept-Encoding": "gzip"}) as response:
         raw = b"".join(response.iter_raw())
 
     assert response.headers["content-encoding"] == "gzip"
     assert response.headers["vary"] == "Accept-Encoding"
     assert response.headers["cache-control"] == "public, max-age=300, stale-while-revalidate=86400"
-    assert raw == gzip.compress(PHOTOS_GEOJSON.encode())  # the stored bytes, not recompressed
+    stored = Database(fixture_db).scalar("select geojson_gzip from layers where id = 'hcdd1-flood-photos'")
+    assert raw == stored  # the stored bytes, not recompressed
 
 
 def test_layer_geojson_plain_when_gzip_not_accepted(api_client):
