@@ -374,9 +374,9 @@ PANEL = {
                   "sev", "nfhl"),
     "hidalgo-firm-1981": ("hazard", "hidalgo-firm-1981", "Hidalgo historic flood zones (1981 FIRM)",
                           "Hidalgo historic flood zones (1981 FIRM)", "sev", "firm"),
-    # Each TWDB extent is drawn in one color of the scale: 1% orange, 0.2% red.
-    "twdb-cursory-1in100": ("hazard", "twdb", "TWDB modeled flood extent", "1% annual chance", "sev", "sev-mod"),
-    "twdb-cursory-1in500": ("hazard", "twdb", "TWDB modeled flood extent", "0.2% annual chance", "sev", "sev-high"),
+    # Each TWDB extent is drawn in its severity color: 1% red, 0.2% orange.
+    "twdb-cursory-1in100": ("hazard", "twdb", "TWDB modeled flood extent", "1% annual chance", "sev", "sev-high"),
+    "twdb-cursory-1in500": ("hazard", "twdb", "TWDB modeled flood extent", "0.2% annual chance", "sev", "sev-mod"),
     "waterways": ("works", "waterways", "Drains, canals and creeks", "Drains, canals and creeks", "line", "drain"),
     "flood-infrastructure": ("works", "flood-infrastructure", "Flood infrastructure, state flood plan",
                              "Flood infrastructure, state flood plan", "diaf", "infra"),

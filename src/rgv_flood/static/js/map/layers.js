@@ -31,6 +31,26 @@ function withParts(spec, entry) {
   return ["all", spec.filter, kept.length ? ["any", ...kept] : ["==", 1, 0]];
 }
 
+// Layers sharing a panel row stack with the more severe on top: the TWDB 0.2%
+// extent holds the whole 1% extent, which would otherwise be hidden under it.
+const SEVERITY_RANK = { "sev-mod": 1, "sev-high": 2 };
+const rank = (entry) => SEVERITY_RANK[entry.info.legend.color] || 0;
+
+/** Registered layers in drawing order: rows as they were first shown, each row's layers by rank. */
+function stackOrder() {
+  const entries = [...registry.values()];
+  const rows = [...new Set(entries.map((entry) => entry.info.panel_row))];
+  return entries.sort((a, b) => rows.indexOf(a.info.panel_row) - rows.indexOf(b.info.panel_row) || rank(a) - rank(b));
+}
+
+/** The style layer a new layer of `entry` goes beneath: the lowest of its more severe row-mates (or none). */
+function beneath(map, entry) {
+  const above = new Set(stackOrder()
+    .filter((other) => other.info.panel_row === entry.info.panel_row && rank(other) > rank(entry))
+    .flatMap((other) => styleLayerIds(map, other.info.id)));
+  return map.getLayersOrder().find((id) => above.has(id));
+}
+
 /** A registered layer's style layers, with its parts and visibility applied. */
 const specsFor = (entry, colors) => styleLayersFor(entry.info, colors).map((spec) => (
   { ...spec, filter: withParts(spec, entry), layout: { ...spec.layout, visibility: entry.visible ? "visible" : "none" } }
@@ -41,8 +61,8 @@ export function ownStyle() {
   const colors = readColors();
   const sources = {};
   const layers = [];
-  for (const [id, entry] of registry) {
-    sources[`src-${id}`] = entry.source;
+  for (const entry of stackOrder()) {
+    sources[`src-${entry.info.id}`] = entry.source;
     layers.push(...specsFor(entry, colors));
   }
   return { sources, layers };
@@ -65,8 +85,9 @@ function ensureOnMap(map, id) {
   if (switchingStyle) return; // the new style brings everything in the registry with it
   const entry = registry.get(id);
   if (!map.getSource(`src-${id}`)) map.addSource(`src-${id}`, entry.source);
+  const before = beneath(map, entry);
   for (const spec of specsFor(entry, readColors())) {
-    if (!map.getLayer(spec.id)) map.addLayer(spec);
+    if (!map.getLayer(spec.id)) map.addLayer(spec, before);
   }
 }
 

@@ -263,14 +263,21 @@ def test_photos_you_can_open_and_photo_locations_have_different_colors(map_page)
     ]
 
 
-def test_twdb_one_percent_is_orange_and_point_two_percent_red(map_page):
+def test_twdb_one_percent_is_red_and_drawn_over_point_two_percent(map_page):
     page = map_page()
     _row(page, "twdb").check()
     wait_js(page, LAYER.format("lyr-twdb-cursory-1in100-fill") + " && " + LAYER.format("lyr-twdb-cursory-1in500-fill"))
 
     high, moderate = _tokens(page, "--sev-high", "--sev-mod")
     paint = "window.__rgvMap.getPaintProperty('lyr-twdb-cursory-{}-fill', 'fill-color')"
-
-    assert page.evaluate(paint.format("1in100")) == moderate
-    assert page.evaluate(paint.format("1in500")) == high
+    assert page.evaluate(paint.format("1in100")) == high
+    assert page.evaluate(paint.format("1in500")) == moderate
     expect(page.locator('[data-row="twdb"] [data-sub] i.sw')).to_have_count(2)
+
+    # The 0.2% extent holds the whole 1% extent, so the 1% one goes on top to be seen,
+    # and stays there when the theme switch rebuilds the style.
+    order = "(() => { const o = window.__rgvMap.getLayersOrder();"             " return o.indexOf('lyr-twdb-cursory-1in100-fill') > o.indexOf('lyr-twdb-cursory-1in500-line'); })()"
+    assert page.evaluate(order)
+    page.locator("header label:has-text('Dark') input").check()
+    wait_js(page, LAYER.format("lyr-twdb-cursory-1in100-fill") + " && " + LAYER.format("lyr-twdb-cursory-1in500-fill"))
+    assert page.evaluate(order)
