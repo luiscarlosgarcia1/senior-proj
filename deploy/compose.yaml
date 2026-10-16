@@ -1,0 +1,30 @@
+# On the server: the app and Caddy in front of it (HTTPS certificates,
+# compression, HSTS). Settings come from .env next to this file (see .env.example).
+#   docker compose pull && docker compose up -d
+services:
+  app:
+    image: ${RGV_IMAGE:-ghcr.io/luiscarlosgarcia1/senior-proj:latest}
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      RGV_DOMAIN: ${RGV_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

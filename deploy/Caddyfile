@@ -1,0 +1,8 @@
+# Caddy gets and renews the HTTPS certificate for RGV_DOMAIN by itself
+# (ports 80 and 443 must be open). Responses the app already compressed
+# (map layers, tiles) are passed through as they are.
+{$RGV_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	reverse_proxy app:8000
+}

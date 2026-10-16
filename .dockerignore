@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+.ruff_cache
+.pytest_cache
+.superpowers
+.claude
+__pycache__
+tmp
+data/ml
+data/generated/.live-signals-scheduler.lock
+docs
+tests
