@@ -206,6 +206,16 @@ LAYERS = [
 TILES = [{"layer_id": "twdb-cursory-1in100", "z": 10, "x": 232, "y": 434, "data": gzip.compress(b"mvt")}]
 
 
+NWS_REPORTS = [
+    {"id": "nws-1", "county": "hidalgo", "kind": "flash_flood", "reported_at": "2020-07-25T23:10:00Z",
+     "city": "3 ENE Weslaco", "remark": "Streets flooded.", "source": "Law Enforcement", "magnitude": None,
+     "lon": -97.95, "lat": 26.17},
+    {"id": "nws-2", "county": "cameron", "kind": "flood", "reported_at": "2020-07-25T20:00:00Z",
+     "city": "Harlingen", "remark": "Water in homes.", "source": "Public", "magnitude": None,
+     "lon": -97.7, "lat": 26.19},
+]
+
+
 def build_fixture_database(path, *, history: bool = False):
     """Write the fixture database to `path` and return it. `history` adds claims,
     policies and gauge-years for the year-by-year page."""
@@ -217,6 +227,7 @@ def build_fixture_database(path, *, history: bool = False):
         record_sources(connection, SOURCES)
         replace_table(connection, "layers", LAYERS)
         replace_table(connection, "layer_tiles", TILES)
+        replace_table(connection, "nws_flood_reports", NWS_REPORTS)
         replace_table(connection, "build_info", [{"key": "built_at", "value": "2026-10-15T12:00:00Z"}])
         if history:
             replace_table(connection, "nfip_claims", CLAIMS)

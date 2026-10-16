@@ -88,12 +88,19 @@ def _events(db: Database, where: str = "", parameters: tuple = ()) -> list[dict]
     return db.rows(query, parameters)
 
 
-def flood_events(db: Database, year: str | None = None, county_slug: str | None = None) -> list[dict]:
-    """Event rows (newest first), optionally filtered to one year and/or county.
+def flood_events(
+    db: Database, year: str | None = None, county_slug: str | None = None, event_type: str | None = None
+) -> list[dict]:
+    """Event rows (newest first), optionally filtered to one year, county and/or type.
 
     ``lat`` / ``lon`` are None when the event has no point to fly the map to.
     """
-    return _events(db, *_where({"substr(date, 1, 4)": year, "county": county_slug})) or []
+    return _events(db, *_where({"substr(date, 1, 4)": year, "county": county_slug, "type": event_type})) or []
+
+
+def flood_event_types(db: Database, county_slug: str | None = None) -> list[str]:
+    where, parameters = _where({"county": county_slug})
+    return [row["type"] for row in db.app_rows(f"select distinct type from flood_events{where} order by type", parameters)]
 
 
 def flood_event_count(db: Database) -> int:
@@ -233,6 +240,19 @@ def reports_near_event(db: Database, event: dict) -> list[dict]:
            where r.county = :county and flood.first_day <= :last and flood.last_day >= :first
            order by r.event_date, r.rowid""",
         {"county": event["county"], "first": first.isoformat(), "last": last.isoformat()},
+    )
+
+
+def nws_reports_near_event(db: Database, event: dict) -> list[dict]:
+    """Flooding reported to the National Weather Service in the event's county
+    on the event's days (the same window as its rain and curated reports)."""
+    first, _, last = _days_around(event)
+    return db.app_rows(
+        """select id, county, kind, reported_at, city, remark, source, magnitude, lon, lat
+           from nws_flood_reports
+           where county = ? and substr(reported_at, 1, 10) between ? and ?
+           order by reported_at, id""",
+        (event["county"], first.isoformat(), last.isoformat()),
     )
 
 
