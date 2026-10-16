@@ -154,3 +154,87 @@ class RainfallRecord(BaseModel):
 
 # Query parameter type: one of the four counties (anything else is a 422).
 County = Literal["cameron", "hidalgo", "starr", "willacy"]
+
+
+# ---- live signals ----
+
+
+class LiveSignal(BaseModel):
+    source: str
+    native_id: str
+    source_url: str
+    source_publisher: str
+    source_channel: str
+    summary: str
+    county_slugs: list[str]
+    is_mappable: bool
+    geometry_absence_reason: str | None = None
+    published_at: str | None = None
+    effective_at: str | None = None
+    source_updated_at: str | None = None
+    expires_at: str | None = None
+    last_seen_at: str
+    retrieved_at: str
+
+
+class LiveSignalsResponse(BaseModel):
+    refreshed_at: str | None
+    signals: list[LiveSignal]
+
+
+# ---- claims history ----
+
+
+class HistoryYear(BaseModel):
+    year: int
+    claims: int
+    paid: int
+    flood_event: str | None = None
+    busiest_month: int | None = None
+    policies: int | None = None
+    claims_per_1000_policies: float | None = None
+    rain_inches: float | None = None
+    complete_gauges: int
+    wettest_day_inches: float | None = None
+    noaa_flood_events: int | None = None
+    nws_flood_reports: int | None = None
+
+
+class HistoryTotals(BaseModel):
+    claims: int
+    paid: int
+    worst_year: int | None = None
+    worst_year_claims: int
+    worst_year_event: str | None = None
+
+
+class Correlation(BaseModel):
+    years: int
+    with_annual_rain: float | None = None
+    with_wettest_day: float | None = None
+
+
+class History(BaseModel):
+    first_year: int
+    last_year: int
+    years: list[HistoryYear]
+    totals: HistoryTotals
+    correlation: Correlation
+
+
+# ---- sources ----
+
+
+class Source(BaseModel):
+    id: str
+    publisher: str | None = None
+    dataset: str | None = None
+    url: str | None = None
+    retrieved_at: str | None = None
+    record_count: int | None = None
+    notes: str | None = None
+
+
+class SourcesResponse(BaseModel):
+    built_at: str | None
+    sources: list[Source]

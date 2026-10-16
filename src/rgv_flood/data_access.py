@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import sqlite3
 from datetime import date, timedelta
 
 from rgv_flood.db import Database
@@ -259,6 +260,14 @@ def nws_reports_near_event(db: Database, event: dict) -> list[dict]:
 # ---- provenance ----
 
 
+def built_at(db: Database) -> str | None:
+    """When the pipeline last finished building the database (None if unknown)."""
+    try:
+        return db.scalar("select value from build_info where key = 'built_at'")
+    except sqlite3.OperationalError:  # a database built before build_info existed
+        return None
+
+
 def data_sources(db: Database) -> list[dict]:
     """Every dataset in the database: who published it, when it was fetched,
     how many records it holds. Events, weather and reports first, then layers."""
@@ -323,6 +332,11 @@ def active_official_signals(db: Database, county_slug: str | None = None) -> lis
         if county_slug is None or county_slug in row["county_slugs"]:
             signals.append(row)
     return signals
+
+
+def live_signals_refreshed_at(db: Database) -> str | None:
+    """When a live-alert poll last finished (None before the first one)."""
+    return db.scalar("select max(completed_at) from live_signal_runs where is_complete = 1")
 
 
 # ---- year by year: claims beside rainfall ----

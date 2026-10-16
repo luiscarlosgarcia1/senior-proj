@@ -8,17 +8,10 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from rgv_flood.api.models import HealthResponse
-from rgv_flood.db import Database, Db
+from rgv_flood.data_access import built_at
+from rgv_flood.db import Db
 
 router = APIRouter()
-
-
-def built_at(db: Database) -> str | None:
-    """When the pipeline last built the database (None if unknown)."""
-    try:
-        return db.scalar("select value from build_info where key = 'built_at'")
-    except sqlite3.OperationalError:  # a database built before build_info existed
-        return None
 
 
 @router.get("/health", response_model=HealthResponse)
