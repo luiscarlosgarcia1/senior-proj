@@ -25,5 +25,22 @@
   "mobile.map": "Map",
   "mobile.layers": "Layers",
   "mobile.events": "Events",
-  "mobile.claims": "Claims"
+  "mobile.claims": "Claims",
+  "layers.title": "Layers",
+  "layers.active": "active",
+  "layers.source": "About this layer's source",
+  "legend.active": "Active layers",
+  "legend.fewer_claims": "fewer claims",
+  "legend.more_claims": "more",
+  "legend.severity": "Relative severity",
+  "severity.high": "High",
+  "severity.moderate": "Moderate",
+  "severity.low": "Low",
+  "severity.uncategorized": "Uncategorized",
+  "common.close": "Close",
+  "source.source": "Source",
+  "source.vintage": "Vintage",
+  "source.coverage": "Coverage",
+  "source.limitation": "Not for:",
+  "source.publisher_link": "Publisher's page"
 }

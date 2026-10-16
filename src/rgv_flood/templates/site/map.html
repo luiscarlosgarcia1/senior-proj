@@ -6,9 +6,15 @@
   {% include "site/components/header.html" %}
   {% if not data_ready %}{% include "site/components/no_data.html" %}{% endif %}
   <div class="flex min-h-0 flex-1" id="map-page">
-    <main class="relative min-w-0 flex-1">
+    <aside class="hidden min-h-0 w-full shrink-0 flex-col border-r border-line bg-panel lg:flex lg:w-72" x-data="layerPanel" data-view="layers">
+      {% include "site/components/layer_panel.html" %}
+    </aside>
+    <main class="relative min-w-0 flex-1" data-view="map">
       <div id="map" class="absolute inset-0"
            data-basemap-light="{{ settings.basemap_light_style }}" data-basemap-dark="{{ settings.basemap_dark_style }}"></div>
+      {% include "site/components/legend.html" %}
+      {% include "site/components/severity_legend.html" %}
+      {% include "site/components/source_details.html" %}
       <div class="absolute inset-x-0 bottom-0 z-[500] flex h-7 items-center justify-between gap-4 border-t border-line bg-panel px-4 text-[11.5px] text-muted">
         {% include "site/components/disclaimer.html" %}
       </div>
@@ -16,3 +22,4 @@
   </div>
 </div>
 {% endblock %}
+{% block scripts %}<script type="module" src="{{ asset_url('js/panels/layer-panel.js') }}"></script>{% endblock %}

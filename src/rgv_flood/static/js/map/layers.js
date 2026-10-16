@@ -1,0 +1,116 @@
+/* Puts layers on the map, shows and hides them, and keeps them across theme
+ * switches.
+ *
+ * Every layer the reader turns on is downloaded once and kept in `registry`
+ * (its source spec, with GeoJSON data held in memory, and its info). The map
+ * itself can be rebuilt from the registry at any time, which is what a theme
+ * switch does: the basemap changes, our sources and style layers are re-added
+ * from memory with the new theme's colors, and nothing is downloaded again. */
+
+import { getJson } from "../api.js";
+import { readColors, styleLayersFor } from "./styles.js";
+
+const registry = new Map(); // layer id -> { info, source, visible, partsOff: Set }
+const loading = new Map(); // layer id -> Promise of its source spec
+
+/** Where the layer's data comes from: tiles for big layers, GeoJSON (fetched by us) otherwise. */
+async function sourceFor(info) {
+  if (info.delivery === "tiles") {
+    return { type: "vector", tiles: [new URL(info.url, location.origin).href], minzoom: 8, maxzoom: 14 };
+  }
+  const path = info.url.replace(/^\/api\/v1\//, "");
+  return { type: "geojson", data: await getJson(path, {}, { cancelPrevious: false }) };
+}
+
+/** The filter of a style layer with the layer's switched-off parts left out. */
+function withParts(spec, entry) {
+  const parts = entry.info.parts || [];
+  if (!parts.length || !entry.partsOff.size) return spec.filter;
+  const kept = parts.filter((part) => !entry.partsOff.has(part.id)).map((part) => part.filter);
+  return ["all", spec.filter, kept.length ? ["any", ...kept] : ["==", 1, 0]];
+}
+
+/** Our sources and style layers, as they should be with the current colors. */
+export function ownStyle() {
+  const colors = readColors();
+  const sources = {};
+  const layers = [];
+  for (const [id, entry] of registry) {
+    sources[`src-${id}`] = entry.source;
+    for (const spec of styleLayersFor(entry.info, colors)) {
+      layers.push({ ...spec, filter: withParts(spec, entry), layout: { ...spec.layout, visibility: entry.visible ? "visible" : "none" } });
+    }
+  }
+  return { sources, layers };
+}
+
+let switchingStyle = false;
+
+/** Call before map.setStyle(): until the new style loads, layers wait; then
+ * anything registered meanwhile is added too. */
+export function beginStyleSwitch(map) {
+  switchingStyle = true;
+  map.once("style.load", () => {
+    switchingStyle = false;
+    for (const id of registry.keys()) ensureOnMap(map, id);
+  });
+}
+
+/** Add whatever of a registered layer the map doesn't have yet. */
+function ensureOnMap(map, id) {
+  if (switchingStyle) return; // the new style brings everything in the registry with it
+  const { sources, layers } = ownStyle();
+  if (!map.getSource(`src-${id}`)) map.addSource(`src-${id}`, sources[`src-${id}`]);
+  for (const layer of layers.filter((spec) => spec.source === `src-${id}`)) {
+    if (!map.getLayer(layer.id)) map.addLayer(layer);
+  }
+}
+
+function styleLayerIds(map, id) {
+  return (map.getStyle()?.layers || []).filter((layer) => layer.source === `src-${id}`).map((layer) => layer.id);
+}
+
+/** Show a layer, downloading it the first time. */
+export async function showLayer(map, info) {
+  const known = registry.get(info.id);
+  if (known) {
+    known.visible = true;
+    for (const layerId of styleLayerIds(map, info.id)) map.setLayoutProperty(layerId, "visibility", "visible");
+    ensureOnMap(map, info.id);
+    return;
+  }
+  if (!loading.has(info.id)) loading.set(info.id, sourceFor(info));
+  let source;
+  try {
+    source = await loading.get(info.id);
+  } finally {
+    loading.delete(info.id);
+  }
+  const entry = registry.get(info.id) || { info, source, visible: true, partsOff: new Set() };
+  registry.set(info.id, entry);
+  ensureOnMap(map, info.id);
+  for (const layerId of styleLayerIds(map, info.id)) {
+    map.setLayoutProperty(layerId, "visibility", entry.visible ? "visible" : "none");
+  }
+}
+
+/** Hide a layer (it stays loaded for next time). */
+export function hideLayer(map, id) {
+  const entry = registry.get(id);
+  if (entry) entry.visible = false;
+  for (const layerId of styleLayerIds(map, id)) map.setLayoutProperty(layerId, "visibility", "none");
+}
+
+/** Turn one part of a layer (e.g. photo locations) on or off. */
+export function setPartVisible(map, id, partId, on) {
+  const entry = registry.get(id);
+  if (!entry) return;
+  if (on) entry.partsOff.delete(partId);
+  else entry.partsOff.add(partId);
+  for (const spec of styleLayersFor(entry.info, readColors())) {
+    if (map.getLayer(spec.id)) map.setFilter(spec.id, withParts(spec, entry));
+  }
+}
+
+/** The GeoJSON of a loaded layer (for the county outlines), or undefined. */
+export const loadedData = (id) => registry.get(id)?.source?.data;

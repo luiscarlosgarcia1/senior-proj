@@ -1,0 +1,17 @@
+{# The legend of the layers that are on, over the map. #}
+<div x-data="legend" x-show="rows.length" x-cloak
+     class="pointer-events-none absolute bottom-12 left-4 z-[500] hidden w-60 rounded-lg border border-line bg-panel/95 p-3 shadow-1 sm:block">
+  <h3 class="mb-2 text-xs font-semibold uppercase tracking-[1px] text-muted">{{ t("legend.active") }}</h3>
+  <ul class="flex max-h-48 flex-col gap-1.5 overflow-hidden text-sm" data-legend>
+    <template x-for="row in rows" x-bind:key="row.id">
+      <li class="flex items-center gap-2.5">
+        <span class="grid w-[22px] shrink-0 place-items-center" aria-hidden="true"><i x-bind:class="swatchClass()" x-bind:style="swatchStyle()"></i></span>
+        <span class="truncate" x-text="shortLabel()"></span>
+      </li>
+    </template>
+  </ul>
+  <div x-show="claimsOn" class="mt-2.5">
+    <div class="sw-ramp h-2 w-full rounded-sm"></div>
+    <div class="mt-0.5 flex justify-between font-mono text-xs text-muted"><span>{{ t("legend.fewer_claims") }}</span><span>{{ t("legend.more_claims") }}</span></div>
+  </div>
+</div>

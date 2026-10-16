@@ -190,7 +190,8 @@ PHOTOS_GEOJSON = (
 LAYERS = [
     _layer("county-boundaries", position=0, layer_group="base", short_label="County boundaries",
            legend_json='{"shape": "line", "color": "county"}'),
-    _layer("fema-nfhl", position=1, title="FEMA effective flood hazard (NFHL)", feature_count=20),
+    _layer("fema-nfhl", position=1, title="FEMA effective flood hazard (NFHL)", feature_count=20,
+           row_label="FEMA effective flood hazard (NFHL)", short_label="FEMA effective flood hazard (NFHL)"),
     _layer("twdb-cursory-1in100", position=2, panel_row="twdb", row_label="TWDB modeled flood extent",
            short_label="1% annual chance", delivery="tiles", tiles_hash="abc123def456"),
     _layer("twdb-cursory-1in500", position=3, panel_row="twdb", row_label="TWDB modeled flood extent",

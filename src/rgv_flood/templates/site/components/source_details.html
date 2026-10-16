@@ -1,0 +1,28 @@
+{# A layer's source card: what it is, where it comes from, what it should not be used for. #}
+<div x-data="sourceDetails" x-show="open" x-cloak data-source-details role="dialog" aria-modal="false" aria-labelledby="source-details-title"
+     class="absolute left-4 top-4 z-[600] w-[min(360px,calc(100%-2rem))] rounded-lg border border-line2 bg-panel p-4 shadow-2"
+     x-on:keydown.escape.window="close()">
+  <template x-if="layer">
+    <div>
+      <div class="flex items-start justify-between gap-3">
+        <h3 id="source-details-title" class="text-md font-semibold" x-text="layer.title"></h3>
+        <button type="button" class="text-muted hover:text-ink" x-on:click="close()" aria-label="{{ t('common.close') }}">✕</button>
+      </div>
+      <p class="mt-2 text-sm leading-snug" x-show="layer.description" x-text="layer.description"></p>
+      <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+        <dt class="text-muted">{{ t("source.source") }}</dt><dd x-text="layer.source"></dd>
+        <dt class="text-muted" x-show="layer.vintage">{{ t("source.vintage") }}</dt><dd x-show="layer.vintage" x-text="layer.vintage"></dd>
+        <dt class="text-muted" x-show="layer.coverage">{{ t("source.coverage") }}</dt><dd x-show="layer.coverage" x-text="layer.coverage"></dd>
+      </dl>
+      <p class="mt-3 border-t border-line pt-2 text-sm text-muted" x-show="layer.limitation">
+        <span class="font-medium text-ink">{{ t("source.limitation") }}</span> <span x-text="layer.limitation"></span>
+      </p>
+      <ul class="mt-2 flex flex-col gap-1 text-sm">
+        <li x-show="layer.source_url"><a x-bind:href="layer.source_url" target="_blank" rel="noopener">{{ t("source.publisher_link") }}</a></li>
+        <template x-for="link in layer.visualizations" x-bind:key="link.url">
+          <li><a x-bind:href="link.url" target="_blank" rel="noopener" x-text="link.title"></a></li>
+        </template>
+      </ul>
+    </div>
+  </template>
+</div>

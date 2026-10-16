@@ -1,0 +1,35 @@
+{# Layers: groups with a tri-state checkbox, rows with a checkbox, legend swatch, count and source button;
+   sub-options (layers sharing a row, or a layer's parts) appear under a row while it is on. #}
+<div class="flex items-center justify-between px-4 pb-2.5 pt-3.5">
+  <h2 class="text-md font-semibold">{{ t("layers.title") }}</h2>
+  <p class="text-sm text-muted"><span class="font-mono text-ink" x-text="activeCount">0</span> {{ t("layers.active") }}</p>
+</div>
+<div class="flex-1 overflow-auto pb-3">
+  <template x-for="group in groups" x-bind:key="group.id">
+    <section class="border-t border-line pb-1.5 pt-3" x-bind:data-group="group.id">
+      <label class="flex cursor-pointer items-center gap-2.5 px-4 pb-1.5">
+        <input type="checkbox" class="cb" x-bind:checked="groupChecked()" x-init="watchIndeterminate()" x-on:change="toggleGroup()">
+        <span class="flex-1 text-xs font-semibold uppercase tracking-[1px] text-muted" x-text="group.title"></span>
+        <span class="font-mono text-xs text-faint" data-tally x-text="groupTally()"></span>
+      </label>
+      <template x-for="row in group.rows" x-bind:key="row.id">
+        <div x-bind:data-row="row.id">
+          <label class="flex cursor-pointer items-center gap-2.5 px-4 py-[5px]">
+            <input type="checkbox" class="cb" x-bind:checked="rowChecked()" x-on:change="toggleRow($event)">
+            <span class="grid w-[22px] shrink-0 place-items-center" aria-hidden="true"><i x-bind:class="swatchClass()" x-bind:style="swatchStyle()"></i></span>
+            <span class="min-w-0 flex-1 leading-snug" x-text="row.label"></span>
+            <span class="font-mono text-xs text-muted" x-text="rowCount()"></span>
+            <button type="button" class="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border border-line2 font-mono text-[9px] italic text-muted hover:text-ink"
+                    x-bind:data-info="row.id" x-on:click.prevent="openDetails()" aria-label="{{ t('layers.source') }}">i</button>
+          </label>
+          <template x-for="sub in subOptions()" x-bind:key="sub.id">
+            <label class="flex cursor-pointer items-center gap-2.5 py-[5px] pl-11 pr-4 text-sm text-muted" x-bind:data-sub="sub.id">
+              <input type="checkbox" class="cb" x-bind:checked="subChecked()" x-on:change="toggleSub($event)">
+              <span x-text="sub.label"></span>
+            </label>
+          </template>
+        </div>
+      </template>
+    </section>
+  </template>
+</div>

@@ -2,12 +2,13 @@
 
 const inFlight = new Map(); // path -> AbortController of the latest call
 
-/** GET /api/v1/<path> as JSON. A newer call to the same path cancels the older
- * one (its promise rejects with an AbortError, which callers can ignore). */
-export async function getJson(path, params = {}) {
+/** GET /api/v1/<path> as JSON. By default a newer call to the same path cancels
+ * the older one (its promise rejects with an AbortError, which callers can
+ * ignore); pass { cancelPrevious: false } for downloads that must all finish. */
+export async function getJson(path, params = {}, { cancelPrevious = true } = {}) {
   const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== null && v !== undefined && v !== ""));
-  const key = path;
-  inFlight.get(key)?.abort();
+  const key = cancelPrevious ? path : `${path}#${Math.random()}`;
+  if (cancelPrevious) inFlight.get(key)?.abort();
   const controller = new AbortController();
   inFlight.set(key, controller);
   const url = `/api/v1/${path}${query.size ? `?${query}` : ""}`;
