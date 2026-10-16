@@ -109,13 +109,13 @@ def test_theme_switch_keeps_layers(map_page):
     wait_js(page, LAYER.format("lyr-fema-nfhl-fill"))
     dark = page.evaluate("window.__rgvMap.getPaintProperty('lyr-fema-nfhl-fill', 'fill-color')")
 
-    page.locator("header label:has-text('Light') input").check()
+    page.locator("header label:has-text('Dark') input").check()
 
     wait_js(page, 
         f"window.__rgvMap.isStyleLoaded() && window.__rgvMap.getLayer('lyr-fema-nfhl-fill') && "
         f"JSON.stringify(window.__rgvMap.getPaintProperty('lyr-fema-nfhl-fill', 'fill-color')) !== {dark!r}"
     )
-    assert page.evaluate("document.documentElement.dataset.theme") == "light"
+    assert page.evaluate("document.documentElement.dataset.theme") == "dark"
 
 
 def test_theme_switch_during_layer_load(map_page, console_errors):
@@ -125,7 +125,7 @@ def test_theme_switch_during_layer_load(map_page, console_errors):
 
     _row(page, "fema-nfhl").check()
     wait_js(page, "true")  # let the request start
-    page.locator("header label:has-text('Light') input").check()
+    page.locator("header label:has-text('Dark') input").check()
     page.wait_for_timeout(300)
     for route in release:
         route.continue_()
@@ -156,3 +156,22 @@ def test_tiled_layer_draws_features(map_page, console_errors):
     wait_js(page, "window.__rgvMap.querySourceFeatures('src-twdb-cursory-1in100', "
                   "{sourceLayer: 'twdb-cursory-1in100'}).length > 0", timeout=15)
     assert console_errors == []
+
+
+def test_opens_in_light_mode_even_when_the_system_is_dark(page, live_server):
+    page.emulate_media(color_scheme="dark")
+    page.goto(f"{live_server}/?test=1")
+
+    assert page.evaluate("document.documentElement.dataset.theme") == "light"
+    expect(page.locator("header label:has-text('Dark') input")).not_to_be_checked()
+
+
+def test_dark_choice_is_remembered(map_page, browser):
+    page = map_page()
+    page.locator("header label:has-text('Dark') input").check()
+    assert page.evaluate("document.documentElement.dataset.theme") == "dark"
+
+    page.reload()
+
+    assert page.evaluate("document.documentElement.dataset.theme") == "dark"
+    expect(page.locator("header label:has-text('Dark') input")).to_be_checked()

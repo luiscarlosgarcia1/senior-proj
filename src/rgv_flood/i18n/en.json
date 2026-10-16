@@ -16,7 +16,6 @@
   "county.label": "County",
   "county.all": "All four counties",
   "county.all_short": "All four",
-  "theme.light": "Light",
   "alerts.pill": "{n} active alerts",
   "footer.built": "Data built {date}",
   "nodata.message": "No data yet: run the build (uv run --group pipeline python pipeline/build_all.py), then reload.",
@@ -104,5 +103,6 @@
   "claims.col.wettest": "Wettest day, in",
   "claims.col.event": "Event",
   "claims.footnote": "Rain is the average of the gauges that reported on at least 330 days of the year; a dash means no gauge did. Dollars are as paid, not adjusted for inflation. Policies are counted from 2009.",
-  "claims.sources": "Sources"
+  "claims.sources": "Sources",
+  "theme.dark": "Dark"
 }

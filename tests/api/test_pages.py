@@ -15,7 +15,7 @@ def test_map_page_renders(api_client):
     html = response.text
     assert "<title>RGV Flood Impact Visualizer</title>" in html
     assert 'href="/claims"' in html and "Map explorer" in html
-    assert 'data-theme="dark"' in html  # the default before the bootstrap script runs
+    assert 'data-theme="light"' in html  # the default before the bootstrap script runs
     assert "/static/vendor/alpine/alpine-csp.min.js" in html
     assert "Educational project only" not in html  # removed at the reader's request
     assert "A UTRGV Computer Science senior project" not in html

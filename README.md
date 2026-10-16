@@ -20,7 +20,7 @@ emergency guidance.
 | Server | One FastAPI service (Uvicorn): the pages, a typed JSON API documented at `/docs`, vector tiles, static files, and the live-alert refresher |
 | Data | One SQLite database, `data/generated/rgv-flood.sqlite3`, opened read-only by the app (WAL mode) |
 | Pages | Jinja templates built from components, Alpine.js (CSP build) for behaviour, Tailwind CSS v4 compiled by Tailwind's standalone binary through `pytailwindcss` |
-| Map | MapLibre GL JS on OpenStreetMap vector basemaps from OpenFreeMap (Positron in light mode, Dark in dark mode) |
+| Map | MapLibre GL JS on OpenStreetMap vector basemaps from OpenFreeMap (Positron in light mode, the default; Dark in dark mode) |
 | Charts | Plotly.js, on the claims page only |
 | Pipeline | Python with geopandas, shapely and GDAL: pulls every source and writes the database |
 | Deployment | Docker image behind Caddy (HTTPS), built and published by GitHub Actions |
@@ -77,8 +77,8 @@ Open <http://127.0.0.1:8000>.
 - **County.** The county selector fits the map to that county and narrows the
   events, rainfall records, reports and alerts to it.
 - **Address search.** Type an address, or press `/`, to fly there.
-- **Light and dark.** Follows the system setting; the "Light" checkbox in the
-  header switches and is remembered.
+- **Light and dark.** The page opens in light mode; the "Dark" checkbox in the
+  header turns dark on, and the choice is remembered in that browser.
 - **Phones.** Below tablet width the map, the layers and the events are three
   views, switched from the bar at the bottom.
 - **Sharing.** The page address holds the county, the layers and sub-options

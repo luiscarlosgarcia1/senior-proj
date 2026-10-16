@@ -59,7 +59,7 @@ def test_charts_follow_theme(page, live_server):
     _open(page, live_server)
     before = page.evaluate("document.querySelector('[data-chart=claims]').data[0].marker.color")
 
-    page.locator("header label:has-text('Light') input").click()  # flip whichever theme it started in
+    page.locator("header label:has-text('Dark') input").click()  # flip whichever theme it started in
 
     wait_js(page, f"document.querySelector('[data-chart=claims]').data[0].marker.color !== {before!r}")
 

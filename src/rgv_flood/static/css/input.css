@@ -2,7 +2,7 @@
    binary (rgv_flood/assets.py); app.css is output, never edited.
 
    Design tokens come from the Claude Design handoff (docs/design/handoff):
-   dark is the default; [data-theme="light"] on <html> switches every token.
+   light is the default; [data-theme="dark"] on <html> switches every token.
    UTRGV orange (--brand) is only for the top hairline, active nav/tab
    underline, focus rings, selected feature/row outline, loading bar and logo
    droplet; never for data, severity or alerts. */
@@ -13,55 +13,7 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-:root, [data-theme="dark"] {
-  --bg: #1a1b1d;
-  --panel: #212225;
-  --panel2: #292a2e;
-  --line: #36373c;
-  --line2: #4a4b52;
-  --text: #ececee;
-  --muted: #9d9da5;
-  --faint: #6e6e76;
-  --accent: #e6e6e9;
-  --accent-ink: #1a1b1d;
-  --accent-soft: rgba(255, 255, 255, .07);
-  --accent-line: rgba(255, 255, 255, .28);
-  --brand: #f05023;
-  --brand-soft: rgba(240, 80, 35, .14);
-  --warn: #ee5a93;
-  --warn-soft: rgba(238, 90, 147, .14);
-  --warn-line: rgba(238, 90, 147, .5);
-  --elev-1: 0 1px 2px rgba(0, 0, 0, .35);
-  --elev-2: 0 12px 32px rgba(0, 0, 0, .5);
-  --water: #121315;
-  --county: #9d9da5;
-  --sev-high: #ee5a93;
-  --sev-mod: #e8c13a;
-  --sev-low: #56b4e9;
-  --sev-unc: #9d9da5;
-  --c-nfhl: #56b4e9;
-  --c-firm: #8e9cf5;
-  --c-twdb: #3f73e6;
-  --c-drain: #5fc9a0;
-  --c-infra: #f2e05c;
-  --c-city: #b6c24a;
-  --c-hdrain: #9fd8d0;
-  --c-bridge: #c7ced8;
-  --c-mapped: #ee5a93;
-  --c-photos: #d98ad6;
-  --c-fema: #f3b6ef;
-  --c-nws: #f5f7fa;
-  --c-proj: #9ae66e;
-  --c-sfp: #3fa34d;
-  --c-claims: #3cc7b0;
-  --r1: #1b3350;
-  --r2: #2a5a85;
-  --r3: #3f87a3;
-  --r4: #86bf9c;
-  --r5: #ecdc8e;
-}
-
-[data-theme="light"] {
+:root, [data-theme="light"] {
   --bg: #f1f1f2;
   --panel: #ffffff;
   --panel2: #f7f7f8;
@@ -107,6 +59,54 @@
   --r3: #5fa4c8;
   --r4: #2b73a0;
   --r5: #123f66;
+}
+
+[data-theme="dark"] {
+  --bg: #1a1b1d;
+  --panel: #212225;
+  --panel2: #292a2e;
+  --line: #36373c;
+  --line2: #4a4b52;
+  --text: #ececee;
+  --muted: #9d9da5;
+  --faint: #6e6e76;
+  --accent: #e6e6e9;
+  --accent-ink: #1a1b1d;
+  --accent-soft: rgba(255, 255, 255, .07);
+  --accent-line: rgba(255, 255, 255, .28);
+  --brand: #f05023;
+  --brand-soft: rgba(240, 80, 35, .14);
+  --warn: #ee5a93;
+  --warn-soft: rgba(238, 90, 147, .14);
+  --warn-line: rgba(238, 90, 147, .5);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, .35);
+  --elev-2: 0 12px 32px rgba(0, 0, 0, .5);
+  --water: #121315;
+  --county: #9d9da5;
+  --sev-high: #ee5a93;
+  --sev-mod: #e8c13a;
+  --sev-low: #56b4e9;
+  --sev-unc: #9d9da5;
+  --c-nfhl: #56b4e9;
+  --c-firm: #8e9cf5;
+  --c-twdb: #3f73e6;
+  --c-drain: #5fc9a0;
+  --c-infra: #f2e05c;
+  --c-city: #b6c24a;
+  --c-hdrain: #9fd8d0;
+  --c-bridge: #c7ced8;
+  --c-mapped: #ee5a93;
+  --c-photos: #d98ad6;
+  --c-fema: #f3b6ef;
+  --c-nws: #f5f7fa;
+  --c-proj: #9ae66e;
+  --c-sfp: #3fa34d;
+  --c-claims: #3cc7b0;
+  --r1: #1b3350;
+  --r2: #2a5a85;
+  --r3: #3f87a3;
+  --r4: #86bf9c;
+  --r5: #ecdc8e;
 }
 
 /* Tailwind names for the tokens. `inline` makes utilities use each token's

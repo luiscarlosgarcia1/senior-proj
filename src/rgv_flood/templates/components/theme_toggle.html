@@ -1,4 +1,4 @@
-{# Light/dark: a checkbox, remembered in this browser. #}
+{# Light by default; this checkbox turns dark on, remembered in this browser. #}
 <label class="hidden cursor-pointer items-center gap-2 text-sm text-muted md:flex" x-data="themeToggle">
-  <input type="checkbox" class="cb" x-bind:checked="light" x-on:change="toggle">{{ t("theme.light") }}
+  <input type="checkbox" class="cb" x-bind:checked="dark" x-on:change="toggle">{{ t("theme.dark") }}
 </label>

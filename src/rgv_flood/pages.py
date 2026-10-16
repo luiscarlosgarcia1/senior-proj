@@ -26,13 +26,12 @@ router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 templates.env.globals.update(t=t, asset_url=asset_url, counties=COUNTIES, short_names=SHORT_NAMES)
 
-# Runs before first paint so the page never flashes the wrong theme: the
-# reader's saved choice, else their system setting. Its hash is allowed by the
+# Runs before first paint so the page never flashes the wrong theme: light,
+# unless the reader turned dark on before. Its hash is allowed by the
 # content-security policy (see app.py); no other inline script runs.
 THEME_BOOTSTRAP = (
-    "(function(){try{var t=localStorage.getItem('rgv-theme');"
-    "if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';"
-    "document.documentElement.dataset.theme=t}catch(e){}})();"
+    "(function(){try{if(localStorage.getItem('rgv-theme')==='dark')"
+    "document.documentElement.dataset.theme='dark'}catch(e){}})();"
 )
 
 

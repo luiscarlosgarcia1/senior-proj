@@ -15,7 +15,7 @@ document.addEventListener("alpine:init", () => {
 
   Alpine.store("app", {
     county: "",
-    theme: document.documentElement.dataset.theme || "dark",
+    theme: document.documentElement.dataset.theme || "light",
     loading: false,
     view: "map", // phones show one view at a time: map, layers or events
     setCounty(slug) {
@@ -36,11 +36,11 @@ document.addEventListener("alpine:init", () => {
   });
 
   Alpine.data("themeToggle", () => ({
-    get light() {
-      return Alpine.store("app").theme === "light";
+    get dark() {
+      return Alpine.store("app").theme === "dark";
     },
     toggle(event) {
-      Alpine.store("app").setTheme(event.target.checked ? "light" : "dark");
+      Alpine.store("app").setTheme(event.target.checked ? "dark" : "light");
     },
   }));
 

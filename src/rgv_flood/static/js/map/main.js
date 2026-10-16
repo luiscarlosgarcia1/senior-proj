@@ -10,7 +10,7 @@ const VALLEY = [[-99.2, 25.8], [-97.1, 26.8]]; // west-south, east-north of the 
 const container = document.getElementById("map");
 
 const basemapFor = (theme) => container.dataset[theme === "light" ? "basemapLight" : "basemapDark"];
-const currentTheme = () => document.documentElement.dataset.theme || "dark";
+const currentTheme = () => document.documentElement.dataset.theme || "light";
 
 let resolveReady;
 /** Resolves with the map once its first style has loaded. */
