@@ -70,3 +70,19 @@ def test_pages_render_before_build(make_client, tmp_path):
         response = client.get(path)
         assert response.status_code == 200
         assert "No data yet" in response.text
+
+
+def test_favicon_is_the_wave_logo(api_client):
+    html = api_client.get("/").text
+
+    assert '<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=' in html
+    icon = api_client.get("/static/favicon.svg")
+    assert icon.status_code == 200
+    assert 'fill="#CB4900"' in icon.text
+
+
+def test_no_logo_mark_in_the_header(api_client):
+    header = api_client.get("/").text.split("<header", 1)[1].split("</header>", 1)[0]
+
+    assert "bg-brand" not in header  # the old droplet mark
+    assert "RGV Flood Impact Visualizer" in header
