@@ -8,7 +8,7 @@
 /** Color key (a layer's legend color, or one the styles below use) -> its CSS variable. */
 export const TOKENS = {
   nfhl: "--c-nfhl", firm: "--c-firm", drain: "--c-drain", infra: "--c-infra", city: "--c-city",
-  hdrain: "--c-hdrain", bridge: "--c-bridge", mapped: "--c-mapped", photos: "--c-photos", fema: "--c-fema",
+  hdrain: "--c-hdrain", bridge: "--c-bridge", mapped: "--c-mapped", photos: "--c-photos", photoloc: "--c-photoloc", fema: "--c-fema",
   nws: "--c-nws", proj: "--c-proj", sfp: "--c-sfp", claims: "--c-claims", county: "--county", dam: "--c-dam",
   "sev-high": "--sev-high", "sev-mod": "--sev-mod", "sev-low": "--sev-low", "sev-unc": "--sev-unc",
   warn: "--warn", bg: "--bg",
@@ -59,11 +59,14 @@ export function styleLayersFor(info, colors) {
     return [at("line", "line", LINES, { "line-color": colors.county, "line-width": 1.2, "line-opacity": 0.8 })];
   }
   if (shape === "sev") {
+    // A layer with one severity color of its own (each TWDB extent) wears it;
+    // the others are colored zone by zone.
+    const fill = key.startsWith("sev-") ? color : bySeverity(colors);
     // The 1981 FIRM is a historic map: dashed outlines tell it apart from current ones.
     const dashed = info.id === "hidalgo-firm-1981" ? { "line-dasharray": [3, 2] } : {};
     return [
-      at("fill", "fill", POLYGONS, { "fill-color": bySeverity(colors), "fill-opacity": 0.3 }),
-      at("line", "line", LINES, { "line-color": bySeverity(colors), "line-width": 1, "line-opacity": 0.8, ...dashed }),
+      at("fill", "fill", POLYGONS, { "fill-color": fill, "fill-opacity": 0.3 }),
+      at("line", "line", LINES, { "line-color": fill, "line-width": 1, "line-opacity": 0.8, ...dashed }),
     ];
   }
   if (info.id === "nfip-claims-by-tract") {
@@ -73,7 +76,7 @@ export function styleLayersFor(info, colors) {
   if (info.id === "hcdd1-flood-photos") {
     const openable = ["has", "photo_url"];
     return [at("point", "circle", POINTS, {
-      "circle-color": color,
+      "circle-color": ["case", openable, color, colors.photoloc],
       "circle-radius": ["case", openable, 3.4, 2.2],
       "circle-stroke-color": colors.bg,
       "circle-stroke-width": ["case", openable, 1, 0],

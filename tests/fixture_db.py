@@ -193,14 +193,15 @@ LAYERS = [
     _layer("fema-nfhl", position=1, title="FEMA effective flood hazard (NFHL)", feature_count=20,
            row_label="FEMA effective flood hazard (NFHL)", short_label="FEMA effective flood hazard (NFHL)"),
     _layer("twdb-cursory-1in100", position=2, panel_row="twdb", row_label="TWDB modeled flood extent",
-           short_label="1% annual chance", delivery="tiles", tiles_hash="abc123def456"),
+           short_label="1% annual chance", legend_json='{"shape": "sev", "color": "sev-mod"}', delivery="tiles", tiles_hash="abc123def456"),
     _layer("twdb-cursory-1in500", position=3, panel_row="twdb", row_label="TWDB modeled flood extent",
-           short_label="0.2% annual chance"),
+           short_label="0.2% annual chance", legend_json='{"shape": "sev", "color": "sev-high"}'),
     _layer("waterways", position=4, layer_group="works", legend_json='{"shape": "line", "color": "drain"}'),
     _layer("hcdd1-flood-photos", PHOTOS_GEOJSON, position=5, layer_group="evidence", feature_count=2,
            legend_json='{"shape": "dot", "color": "photos"}',
-           parts_json='[{"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"]},'
-                      ' {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]]}]'),
+           parts_json='[{"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"], "color": "photos"},'
+                      ' {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]],'
+                      ' "color": "photoloc"}]'),
     _layer("flood-projects", position=6, layer_group="projects", legend_json='{"shape": "sqf", "color": "sfp"}'),
     _layer("dams", position=9, layer_group="works", row_label="Dams", short_label="Dams",
            legend_json='{"shape": "dot", "color": "dam"}'),

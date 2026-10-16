@@ -238,3 +238,39 @@ def test_labels_in_mexico_are_hidden(map_page):
     assert highway["filter"][0] == "within"
     assert "filter" not in water  # the Rio Grande's name stays
     assert "filter" not in roads
+
+
+def _tokens(page, *names):
+    return page.evaluate(f"""(() => {{ const s = getComputedStyle(document.documentElement);
+        return {list(names)!r}.map(n => s.getPropertyValue(n).trim()); }})()""")
+
+
+def test_photos_you_can_open_and_photo_locations_have_different_colors(map_page):
+    page = map_page()
+    _row(page, "hcdd1-flood-photos").check()
+    wait_js(page, LAYER.format("lyr-hcdd1-flood-photos-point"))
+
+    color = page.evaluate("window.__rgvMap.getPaintProperty('lyr-hcdd1-flood-photos-point', 'circle-color')")
+    photos, locations = _tokens(page, "--c-photos", "--c-photoloc")
+
+    assert color == ["case", ["has", "photo_url"], photos, locations]
+    assert photos and locations and photos != locations
+    swatches = page.locator('[data-row="hcdd1-flood-photos"] [data-sub] i.sw')
+    expect(swatches).to_have_count(2)
+    assert swatches.evaluate_all("els => els.map(e => getComputedStyle(e).backgroundColor)") == [
+        page.evaluate(f"(() => {{ const e = document.createElement('i'); e.style.color = {c!r}; document.body.append(e);"
+                      " const v = getComputedStyle(e).color; e.remove(); return v; })()") for c in (photos, locations)
+    ]
+
+
+def test_twdb_one_percent_is_orange_and_point_two_percent_red(map_page):
+    page = map_page()
+    _row(page, "twdb").check()
+    wait_js(page, LAYER.format("lyr-twdb-cursory-1in100-fill") + " && " + LAYER.format("lyr-twdb-cursory-1in500-fill"))
+
+    high, moderate = _tokens(page, "--sev-high", "--sev-mod")
+    paint = "window.__rgvMap.getPaintProperty('lyr-twdb-cursory-{}-fill', 'fill-color')"
+
+    assert page.evaluate(paint.format("1in100")) == moderate
+    assert page.evaluate(paint.format("1in500")) == high
+    expect(page.locator('[data-row="twdb"] [data-sub] i.sw')).to_have_count(2)

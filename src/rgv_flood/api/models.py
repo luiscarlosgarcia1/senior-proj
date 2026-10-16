@@ -31,6 +31,7 @@ class LayerPart(BaseModel):
     id: str
     label: str
     filter: list  # a MapLibre filter expression
+    color: str | None = None  # its dot's color key, when it differs from the layer's
 
 
 class LayerInfo(BaseModel):

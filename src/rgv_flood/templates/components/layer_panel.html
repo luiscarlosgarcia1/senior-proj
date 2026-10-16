@@ -25,6 +25,7 @@
           <template x-for="sub in subOptions()" x-bind:key="sub.id">
             <label class="flex cursor-pointer items-center gap-2.5 py-[5px] pl-11 pr-4 text-sm text-muted" x-bind:data-sub="sub.id">
               <input type="checkbox" class="cb" x-bind:checked="subChecked()" x-on:change="toggleSub($event)">
+              <span class="grid w-[14px] shrink-0 place-items-center" aria-hidden="true"><i x-bind:class="subSwatchClass()" x-bind:style="subSwatchStyle()"></i></span>
               <span x-text="sub.label"></span>
             </label>
           </template>

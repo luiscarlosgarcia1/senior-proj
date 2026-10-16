@@ -374,8 +374,9 @@ PANEL = {
                   "sev", "nfhl"),
     "hidalgo-firm-1981": ("hazard", "hidalgo-firm-1981", "Hidalgo historic flood zones (1981 FIRM)",
                           "Hidalgo historic flood zones (1981 FIRM)", "sev", "firm"),
-    "twdb-cursory-1in100": ("hazard", "twdb", "TWDB modeled flood extent", "1% annual chance", "sev", "nfhl"),
-    "twdb-cursory-1in500": ("hazard", "twdb", "TWDB modeled flood extent", "0.2% annual chance", "sev", "nfhl"),
+    # Each TWDB extent is drawn in one color of the scale: 1% orange, 0.2% red.
+    "twdb-cursory-1in100": ("hazard", "twdb", "TWDB modeled flood extent", "1% annual chance", "sev", "sev-mod"),
+    "twdb-cursory-1in500": ("hazard", "twdb", "TWDB modeled flood extent", "0.2% annual chance", "sev", "sev-high"),
     "waterways": ("works", "waterways", "Drains, canals and creeks", "Drains, canals and creeks", "line", "drain"),
     "flood-infrastructure": ("works", "flood-infrastructure", "Flood infrastructure, state flood plan",
                              "Flood infrastructure, state flood plan", "diaf", "infra"),
@@ -402,8 +403,8 @@ PANEL = {
 # Parts of a layer a reader can turn on and off on their own, as MapLibre filters.
 PARTS = {
     "hcdd1-flood-photos": [
-        {"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"]},
-        {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]]},
+        {"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"], "color": "photos"},
+        {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]], "color": "photoloc"},
     ],
 }
 for _layer_id, (_group, _row, _row_label, _label, _shape, _color) in PANEL.items():

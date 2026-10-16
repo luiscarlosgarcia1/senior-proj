@@ -124,10 +124,12 @@ document.addEventListener("alpine:init", () => {
     subOptions() {
       if (!store().rowOn(this.row)) return [];
       if (this.row.layers.length > 1) {
-        return this.row.layers.map((layer) => ({ id: layer.id, label: layer.short_label, layer }));
+        return this.row.layers.map((layer) => (
+          { id: layer.id, label: layer.short_label, layer, swatch: { shape: "poly", color: layer.legend.color } }));
       }
       const layer = this.row.layers[0];
-      return (layer.parts || []).map((part) => ({ id: part.id, label: part.label, layer, part }));
+      return (layer.parts || []).map((part) => (
+        { id: part.id, label: part.label, layer, part, swatch: { shape: "dot", color: part.color || layer.legend.color } }));
     },
     subChecked() {
       const { layer, part } = this.sub;
@@ -146,6 +148,12 @@ document.addEventListener("alpine:init", () => {
     },
     swatchStyle() {
       return swatchStyle(this.row.legend);
+    },
+    subSwatchClass() {
+      return swatchClass(this.sub.swatch);
+    },
+    subSwatchStyle() {
+      return swatchStyle(this.sub.swatch);
     },
     rowCount() {
       return this.row.count ? this.row.count.toLocaleString() : "";

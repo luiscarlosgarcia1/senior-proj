@@ -38,8 +38,8 @@ def test_photo_parts_present(api_client):
     photos = next(layer for layer in evidence if layer["id"] == "hcdd1-flood-photos")
 
     assert photos["parts"] == [
-        {"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"]},
-        {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]]},
+        {"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"], "color": "photos"},
+        {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]], "color": "photoloc"},
     ]
 
 
