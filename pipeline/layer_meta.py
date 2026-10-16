@@ -342,3 +342,50 @@ LAYER_META: dict[str, dict] = {
         "source_url": "https://www.fema.gov/openfema-data-page/nfip-redacted-claims-v3",
     },
 }
+
+
+# How each layer appears in the layer panel: its group, the panel row it sits in
+# (layers sharing a row become that row's sub-options), the row's title, the
+# layer's own short label, and its legend swatch (shape, color token key).
+PANEL = {
+    "county-boundaries": ("base", "county-boundaries", "County boundaries", "County boundaries", "line", "county"),
+    "fema-nfhl": ("hazard", "fema-nfhl", "FEMA effective flood hazard (NFHL)", "FEMA effective flood hazard (NFHL)",
+                  "poly", "nfhl"),
+    "hidalgo-firm-1981": ("hazard", "hidalgo-firm-1981", "Hidalgo historic flood zones (1981 FIRM)",
+                          "Hidalgo historic flood zones (1981 FIRM)", "dash", "firm"),
+    "twdb-cursory-1in100": ("hazard", "twdb", "TWDB modeled flood extent", "1% annual chance", "poly", "twdb"),
+    "twdb-cursory-1in500": ("hazard", "twdb", "TWDB modeled flood extent", "0.2% annual chance", "dash", "twdb"),
+    "waterways": ("works", "waterways", "Drains, canals and creeks", "Drains, canals and creeks", "line", "drain"),
+    "flood-infrastructure": ("works", "flood-infrastructure", "Flood infrastructure, state flood plan",
+                             "Flood infrastructure, state flood plan", "diaf", "infra"),
+    "city-drainage": ("works", "city-drainage", "City storm drainage, Harlingen & Brownsville",
+                      "City storm drainage, Harlingen & Brownsville", "line", "city"),
+    "hcdd1-drainage": ("works", "hcdd1-drainage", "Drainage network, Hidalgo", "Drainage network, Hidalgo",
+                       "line", "hdrain"),
+    "overture-bridges": ("works", "overture-bridges", "Bridges", "Bridges", "ring", "bridge"),
+    "hcdd1-flood-extents": ("evidence", "hcdd1-flood-extents", "Mapped flooding 2008–2020, Hidalgo",
+                            "Mapped flooding 2008–2020, Hidalgo", "poly", "mapped"),
+    "hcdd1-flood-photos": ("evidence", "hcdd1-flood-photos", "Flood photos, Hidalgo", "Flood photos, Hidalgo",
+                           "dot", "photos"),
+    "fema-flood-photos": ("evidence", "fema-flood-photos", "Flood photos, FEMA", "Flood photos, FEMA", "fema", "fema"),
+    "nws-flood-reports": ("evidence", "nws-flood-reports", "Reported flooding, NWS", "Reported flooding, NWS",
+                          "dia", "nws"),
+    "nfip-claims-by-tract": ("evidence", "nfip-claims-by-tract", "Flood insurance claims by census tract",
+                             "Flood insurance claims by census tract", "ramp", "claims"),
+    "hcdd1-bond-projects": ("projects", "hcdd1-bond-projects", "Drainage improvement projects, Hidalgo",
+                            "Drainage improvement projects, Hidalgo", "sq", "proj"),
+    "flood-projects": ("projects", "flood-projects", "Flood projects, state flood plan",
+                       "Flood projects, state flood plan", "sqf", "sfp"),
+}
+# Parts of a layer a reader can turn on and off on their own, as MapLibre filters.
+PARTS = {
+    "hcdd1-flood-photos": [
+        {"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"]},
+        {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]]},
+    ],
+}
+for _layer_id, (_group, _row, _row_label, _label, _shape, _color) in PANEL.items():
+    LAYER_META[_layer_id] |= {
+        "group": _group, "panel_row": _row, "row_label": _row_label, "short_label": _label,
+        "legend": {"shape": _shape, "color": _color}, "parts": PARTS.get(_layer_id, []),
+    }

@@ -176,18 +176,18 @@ BUILDERS = {
     "hidalgo-firm-1981": build_hidalgo_firm,
     "twdb-cursory-1in100": lambda: build_twdb("1in100", "1% annual chance"),
     "twdb-cursory-1in500": lambda: build_twdb("1in500", "0.2% annual chance"),
-    "overture-bridges": build_overture_bridges,
     "waterways": regional_layers.build_waterways,
     "flood-infrastructure": regional_layers.build_flood_infrastructure,
     "city-drainage": regional_layers.build_city_drainage,
+    "hcdd1-drainage": evidence_layers.build_hcdd1_drainage,
+    "overture-bridges": build_overture_bridges,
     "hcdd1-flood-extents": evidence_layers.build_hcdd1_flood_extents,
     "hcdd1-flood-photos": evidence_layers.build_hcdd1_flood_photos,
     "fema-flood-photos": regional_layers.build_fema_flood_photos,
-    "hcdd1-drainage": evidence_layers.build_hcdd1_drainage,
-    "hcdd1-bond-projects": evidence_layers.build_hcdd1_bond_projects,
-    "flood-projects": regional_layers.build_flood_projects,
     "nws-flood-reports": regional_layers.build_nws_flood_reports,
     "nfip-claims-by-tract": evidence_layers.build_nfip_claims_by_tract,
+    "hcdd1-bond-projects": evidence_layers.build_hcdd1_bond_projects,
+    "flood-projects": regional_layers.build_flood_projects,
 }
 
 
@@ -199,6 +199,9 @@ def _row(layer_id: str, position: int, layer: MapLayer) -> dict:
         "id": layer_id,
         "position": position,
         "visualizations_json": json.dumps(meta.pop("visualizations", [])),
+        "layer_group": meta.pop("group"),
+        "legend_json": json.dumps(meta.pop("legend")),
+        "parts_json": json.dumps(meta.pop("parts")),
         **meta,
         "feature_count": layer.feature_count,
         # Compressed once here so the app can send it without spending CPU per

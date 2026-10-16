@@ -29,6 +29,8 @@ from paths import DATABASE
 # Table name -> the statements that create it (and its indexes).
 TABLES: dict[str, tuple[str, ...]] = {
     # One row per map layer: its sidebar/source-card text and the GeoJSON the map draws.
+    # Facts about the build itself; `built_at` is when build_all.py last finished.
+    "build_info": ("CREATE TABLE IF NOT EXISTS build_info (key TEXT PRIMARY KEY, value TEXT NOT NULL)",),
     "layers": (
         """CREATE TABLE IF NOT EXISTS layers (
              id TEXT PRIMARY KEY,
@@ -42,6 +44,14 @@ TABLES: dict[str, tuple[str, ...]] = {
              limitation TEXT,
              source_url TEXT,
              visualizations_json TEXT NOT NULL,    -- [{"title": ..., "url": ...}], the publisher's own maps
+             layer_group TEXT NOT NULL,            -- base, hazard, works, evidence or projects
+             panel_row TEXT NOT NULL,              -- layers sharing a row are its sub-options
+             row_label TEXT NOT NULL,
+             short_label TEXT NOT NULL,
+             legend_json TEXT NOT NULL,            -- {"shape": ..., "color": ...}
+             parts_json TEXT NOT NULL,             -- [{"id", "label", "filter"}], MapLibre filters
+             delivery TEXT NOT NULL DEFAULT 'geojson',  -- geojson, or tiles (see layer_tiles)
+             tiles_hash TEXT,
              feature_count INTEGER NOT NULL,
              geojson_gzip BLOB NOT NULL,           -- gzipped UTF-8 FeatureCollection, sent to the browser as is
              etag TEXT NOT NULL                    -- changes whenever the GeoJSON does
@@ -271,6 +281,9 @@ def open_database(path: Path = DATABASE) -> Iterator[sqlite3.Connection]:
     """Open the database for one all-or-nothing write, creating it if needed."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(path)) as connection, connection:
+        # WAL: the app's readers never wait on a writer (the live-alert refresher).
+        # The mode is stored in the file, so setting it on every open is cheap.
+        connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("BEGIN IMMEDIATE")
         ensure_schema(connection)
         yield connection

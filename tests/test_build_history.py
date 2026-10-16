@@ -78,3 +78,22 @@ def test_gauge_years_are_worked_out_from_the_daily_readings(tmp_path):
         row = connection.execute("select * from rainfall_station_years").fetchone()
     # three days reported, 70 mm in all, the wettest 60 mm (over 2 inches, once); the temperature is ignored
     assert row == ("S1", 2020, 3, 700.0, 600.0, 1)
+
+
+def test_open_database_uses_wal(tmp_path):
+    with open_database(tmp_path / "db.sqlite3") as connection:
+        mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+
+    assert mode == "wal"
+
+
+def test_build_date_is_recorded(tmp_path):
+    import build_all
+
+    database = tmp_path / "db.sqlite3"
+    with open_database(database):
+        pass
+    build_all.record_build_date(database, "2026-10-15T12:00:00Z")
+
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("select value from build_info where key = 'built_at'").fetchone() == ("2026-10-15T12:00:00Z",)
