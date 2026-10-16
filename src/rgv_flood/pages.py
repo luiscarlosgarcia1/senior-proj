@@ -44,7 +44,7 @@ def _built_label(db) -> str | None:
     stamp = data_access.built_at(db) if db.exists else None
     if not stamp:
         return None
-    when = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    when = datetime.fromisoformat(stamp)
     return t("footer.built", date=f"{when:%b} {when.day}, {when.year}")
 
 
