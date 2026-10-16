@@ -63,12 +63,12 @@ def _render(request: Request, template: str, db, nav_active: str):
 
 @router.get("/", include_in_schema=False)
 def map_page(request: Request, db: Db):
-    return _render(request, "site/map.html", db, "map")
+    return _render(request, "map.html", db, "map")
 
 
 @router.get("/claims", include_in_schema=False)
 def claims_page(request: Request, db: Db):
-    return _render(request, "site/claims.html", db, "claims")
+    return _render(request, "claims.html", db, "claims")
 
 
 @router.get("/analysis", include_in_schema=False)

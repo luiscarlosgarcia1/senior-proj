@@ -9,7 +9,7 @@ Hazard layers come from the seed GeoJSON in `data/seed/<county>/`. For each one 
   * simplifies geometry to a map-scale tolerance
 
 Each layer becomes one row of the `layers` table (see `database.py`): its
-map-ready GeoJSON, which the Flask app serves as is, next to its description.
+map-ready GeoJSON, which the app serves as is, next to its description.
 Bridges are pulled from Overture Maps (`overture.py`); flood-evidence,
 drainage and insurance-claims layers from their publishers
 (`evidence_layers.py`, `regional_layers.py`); layer descriptions come from

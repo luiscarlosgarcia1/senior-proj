@@ -1,7 +1,6 @@
 """The app's settings, read from RGV_* environment variables.
 
-The names match what the Flask app read, so an existing deployment keeps its
-configuration. Every setting has a default that works for local development.
+Every setting has an RGV_ prefix and a default that works for local development.
 """
 
 from __future__ import annotations

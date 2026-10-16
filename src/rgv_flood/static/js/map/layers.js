@@ -16,7 +16,8 @@ const loading = new Map(); // layer id -> Promise of its source spec
 /** Where the layer's data comes from: tiles for big layers, GeoJSON (fetched by us) otherwise. */
 async function sourceFor(info) {
   if (info.delivery === "tiles") {
-    return { type: "vector", tiles: [new URL(info.url, location.origin).href], minzoom: 8, maxzoom: 14 };
+    // A plain string: new URL() would percent-encode the {z}/{x}/{y} placeholders.
+    return { type: "vector", tiles: [`${location.origin}${info.url}`], minzoom: 7, maxzoom: 14 }; // as cut by pipeline/layer_tiles.py
   }
   const path = info.url.replace(/^\/api\/v1\//, "");
   return { type: "geojson", data: await getJson(path, {}, { cancelPrevious: false }) };

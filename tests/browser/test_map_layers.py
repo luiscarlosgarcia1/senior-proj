@@ -146,3 +146,13 @@ def test_map_fills_its_area(map_page):
     assert box["height"] > 300
     assert abs(box["height"] - main["height"]) < 2
     assert page.evaluate("window.__rgvMap.getCanvas().clientHeight") == round(box["height"])
+
+
+def test_tiled_layer_draws_features(map_page, console_errors):
+    page = map_page()
+
+    _row(page, "twdb").check()
+
+    wait_js(page, "window.__rgvMap.querySourceFeatures('src-twdb-cursory-1in100', "
+                  "{sourceLayer: 'twdb-cursory-1in100'}).length > 0", timeout=15)
+    assert console_errors == []

@@ -1,31 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}RGV Flood Impact Visualizer{% endblock %}</title>
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
-        rel="stylesheet">
-
-  <link rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-        crossorigin="">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}{{ t("app.title") }}{% endblock %}</title>
+  <script>{{ theme_bootstrap | safe }}</script>
+  <link rel="preload" href="/static/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="{{ asset_url('favicon.svg') }}">
+  <link rel="stylesheet" href="{{ asset_url('css/site.css') }}">
+  {% block head %}{% endblock %}
+  <script type="application/json" id="i18n">{{ catalog | tojson }}</script>
 </head>
-<body>
-  {% block content %}{% endblock %}
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-          crossorigin=""></script>
-  <script src="https://unpkg.com/htmx.org@2.0.4"
-          integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
-          crossorigin="anonymous"></script>
+<body class="{% block body_class %}min-h-full{% endblock %} bg-bg font-sans text-base text-ink">
+  <div class="fixed inset-x-0 top-0 z-[2000] h-0.5 bg-brand" aria-hidden="true"></div>
+  {% block page %}
+    {% include "components/header.html" %}
+    {% if not data_ready %}{% include "components/no_data.html" %}{% endif %}
+    {% block content %}{% endblock %}
+  {% endblock %}
   {% block scripts %}{% endblock %}
+  <script type="module" src="{{ asset_url('js/store.js') }}"></script>
+  <script defer src="{{ asset_url('vendor/alpine/alpine-csp.min.js') }}"></script>
 </body>
 </html>

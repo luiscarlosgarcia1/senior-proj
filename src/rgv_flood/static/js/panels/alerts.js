@@ -5,7 +5,8 @@
 import { t } from "../i18n.js";
 import { ago, alertSeverity } from "./format.js";
 
-const SOURCE_BADGES = { nws: "NWS", drivetexas: "TxDOT", "hidalgo-rss": "County" };
+// Words in a signal's source -> the short agency name on its badge.
+const SOURCE_BADGES = { "weather.gov": "NWS", nws: "NWS", drivetexas: "TxDOT", hidalgo: "County" };
 
 document.addEventListener("alpine:init", () => {
   const Alpine = window.Alpine;

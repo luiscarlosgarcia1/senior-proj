@@ -17,7 +17,7 @@ from starlette.staticfiles import StaticFiles
 
 STATIC_ROOT = Path(__file__).parent / "static"
 CSS_INPUT = STATIC_ROOT / "css" / "input.css"
-CSS_OUTPUT = STATIC_ROOT / "css" / "site.css"  # (app.css is the old Flask app's stylesheet)
+CSS_OUTPUT = STATIC_ROOT / "css" / "site.css"
 TAILWIND_VERSION = "v4.3.3"
 
 

@@ -28,7 +28,7 @@ class LiveSignalScheduler:
     """Run snapshot commands on one process at a fixed interval.
 
     The advisory lock is held for the scheduler's lifetime. This lets just one
-    Flask worker own live refreshes, including when Werkzeug starts its reloader.
+    app worker own live refreshes, however many workers Uvicorn starts.
     """
 
     def __init__(

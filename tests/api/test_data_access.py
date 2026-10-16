@@ -46,3 +46,10 @@ def test_functions_tolerate_missing_database(tmp_path):
     assert data_access.active_official_signals(db) == []
     assert data_access.flood_events_geojson(db) is None
     assert data_access.history_by_year(db, None, 2020)["totals"]["claims"] == 0
+
+
+def test_rank_correlation():
+    assert data_access.rank_correlation([1, 2, 3, 4], [10, 20, 30, 1000]) == 1.0  # one extreme year doesn't matter
+    assert data_access.rank_correlation([1, 2, 3], [3, 2, 1]) == -1.0
+    assert data_access.rank_correlation([1, 2], [1, 2]) is None  # too few years
+    assert data_access.rank_correlation([1, 2, 3], [5, 5, 5]) is None  # nothing varies

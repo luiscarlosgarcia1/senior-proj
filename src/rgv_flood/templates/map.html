@@ -1,14 +1,14 @@
-{% extends "site/base.html" %}
+{% extends "base.html" %}
 {% block body_class %}h-screen overflow-hidden{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ asset_url('vendor/maplibre/maplibre-gl.css') }}">{% endblock %}
 {% block page %}
 <div class="flex h-full flex-col">
-  {% include "site/components/header.html" %}
-  {% if not data_ready %}{% include "site/components/no_data.html" %}{% endif %}
+  {% include "components/header.html" %}
+  {% if not data_ready %}{% include "components/no_data.html" %}{% endif %}
   <div class="flex min-h-0 flex-1" id="map-page">
     <aside class="flex min-h-0 w-full shrink-0 flex-col border-r border-line bg-panel lg:w-72" x-data="layerPanel" data-view="layers"
            x-bind:data-active="$store.app.view === 'layers'">
-      {% include "site/components/layer_panel.html" %}
+      {% include "components/layer_panel.html" %}
     </aside>
     <main class="relative min-w-0 flex-1" data-view="map" data-active="true" x-data x-bind:data-active="$store.app.view === 'map'">
       {# MapLibre's own stylesheet makes its container position: relative, so the
@@ -17,17 +17,17 @@
         <div id="map" class="h-full w-full"
              data-basemap-light="{{ settings.basemap_light_style }}" data-basemap-dark="{{ settings.basemap_dark_style }}"></div>
       </div>
-      {% include "site/components/legend.html" %}
-      {% include "site/components/severity_legend.html" %}
-      {% include "site/components/source_details.html" %}
-      {% include "site/components/popup.html" %}
+      {% include "components/legend.html" %}
+      {% include "components/severity_legend.html" %}
+      {% include "components/source_details.html" %}
+      {% include "components/popup.html" %}
     </main>
     <aside class="block min-h-0 w-full shrink-0 overflow-auto border-l border-line bg-panel lg:w-[344px]" data-view="events"
            x-data x-bind:data-active="$store.app.view === 'events'">
-      {% include "site/components/side_panel.html" %}
+      {% include "components/side_panel.html" %}
     </aside>
   </div>
-  {% include "site/components/bottom_nav.html" %}
+  {% include "components/bottom_nav.html" %}
 </div>
 {% endblock %}
 {% block scripts %}<script type="module" src="{{ asset_url('js/pages/map.js') }}"></script>{% endblock %}

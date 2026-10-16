@@ -3,139 +3,234 @@
 CSCI 4390 Senior Project by Danny McClain and Luis Garcia. Faculty adviser:
 Sergei Chuprov.
 
-## Overview
-
-A browser map for comparing flood-hazard information across Cameron, Hidalgo,
-Starr, and Willacy counties. Includes hazard layers, at-risk infrastructure
-(bridges, dams), drainage and flood-control works, documented flood events,
-rainfall, local reports, official live signals, and address search, plus a page
-that sets flood-insurance claims beside rainfall year by year since 1978.
+A map for comparing flood-hazard information across Cameron, Hidalgo, Starr
+and Willacy counties: hazard zones, drainage and flood-control works, bridges,
+recorded flooding and flood photos, NOAA flood events, rainfall, local reports,
+live official alerts and address search, plus a page that sets
+flood-insurance claims beside rainfall year by year since 1978.
 
 Educational and comparative only. Not for emergency routing, engineering,
 insurance, flood-depth estimates, or flood-zone certification. Follow official
 emergency guidance.
 
-### Using the map
+## Stack
 
-- **Layers.** Tick a layer in the sidebar to draw it; "source" shows where it
-  comes from and what it should not be used for.
-- **Flood events.** Click an event on the map or in the list to see NOAA's
-  account of it, the rain nearby gauges recorded from the day before to the day
-  after, and any local reports from the same days.
-- **Flood photos.** On the Hidalgo drainage district's photo layer, a magenta
-  dot is a photo: click it to see the district's picture taken at that spot (it
-  loads from the district's own server). A grey dot is a photo location: a crew
-  took a photo there, but the district has not published the image. The two
-  checkboxes under the layer turn each kind on and off.
-- **FEMA flood photos.** FEMA's own photos of flooding from Hurricane Dolly
-  (2008), the Roma flood of 2008 and Hurricane Alex (2010), in Brownsville,
-  La Feria, Raymondville, Roma, La Grulla, Mission and Weslaco. A ringed
-  magenta dot is a town: click it to scroll through its photos. FEMA's captions
-  name only the town, so that is where each photo is placed.
-- **Drainage and flood works in every county.** Drains, canals, resacas and
-  creeks (Census) and the dams, levees, sea walls, storm drains, low-water
-  crossings and coastal works in the State Flood Plan (TWDB) cover all four
-  counties, as do the
-  plan's ongoing and recommended flood projects. Harlingen and Brownsville add
-  their own storm ditches, ponds and sewers. Hidalgo's drainage district layers
-  (photos, mapped flooding, its own network) have no published counterpart in
-  the other three counties.
-- **Reported flooding.** Flood, flash flood, heavy rain and coastal flood
-  reports made to the National Weather Service in Brownsville since 2005, each
-  with the time, place and what was seen.
-- **Claims and rainfall by year.** The link in the header opens a page of
-  yearly charts for the four counties or any one: flood-insurance claims (or
-  dollars paid, or claims per 1,000 policies), the year's rain and its wettest
-  day, with the storm FEMA named for each busy year and a table of every year.
-  Claims follow the wettest day of a year more closely than its total rain.
-- **County.** The county selector moves the map and narrows the events,
-  rainfall records, reports and live signals to that county.
-- **Sharing a view.** The page address keeps track of the county, the layers
-  that are on and where the map is, so copying it shares exactly what you see.
-- **Data sources.** The last sidebar card lists every dataset behind the map
-  and when it was last downloaded.
+| Part | What it uses |
+| --- | --- |
+| Server | One FastAPI service (Uvicorn): the pages, a typed JSON API documented at `/docs`, vector tiles, static files, and the live-alert refresher |
+| Data | One SQLite database, `data/generated/rgv-flood.sqlite3`, opened read-only by the app (WAL mode) |
+| Pages | Jinja templates built from components, Alpine.js (CSP build) for behaviour, Tailwind CSS v4 compiled by Tailwind's standalone binary through `pytailwindcss` |
+| Map | MapLibre GL JS on OpenStreetMap vector basemaps from OpenFreeMap (Positron in light mode, Dark in dark mode) |
+| Charts | Plotly.js, on the claims page only |
+| Pipeline | Python with geopandas, shapely and GDAL: pulls every source and writes the database |
+| Deployment | Docker image behind Caddy (HTTPS), built and published by GitHub Actions |
 
-## Technology Stack
+There is no Node and no JavaScript build step. Third-party front-end files
+(MapLibre, Alpine, Plotly, IBM Plex fonts) are pinned by version and SHA-256 in
+`src/rgv_flood/vendor.lock.json` and served by the app itself. Requires Python
+3.13+ and [uv](https://docs.astral.sh/uv/); works the same on Windows, macOS
+and Linux.
 
-- Flask, Jinja templates, HTMX, Leaflet
-- One SQLite database holds all the data; the app reads nothing else
-- Python data pipeline (geopandas, shapely) that pulls each source and writes it to that database
-- Vanilla JavaScript ES modules for the map; no Node or build step
-- NOAA, FEMA, TWDB, Census, NWS, TxDOT, and local government sources
-
-Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
-
-## Quick Start
+## Quick start
 
 From the repository root:
 
 ```bash
 uv sync --group dev --group pipeline
 uv run --group pipeline python pipeline/build_all.py
-uv run flask --app rgv_flood run --debug
+uv run dev
 ```
 
-Open <http://127.0.0.1:5000>.
+Open <http://127.0.0.1:8000>.
 
-`build_all.py` is the one build command. It pulls every source into memory and
-writes it to a single SQLite database, `data/generated/rgv-flood.sqlite3`: map
-layers, flood events, local reports, weather records, insurance claims and
-live signals. The app
-reads only that database, never data files. Re-run the build after changing
-pipeline inputs or rules; it is safe to run while the app is up. The first run
-downloads about 400 MB into the `tmp/` cache, and later runs reuse it. See
-[pipeline/README.md](pipeline/README.md) for the tables and the individual steps.
+- `build_all.py` builds the database. It downloads about 400 MB into the `tmp/`
+  cache the first time; later runs reuse it. It is safe to run while the app is up.
+- `uv run dev` fetches the pinned front-end files if they are missing, rebuilds
+  the stylesheet whenever a template or script changes, and reloads the server
+  on code changes.
+- `uv run serve` runs it as in production: minified stylesheet, several workers
+  (`RGV_WORKERS`, default 4).
 
-Flask refreshes official live signals at startup and every 15 minutes. Set
-`RGV_LIVE_SIGNALS_SCHEDULER_ENABLED=false` to disable it, or set
-`RGV_LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS` to change the interval.
+## Using the map
 
-## Troubleshooting
+- **Layers.** The left panel groups the layers: flood hazard, drainage and flood
+  works, evidence of flooding, projects. Tick a layer to draw it; a group's own
+  checkbox turns the whole group on or off and shows a dash when only some of
+  it is on. The round "i" opens the layer's source card: what it is, who
+  publishes it, how old it is, and what it should not be used for.
+- **Sub-options.** Some rows have options underneath while they are on: TWDB's
+  modeled flood extent splits into the 1% and 0.2% annual-chance areas, and
+  Hidalgo's flood photos into "photos you can open" and "photo locations only".
+- **Popups.** Click anything on the map for its details. A Hidalgo flood photo
+  shows the district's picture; a FEMA photo town (a large pink dot) opens a
+  gallery of FEMA's photos of flooding there, placed at the town the caption
+  names. The selected feature gets an orange ring.
+- **Live alerts.** Current NWS warnings and advisories, TxDOT road closures and
+  Hidalgo County notices, at the top of the right panel and counted in the header.
+- **Flood events.** NOAA's flood events, filtered by type or year. Picking one
+  flies to it and shows the rain at the nearest gauges that day (or the full
+  day-before-to-day-after table), with local news and NWS reports from the same days.
+- **Rainfall records, local reports, data sources.** The rest of the right
+  panel: the wettest single days at the gauges, curated news and government
+  reports, and every dataset behind the map with the date it was downloaded and
+  the date the database was built.
+- **County.** The county selector fits the map to that county and narrows the
+  events, rainfall records, reports and alerts to it.
+- **Address search.** Type an address, or press `/`, to fly there.
+- **Light and dark.** Follows the system setting; the "Light" checkbox in the
+  header switches and is remembered.
+- **Phones.** Below tablet width the map, the layers and the events are three
+  views, switched from the bar at the bottom.
+- **Sharing.** The page address holds the county, the layers and sub-options
+  that are on, the selected event and the map view, so a copied link opens
+  exactly what you see.
 
-- `uv` errors: run `uv sync --group dev --group pipeline` again.
-- Map has no layers or events: run `build_all.py` (it builds `data/generated/rgv-flood.sqlite3`).
-- Build fails on a download: confirm network access to NOAA, Overture, FEMA, TWDB, the Census Bureau,
-  Iowa Environmental Mesonet, Wikimedia Commons, the cities' ArcGIS services and the Hidalgo drainage district, then re-run;
-  finished downloads are kept in `tmp/`.
-- A layer is missing after a build: its publisher was unreachable. The build says which; re-run it.
-- Live signals unavailable: source outages are logged; the app remains usable.
+## Claims & rainfall by year
 
-## Data and Database
+`/claims` shows the four counties together or one at a time, 1978 to the last
+full year:
 
-Everything lives in one SQLite file, `data/generated/rgv-flood.sqlite3`:
+- tiles for total claims, dollars paid, the worst year and its storm, and how
+  closely claims follow a year's wettest day and its total rain (they follow
+  the wettest day more);
+- three column charts sharing the year axis: claims (or dollars paid, or claims
+  per 1,000 policies), yearly rain, and the wettest day of the year. Hovering a
+  year shows it in all three and highlights it in the table; each chart can be
+  viewed as a table;
+- a year-by-year table with claims, payments, the claims rate, rain, the
+  wettest day and the storm FEMA named.
+
+Rain is the average of the gauges that reported on at least 330 days of the
+year. Dollars are as paid, not adjusted for inflation. Policy counts start in 2009.
+
+## The API
+
+Every page reads the same read-only JSON endpoints, documented with their exact
+responses at `/docs`:
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/v1/layers` | The layer panel: groups, layers, legends, sub-options, sources |
+| `GET /api/v1/layers/{id}.geojson` | A layer's GeoJSON, sent pre-compressed |
+| `GET /api/v1/tiles/{id}/{z}/{x}/{y}.pbf` | Vector tiles of the layers over 1 MB compressed (the two TWDB layers) |
+| `GET /api/v1/events`, `/api/v1/events.geojson` | NOAA flood events, filterable by county, type and year |
+| `GET /api/v1/events/{id}/context` | One event's gauge rain, curated reports and NWS reports |
+| `GET /api/v1/rainfall-records` | The wettest single days at the gauges |
+| `GET /api/v1/reports` | Curated local news and government reports |
+| `GET /api/v1/live-signals`, `/api/v1/live-signals.geojson` | Current official alerts and when they were last refreshed |
+| `GET /api/v1/history` | Claims, payments, policies, rain and events, year by year |
+| `GET /api/v1/sources` | Every dataset's publisher, link, download date and size; the build date |
+| `GET /api/v1/geocode?q=` | Address search, proxied to Nominatim (cached, one request a second upstream, 30 a minute per visitor) |
+| `GET /health` | Status for Docker and Caddy; 503 when the database is missing |
+
+The county filter is one of `cameron`, `hidalgo`, `starr`, `willacy`. JSON
+responses carry ETags; layer files and tiles are cached by browsers and proxies.
+
+## Data and database
+
+Everything lives in `data/generated/rgv-flood.sqlite3`, built by
+`pipeline/build_all.py`; see [pipeline/README.md](pipeline/README.md) for each step.
 
 | Table | Holds |
 | --- | --- |
-| `layers` | Every map layer: its description and the GeoJSON the map draws |
+| `layers` | Every map layer: its description, its place in the layer panel, and the GeoJSON the map draws |
+| `layer_tiles` | Vector tiles of the big layers |
 | `flood_events` | Flood-type events from NOAA's Storm Events Database, 1996–2025 |
-| `flood_reports` | Hand-curated local-news and government flood reports |
+| `flood_reports` | Hand-curated local news and government flood reports |
 | `nws_flood_reports` | Flooding reported to the National Weather Service in Brownsville, 2005 on |
 | `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily rain readings, 1978–2025 |
 | `rainfall_station_years` | Each gauge's yearly rain, wettest day and days reported |
 | `nfip_claims`, `nfip_policies_by_year` | Every NFIP flood-insurance claim since 1978; policies per county and year since 2009 |
 | `data_sources` | Where each dataset came from and when it was downloaded |
+| `build_info` | When the database was built |
 | `live_signals` | Current official alerts, road conditions and notices, refreshed while the app runs |
 
-The build scripts download from the publishers, hold the data in memory and
-write these tables. The only data files in the repository are the seed files in
-`data/seed/`: flood-hazard geometry, curated reports and yearly NFIP policy
-counts that no publisher offers as a scripted download. Set `RGV_DATABASE` to point the app at a database
-somewhere else, which is all a deployment needs alongside the code.
+The only data files in the repository are the seed files in `data/seed/`:
+flood-hazard geometry, curated reports and yearly NFIP policy counts that no
+publisher offers as a scripted download. See [data/seed/README.md](data/seed/README.md).
 
 `pipeline/fetch_ml_inputs.py` is separate from the app: it gathers the public
 inputs for the planned Hidalgo flood-susceptibility model (elevation, NLCD,
-soils, Atlas 14 rainfall, Overture buildings/roads, NFIP claims and policies,
-Hidalgo drainage-district layers) into the gitignored `data/ml/raw/`.
+soils, Atlas 14 rainfall, Overture buildings and roads, NFIP claims and
+policies, Hidalgo drainage-district layers) into the gitignored `data/ml/raw/`.
 
-## Hidalgo Drainage District (HCDD1) Data and Visualizations
+## Configuration
 
-The flood-evidence, drainage and bond-project overlays come from Hidalgo County
-Drainage District No. 1 (<https://www.hcdd1.org>), which publishes its data
-through a public ArcGIS Online account (no login or API key).
+Settings are environment variables, all optional:
 
-### REST API that pulls the data
+| Variable | Default |
+| --- | --- |
+| `RGV_DATABASE` | `data/generated/rgv-flood.sqlite3` |
+| `RGV_LIVE_SIGNALS_SCHEDULER_ENABLED` | `true` (refreshes alerts at startup and every interval) |
+| `RGV_LIVE_SIGNALS_REFRESH_INTERVAL_SECONDS` | `900` |
+| `RGV_LIVE_SIGNALS_SCHEDULER_LOCK_FILE` | next to the database (one refresher per host) |
+| `RGV_BASEMAP_LIGHT_STYLE`, `RGV_BASEMAP_DARK_STYLE` | OpenFreeMap Positron and Dark |
+| `RGV_GEOCODER_URL`, `RGV_GEOCODER_USER_AGENT` | Nominatim, with the project's name |
+| `RGV_LOG_LEVEL` | `INFO` (one JSON log line per request) |
 
-All layers are ArcGIS REST feature services under one base URL:
+## Deployment
+
+The app runs on the university's Azure VM as one Docker image (database
+included) behind Caddy, which handles HTTPS. GitHub Actions tests every push,
+and the release workflow builds the database and the image on pushes to `main`,
+on demand, and on the first of each month so the NOAA and FEMA data stay
+current. On the server: `docker compose pull && docker compose up -d`. Full
+setup in [deploy/README.md](deploy/README.md).
+
+## Development and testing
+
+```bash
+uv run playwright install chromium   # once, for the browser tests
+uv run pytest
+uv run ruff check .
+```
+
+- `tests/api/`: every endpoint, the pages, assets, caching and security headers.
+- `tests/browser/`: the real app in Chromium: the map, layers and sub-options,
+  popups and galleries, the side panels, search, shareable links, the phone
+  layout, themes, and the claims charts.
+- The rest: the pipeline.
+
+Interface text lives in `src/rgv_flood/i18n/en.json`, so a Spanish version is
+a matter of adding `es.json`. The visual design follows the Claude Design
+handoff kept in `docs/design/handoff/`.
+
+## Repository layout
+
+| Path | What it is | In Git |
+| --- | --- | --- |
+| `src/rgv_flood/app.py` | The FastAPI app: settings, database, middleware, routers, the live-alert refresher | yes |
+| `src/rgv_flood/api/` | One module per group of endpoints, and the response models | yes |
+| `src/rgv_flood/data_access.py` | Every database query | yes |
+| `src/rgv_flood/templates/` | `base.html`, `map.html`, `claims.html` and their `components/` | yes |
+| `src/rgv_flood/static/` | `css/input.css` (tokens and components), `js/` (`map/`, `panels/`, one entry per page in `pages/`), `basemap/offline.json`, `favicon.svg` | yes |
+| `src/rgv_flood/static/css/site.css`, `static/vendor/`, `static/fonts/` | Built stylesheet and fetched third-party files | no |
+| `pipeline/` | The build scripts and the live-alert pollers; see [pipeline/README.md](pipeline/README.md) | yes |
+| `tests/` | API, browser and pipeline tests | yes |
+| `deploy/`, `.github/workflows/` | Dockerfile, Compose with Caddy, the server guide; CI and the monthly release | yes |
+| `data/seed/` | The seed files (see above) | yes |
+| `data/generated/` | The database | no |
+| `tmp/` | Download cache of the publishers' files; safe to delete | no |
+| `data/ml/raw/` | Downloads from `fetch_ml_inputs.py` | no |
+
+## Troubleshooting
+
+- `uv` errors: run `uv sync --group dev --group pipeline` again.
+- The page has no styling: the stylesheet isn't built; run `uv run dev` or `uv run serve`.
+- "No data yet" on the page: run `build_all.py`.
+- A build fails on a download: check network access to NOAA, Overture, FEMA,
+  TWDB, the Census Bureau, Iowa Environmental Mesonet, Wikimedia Commons, the
+  cities' ArcGIS services and the Hidalgo drainage district, then re-run;
+  finished downloads stay in `tmp/`.
+- A layer is missing after a build: its publisher was unreachable. The build names it; re-run.
+- Live alerts don't show: source outages are logged and the rest of the app keeps working.
+
+## Hidalgo Drainage District (HCDD1) data
+
+The mapped flooding, flood photos, drainage network and bond-project layers
+come from Hidalgo County Drainage District No. 1 (<https://www.hcdd1.org>),
+which publishes its data through a public ArcGIS Online account (no login or
+API key). All layers are ArcGIS REST feature services under one base URL:
 
 ```
 https://services7.arcgis.com/JSUhwVSJhyVkcN3Q/arcgis/rest/services
@@ -149,43 +244,31 @@ https://services7.arcgis.com/JSUhwVSJhyVkcN3Q/arcgis/rest/services
 | Feature count | `<base>/<Service>/FeatureServer/<layer>/query?where=1=1&returnCountOnly=true&f=json` |
 | Download as GeoJSON | `<base>/<Service>/FeatureServer/<layer>/query?where=1=1&outFields=*&outSR=4326&f=geojson&resultOffset=0&resultRecordCount=1000` |
 
-Servers cap how many features one response can return, so the script asks for
-1,000 at a time and advances `resultOffset` until a page comes back empty.
-`pipeline/public_sources.py` does this for the layers listed in its
-`HCDD1_LAYERS` table, and `pipeline/build_layers.py` turns the ones below into
-map layers in the database:
-
-```bash
-uv run --group pipeline python pipeline/build_layers.py
-```
+Servers cap how many features one response returns, so `pipeline/public_sources.py`
+asks for 1,000 at a time and advances `resultOffset` until a page comes back empty.
 
 | Service / layer | Features | Becomes |
 | --- | --- | --- |
-| `Historical_Flooding_Layer` 0–3 (photos), `Hanna_Geotagged_Photos` | ~16k kept | Flood photos and photo locations. Layers 1 and 2 (June 2019, Sept 2018) also publish the image itself as an attachment, about 4,850 photos; the rest give only a path on the district's own network |
+| `Historical_Flooding_Layer` 0–3 (photos), `Hanna_Geotagged_Photos` | ~16k | Flood photos and photo locations; layers 1 and 2 (June 2019, Sept 2018) publish the image itself, about 4,850 photos |
 | `Historical_Flooding_Layer` 4–9 (extents, 2008–2020) | ~1,200 | Mapped flooding |
 | `HCDD1_System`, `Future_System`, `Detention_Ponds`, `Gate_Pumps_New` | ~1,750 | Drainage network |
 | `2012_Bond_Program`, `2018_Bond_Program`, `2023_Bond` | ~200 | Drainage improvement projects |
-| `FEMA_Hidalgo_FIRM`, `LOMR_CLOMR`, `Rain_n_Stream_Gauges`, `Ditch_Maintenance`, others | various | Downloaded for the ML work, not yet on the map |
+| `FEMA_Hidalgo_FIRM`, `LOMR_CLOMR`, `Rain_n_Stream_Gauges`, `Ditch_Maintenance`, others | various | Downloaded for the model work |
 
-Other public APIs used for the insurance-claims layer and model inputs:
+Other public APIs the pipeline uses:
 
 | Data | API |
 | --- | --- |
-| NFIP claims (v3) | `https://www.fema.gov/api/open/v3/NfipClaims` (OData: `$filter`, `$top`, `$skip`) |
-| NFIP policies (v2, removed by FEMA 2026-10-15) | `https://www.fema.gov/api/open/v2/FimaNfipPolicies` |
+| NFIP claims (v3) | `https://www.fema.gov/api/open/v3/NfipClaims` |
+| NFIP policies (v2; retired by FEMA, counts kept in `data/seed/`) | `https://www.fema.gov/api/open/v2/FimaNfipPolicies` |
 | Elevation (3DEP) | `https://tnmaccess.nationalmap.gov/api/v1/products` |
-| Land cover / imperviousness (NLCD) | `https://www.mrlc.gov/geoserver/mrlc_download/wcs` (WCS 2.0.1) |
+| Land cover / imperviousness (NLCD) | `https://www.mrlc.gov/geoserver/mrlc_download/wcs` |
 | Soils (SSURGO) | `https://sdmdataaccess.sc.egov.usda.gov/tabular/post.rest` |
 
-### HCDD1's own visualizations
+### HCDD1's own maps and dashboards
 
-HCDD1 publishes its own maps and dashboards from the same account. These are
-useful to compare against this project's overlays and for their legends and
-descriptions. Links were found through the ArcGIS Online search API and
-the hcdd1.org homepage; they are listed as discovered, not individually
-verified to still load.
-
-**Flood and system maps**
+Found through the ArcGIS Online search API and hcdd1.org; listed as found, not
+each checked to still load.
 
 | Name | Link |
 | --- | --- |
@@ -198,11 +281,6 @@ verified to still load.
 | Flood Damages June 2018 | <https://www.arcgis.com/home/item.html?id=f9a644ef576943549ac75382d0ba56e2> |
 | HCDD1 Damage Assessment | <https://www.arcgis.com/home/item.html?id=9286802c6d1540de854e65a28989a002> |
 | Hidalgo County FEMA Damage Assessment | <https://www.arcgis.com/home/item.html?id=53b2d29760e94fc88229d7524dbba6e5> |
-
-**Projects and bond programs**
-
-| Name | Link |
-| --- | --- |
 | 2012 Bond Dashboard | <https://www.arcgis.com/home/item.html?id=4bbb6b3959124f62bf7b30389a6dddce> |
 | 2018 Bond Dashboard | <https://hcdd1.maps.arcgis.com/apps/dashboards/d3c9a895241a49e1a28a762674131994> |
 | 2023 Bond Dashboard | <https://hcdd1.maps.arcgis.com/apps/dashboards/f7722aadbef74bf29d76d144d49390e8> |
@@ -211,49 +289,24 @@ verified to still load.
 | HCDD1 District Projects | <https://www.arcgis.com/home/item.html?id=40da5a923154485cac2256bf3daec571> |
 | HCDD1 Master Dashboard | <https://www.arcgis.com/home/item.html?id=8abf134d9c83476fbe57f923e03028c6> |
 
-The district's data terms of use were not found; the overlays here credit
-"Hidalgo County Drainage District No. 1". Confirm reuse with the district before
+The district's data terms of use were not found; the layers credit "Hidalgo
+County Drainage District No. 1". Confirm reuse with the district before
 publishing this project outside the course.
 
-## Repository Layout
+## Sources and acknowledgments
 
-| Path | What it is | In Git |
-| --- | --- | --- |
-| `src/rgv_flood/` | The Flask app: `views/`, `data_access.py` (every database query), templates, and the map's ES modules in `static/js/` | yes |
-| `pipeline/` | The build scripts and the live-signal pollers; see [pipeline/README.md](pipeline/README.md) | yes |
-| `tests/` | Tests for the app and the pipeline | yes |
-| `data/seed/` | Seed files: FEMA, TWDB and county-boundary GeoJSON, Hidalgo's 16 curated reports and NFIP policies by year. The only data in the repository; see [data/seed/README.md](data/seed/README.md) | yes |
-| `data/generated/` | The database, `rgv-flood.sqlite3` | no |
-| `tmp/` | Download cache: publishers' files as downloaded, so a rebuild does not fetch them again. Safe to delete | no |
-| `data/ml/raw/` | Downloads from `fetch_ml_inputs.py` for the planned model | no |
+Hazard data comes from FEMA, Hidalgo County Drainage District No. 1 and TWDB;
+drainage and flood works from TWDB's State Flood Plan, Census TIGER/Line and the
+cities of Harlingen and Brownsville; boundaries from Census TIGER/Line; events
+and weather from NOAA; reported flooding from NWS (archived by Iowa
+Environmental Mesonet); insurance claims and policies from OpenFEMA; FEMA's
+flood photos from Wikimedia Commons; bridges and some dams from Overture Maps
+Foundation; live alerts from NWS, TxDOT and Hidalgo County; basemaps from
+OpenFreeMap and OpenStreetMap. Curated local reports cover Hidalgo County.
 
-Nothing generated is committed and the app reads no data files, so after a fresh
-clone `build_all.py` has to run once before the map has anything to show.
-
-## Development and Testing
-
-```bash
-uv run pytest
-uv run ruff check .
-```
-
-Keep source attribution and source-supplied geometry intact; do not infer live
-conditions.
-
-## Sources, Contributing, License, and Acknowledgments
-
-Source coverage is documented in the data and pipeline artifacts. Hazard data
-comes from FEMA, Hidalgo County Drainage District No. 1, and TWDB; drainage and
-flood works from TWDB's State Flood Plan, Census TIGER/Line and the cities of
-Harlingen and Brownsville; boundaries from Census TIGER/Line; events and weather
-from NOAA; reported flooding from NWS (archived by Iowa Environmental Mesonet);
-insurance claims and policies from OpenFEMA; FEMA's flood photos from Wikimedia
-Commons; bridges and some dams from Overture Maps Foundation; live signals from
-NWS, TxDOT, and Hidalgo County.
-Local reports currently cover Hidalgo County only.
-
-Contributions should preserve source attribution, include focused tests, and
-avoid presenting this tool as emergency or regulatory guidance.
+Contributions should keep source attribution and source-supplied geometry
+intact, include focused tests, never infer live conditions, and never present
+this tool as emergency or regulatory guidance.
 
 No separate license is currently declared. Built by Danny McClain and Luis
 Garcia with guidance from Sergei Chuprov.

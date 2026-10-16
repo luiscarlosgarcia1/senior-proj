@@ -1,5 +1,5 @@
 {# The page header: logo, county, search (map page), navigation, theme, live-alert pill. #}
-{% from "site/components/county_select.html" import county_select %}
+{% from "components/county_select.html" import county_select %}
 <header class="relative z-[1100] flex shrink-0 flex-col border-b border-line bg-panel shadow-1">
   <div class="flex h-14 items-center gap-4 px-4">
     <a href="/" class="flex items-center no-underline lg:min-w-[256px]">
@@ -7,7 +7,7 @@
     </a>
     {% if nav_active == "map" %}
       <div class="hidden lg:block">{{ county_select("header") }}</div>
-      {% include "site/components/search_box.html" ignore missing %}
+      {% include "components/search_box.html" ignore missing %}
     {% endif %}
     <div class="flex-1"></div>
     <nav class="flex self-stretch" aria-label="{{ t('nav.label') }}">
@@ -20,12 +20,12 @@
         <span class="hidden sm:inline">{{ t("nav.claims") }}</span><span class="sm:hidden">{{ t("nav.claims_short") }}</span>
       </a>
     </nav>
-    {% include "site/components/theme_toggle.html" %}
+    {% include "components/theme_toggle.html" %}
     <div x-data="alertPill" class="hidden h-7 items-center gap-2 rounded-full border border-line2 bg-panel2 px-3 text-sm font-medium sm:flex">
       <span class="h-[7px] w-[7px] rounded-full bg-warn" aria-hidden="true"></span>
       <span x-text="label">{{ t("alerts.pill", n=0) }}</span>
     </div>
   </div>
-  {% if nav_active == "map" %}{% include "site/components/phone_search_row.html" ignore missing %}{% endif %}
+  {% if nav_active == "map" %}{% include "components/phone_search_row.html" ignore missing %}{% endif %}
   <div x-data x-show="$store.app.loading" x-cloak class="loadbar" aria-hidden="true"></div>
 </header>

@@ -3,8 +3,8 @@
  *   #county=hidalgo&layers=fema-nfhl,hcdd1-flood-photos&off=hcdd1-flood-photos.locations&event=<id>&map=26.2,-98.2,11
  *
  * Reading is forgiving: unknown layers and parts, a county that isn't one of
- * the four and a malformed map view are ignored, and links from the old app
- * (`events=1`) still work. */
+ * the four and a malformed map view are ignored, and `events=1` turns on the
+ * NOAA flood events layer. */
 
 import { mapReady } from "./map/main.js";
 
@@ -15,7 +15,7 @@ const list = (value) => (value || "").split(",").map((item) => item.trim()).filt
 export function readHash(hash = location.hash) {
   const params = new URLSearchParams(hash.replace(/^#/, ""));
   const layers = new Set(list(params.get("layers")));
-  if (params.get("events") === "1") layers.add("noaa-flood-events"); // the Flask app's links
+  if (params.get("events") === "1") layers.add("noaa-flood-events");
   const view = list(params.get("map")).map(Number);
   const validView = view.length === 3 && view.every(Number.isFinite) && Math.abs(view[0]) <= 90 && Math.abs(view[1]) <= 180;
   const county = params.get("county");

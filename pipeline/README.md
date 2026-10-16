@@ -3,7 +3,7 @@
 Builds and maintains the project's one database,
 `data/generated/rgv-flood.sqlite3`. Every script here pulls its sources into
 memory and writes straight to that database. Nothing is generated as loose data
-files, and the Flask app reads nothing else.
+files, and the app reads nothing else.
 
 ```bash
 uv run --group pipeline python pipeline/build_all.py     # about 2 minutes once downloads are cached
@@ -21,7 +21,8 @@ Every table is defined in `database.py`. Every query the app runs is in
 
 | Table | One row per | Written by |
 | --- | --- | --- |
-| `layers` | map layer: title, description, source, limitation and links, plus the map-ready GeoJSON the browser draws (stored gzipped and sent as is) | `build_layers.py` |
+| `layers` | map layer: title, description, source, limitation and links, its place in the layer panel (group, row, legend, sub-options), and the map-ready GeoJSON the browser draws (stored gzipped and sent as is) | `build_layers.py` |
+| `layer_tiles` | vector tile (gzipped MVT, XYZ numbering) of a layer over 1 MB compressed | `build_layers.py` |
 | `flood_events` | flood-type event in NOAA's Storm Events Database, 1996–2025, with NOAA's coordinate and the point the map plots | `build_events.py` |
 | `flood_reports` | hand-curated local-news or government report tied to a flood | `build_events.py` |
 | `weather_stations` | GHCN-Daily station used for a county | `build_events.py` |
@@ -31,6 +32,7 @@ Every table is defined in `database.py`. Every query the app runs is in
 | `nfip_policies_by_year` | county and year: NFIP policies in force, 2009 on | `build_history.py` |
 | `nws_flood_reports` | flood, flash flood, heavy rain or coastal flood report to NWS Brownsville, 2005 on | `build_history.py` |
 | `data_sources` | dataset loaded into the database: publisher, URL, when it was downloaded, how many records | every build script |
+| `build_info` | `built_at`: when `build_all.py` last finished | `build_all.py` |
 | `live_signals` | current official alert, road condition or county notice | `run_*.py`, while the app runs |
 | `live_signal_runs`, `live_signal_tombstones` | bookkeeping for live-signal polls and expired signals | `run_*.py` |
 
@@ -144,6 +146,18 @@ ponds), parks, wetlands and "otherwise protected areas" are not flood works and
 are left out. GHCN-Daily readings are kept for rain only: nothing reads
 temperature or wind.
 
+**Vector tiles.** A layer whose gzipped GeoJSON is over 1 MB (today the two
+TWDB layers) is also cut into vector tiles, zoom 7 to 14, by GDAL
+(`layer_tiles.py`), and the app serves those instead of the whole file.
+
+**The layer panel.** `layer_meta.py`'s `PANEL` table gives each layer its group,
+row, short label and legend; layers sharing a row (TWDB 1% and 0.2%) become that
+row's sub-options, and `PARTS` adds sub-options within one layer (Hidalgo photos
+you can open, photo locations).
+
+The database runs in WAL mode, so the app's readers never wait on the
+live-alert refresher's writes; `build_all.py` folds the WAL in before it compacts.
+
 If a publisher can't be reached and its files aren't cached, that one layer is
 left out, the rest are still written, and the script exits with an error naming
 the missing layer.
@@ -155,7 +169,7 @@ exceed GDAL's default per-feature size cap.
 
 `run_nws.py`, `run_hidalgo_rss.py` and `run_drivetexas.py` each poll one official
 source and update the `live_signals` table through `live_signals.py`
-(`LiveSignalStore`). The Flask app runs all three on a timer; each can also be
+(`LiveSignalStore`). The app runs all three on a timer; each can also be
 run by hand, and takes `--output` to write to a different database file.
 `run_live_signal_fixture.py` loads the test fixture instead of a live source.
 
@@ -178,7 +192,7 @@ flood-susceptibility model. Re-runs skip files already present.
 | `paths.py` | Where things live: the database, the seed folder, the download cache |
 | `net.py` | HTTP GET for bytes, text and JSON, plus resumable downloads with retries |
 | `jsonio.py` | Reading NDJSON, canonical (sorted, compact) JSON, GeoJSON feature collections |
-| `rgv_flood.counties` | The four counties: slugs, FIPS codes, names, bounding box (shared with the Flask app) |
+| `rgv_flood.counties` | The four counties: slugs, FIPS codes, names, bounding box (shared with the app) |
 
 ## Conventions
 

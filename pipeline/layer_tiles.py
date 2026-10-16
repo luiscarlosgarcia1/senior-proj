@@ -18,7 +18,7 @@ import geopandas as gpd
 import pyogrio
 
 TILE_THRESHOLD_BYTES = 1_000_000
-MIN_ZOOM = 8  # the whole valley
+MIN_ZOOM = 7  # the map's own minimum: the whole valley on a small screen
 MAX_ZOOM = 14  # street level; MapLibre over-zooms past this
 
 

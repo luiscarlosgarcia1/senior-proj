@@ -78,7 +78,7 @@ def test_stale_share_link_is_ignored_gracefully(map_page, console_errors):
     assert [e for e in console_errors if "404" not in e] == []
 
 
-def test_old_flask_link_still_works(map_page):
+def test_events_flag_link_works(map_page):
     page = map_page("#county=hidalgo&layers=fema-nfhl&events=1&map=26.2034,-98.2300,11")
 
     expect(_row(page, "fema-nfhl")).to_be_checked()

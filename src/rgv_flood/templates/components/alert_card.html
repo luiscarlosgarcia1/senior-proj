@@ -3,7 +3,7 @@
   <span class="w-[3px] shrink-0 rounded-sm" x-bind:style="stripe()" aria-hidden="true"></span>
   <div class="min-w-0">
     <div class="flex items-center gap-1.5 text-xs font-semibold tracking-[.6px] text-muted">
-      <span class="rounded-sm border border-line2 px-1 font-mono" x-text="badge()"></span>
+      <span class="rounded-sm border border-line2 px-1 font-mono" data-badge x-text="badge()"></span>
     </div>
     <a class="mt-1 block font-medium leading-snug no-underline hover:underline" x-bind:href="signal.source_url" target="_blank" rel="noopener" x-text="signal.summary"></a>
     <div class="mt-0.5 text-sm text-muted" x-text="meta()"></div>

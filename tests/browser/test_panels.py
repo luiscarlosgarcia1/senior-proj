@@ -37,6 +37,18 @@ def test_alert_panel_lists_signals(page, live_server):
     expect(page.locator("header")).to_contain_text("1 active alerts")
 
 
+def test_alert_badges_name_the_agency(page, live_server):
+    signals = {"refreshed_at": SIGNALS["refreshed_at"], "signals": [
+        {**SIGNALS["signals"][0], "native_id": "a", "source": "https://api.weather.gov/alerts/active?area=TX"},
+        {**SIGNALS["signals"][0], "native_id": "b", "source": "drivetexas:points", "source_publisher": "TxDOT"},
+    ]}
+    page.route("**/api/v1/live-signals", lambda route: route.fulfill(json=signals))
+    page.goto(f"{live_server}/?test=1")
+
+    badges = page.locator("[data-panel=alerts] [data-badge]")
+    expect(badges).to_have_text(["NWS", "TxDOT"])
+
+
 def test_event_chip_filters_list(map_page):
     page = map_page()
     events = page.locator("[data-panel=events] [data-event]")

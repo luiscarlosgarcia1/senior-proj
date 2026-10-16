@@ -1,7 +1,7 @@
 """The central database: every table the project has, defined in one place.
 
 One SQLite file (`paths.DATABASE`) holds everything the build produces and
-everything the Flask app reads:
+everything the app reads:
 
   build_layers.py   fills  layers
   build_events.py   fills  flood_events, flood_reports, weather_stations,

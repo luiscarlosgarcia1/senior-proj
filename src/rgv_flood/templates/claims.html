@@ -1,7 +1,7 @@
-{% extends "site/base.html" %}
-{% from "site/components/county_select.html" import county_select %}
-{% from "site/components/stat_tile.html" import stat_tile %}
-{% from "site/components/segmented.html" import segmented %}
+{% extends "base.html" %}
+{% from "components/county_select.html" import county_select %}
+{% from "components/stat_tile.html" import stat_tile %}
+{% from "components/segmented.html" import segmented %}
 {% block title %}{{ t("app.claims_title") }}{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="claims-page" x-data="claimsPage">
