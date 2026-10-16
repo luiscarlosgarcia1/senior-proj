@@ -109,3 +109,18 @@ def test_sources_show_build_date(map_page):
 
 def test_signals_fixture_is_valid_json():
     json.dumps(SIGNALS)
+
+
+def test_clicking_the_selected_event_again_clears_it(map_page):
+    page = map_page()
+    event = page.locator("[data-event='noaa-storm-events-1']")
+    event.click()
+    expect(page.locator("[data-event-detail]")).to_be_visible()
+    wait_js(page, "window.__rgvMap.getSource('selection')?.serialize().data.features.length === 1")
+
+    event.click()
+
+    expect(page.locator("[data-event-detail]")).to_be_hidden()
+    wait_js(page, "window.__rgvMap.getSource('selection').serialize().data.features.length === 0")
+    expect(page.locator(".is-selected[data-event]")).to_have_count(0)
+    wait_js(page, "!location.hash.includes('event=')")

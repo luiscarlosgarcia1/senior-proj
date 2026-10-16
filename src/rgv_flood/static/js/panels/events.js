@@ -16,8 +16,16 @@ document.addEventListener("alpine:init", () => {
     selectedId: null,
     context: null,
     showTable: false,
-    /** Select an event: fly to it (when it has a point), ring it, load its context. */
+    /** Clear the selection: no ring, no detail card. */
+    clear() {
+      this.selectedId = null;
+      this.context = null;
+      select(null);
+    },
+    /** Select an event: fly to it (when it has a point), ring it, load its context.
+     * Picking the selected event again clears it. */
     async open(event) {
+      if (this.selectedId === event.id) return this.clear();
       this.selectedId = event.id;
       this.showTable = false;
       if (event.lat !== null && event.lat !== undefined) {
