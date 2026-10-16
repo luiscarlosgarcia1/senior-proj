@@ -135,3 +135,14 @@ def test_theme_switch_during_layer_load(map_page, console_errors):
     sources = page.evaluate("Object.keys(window.__rgvMap.getStyle().sources).filter(id => id === 'src-fema-nfhl')")
     assert sources == ["src-fema-nfhl"]
     assert console_errors == []
+
+
+def test_map_fills_its_area(map_page):
+    page = map_page()
+
+    box = page.locator("#map").bounding_box()
+    main = page.locator('main[data-view="map"]').bounding_box()
+
+    assert box["height"] > 300
+    assert abs(box["height"] - main["height"]) < 2
+    assert page.evaluate("window.__rgvMap.getCanvas().clientHeight") == round(box["height"])

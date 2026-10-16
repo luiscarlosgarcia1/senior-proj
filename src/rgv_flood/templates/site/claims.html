@@ -2,8 +2,8 @@
 {% block title %}{{ t("app.claims_title") }}{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="claims-page">
-  <footer class="mt-4 flex flex-wrap justify-between gap-x-8 gap-y-2 text-[11.5px] leading-relaxed text-muted">
-    {% include "site/components/disclaimer.html" %}
+  <footer class="mt-4 text-[11.5px] leading-relaxed text-muted" data-claims-footer>
+    {% if built_label %}<p>{{ built_label }}</p>{% endif %}
   </footer>
 </div>
 {% endblock %}

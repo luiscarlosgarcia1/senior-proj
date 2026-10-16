@@ -18,8 +18,6 @@
   "county.all_short": "All four",
   "theme.light": "Light",
   "alerts.pill": "{n} active alerts",
-  "disclaimer.text": "Educational project only. Not for emergency use. In an emergency call 911.",
-  "disclaimer.project": "A UTRGV Computer Science senior project",
   "footer.built": "Data built {date}",
   "nodata.message": "No data yet: run the build (uv run --group pipeline python pipeline/build_all.py), then reload.",
   "mobile.map": "Map",
@@ -42,5 +40,10 @@
   "source.vintage": "Vintage",
   "source.coverage": "Coverage",
   "source.limitation": "Not for:",
-  "source.publisher_link": "Publisher's page"
+  "source.publisher_link": "Publisher's page",
+  "popup.open_photo": "Open the full-size photo",
+  "popup.open_commons": "Open on Wikimedia Commons",
+  "popup.previous_photo": "Previous photo",
+  "popup.next_photo": "Next photo",
+  "popup.source_link": "Source"
 }

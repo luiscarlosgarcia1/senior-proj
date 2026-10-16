@@ -1,0 +1,12 @@
+{# A town's FEMA photos: one large, previous/next, thumbnails, caption and credit. #}
+<div data-gallery>
+  <div class="gal-photo">
+    <a data-gallery-link target="_blank" rel="noopener" title="{{ t('popup.open_commons') }}"><img data-gallery-image alt="" loading="lazy"></a>
+    <span class="absolute right-2 top-2 rounded-sm border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] font-medium" data-counter></span>
+    <button type="button" class="gal-btn left-1.5" data-step="-1" aria-label="{{ t('popup.previous_photo') }}">‹</button>
+    <button type="button" class="gal-btn right-1.5" data-step="1" aria-label="{{ t('popup.next_photo') }}">›</button>
+  </div>
+  <div class="mt-1.5 flex gap-1.5" data-thumbs></div>
+  <div class="mt-2.5 text-[12.5px] leading-snug" data-caption></div>
+  <div class="mt-0.5 text-xs text-muted" data-credit></div>
+</div>

@@ -17,7 +17,8 @@ def test_map_page_renders(api_client):
     assert 'href="/claims"' in html and "Map explorer" in html
     assert 'data-theme="dark"' in html  # the default before the bootstrap script runs
     assert "/static/vendor/alpine/alpine-csp.min.js" in html
-    assert "A UTRGV Computer Science senior project" in html
+    assert "Educational project only" not in html  # removed at the reader's request
+    assert "A UTRGV Computer Science senior project" not in html
 
 
 def test_claims_page_renders(api_client):
@@ -58,8 +59,8 @@ def test_catalog_embedded_for_scripts(api_client):
     assert '<script type="application/json" id="i18n">' in api_client.get("/").text
 
 
-def test_build_date_in_footer(api_client):
-    assert "Data built Oct 15, 2026" in api_client.get("/").text
+def test_build_date_in_claims_footer(api_client):
+    assert "Data built Oct 15, 2026" in api_client.get("/claims").text
 
 
 def test_pages_render_before_build(make_client, tmp_path):

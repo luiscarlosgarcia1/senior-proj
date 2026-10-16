@@ -17,7 +17,7 @@ import pytest
 import uvicorn
 from browser_support import wait_js
 from database import open_database, replace_table
-from fixture_db import LAYERS, build_fixture_database
+from fixture_db import LAYERS, _layer, build_fixture_database
 
 pytest.importorskip("pyogrio", reason="tiles need the pipeline dependency group")
 
@@ -57,12 +57,45 @@ TWDB_SQUARE = _collection([{
 }])
 
 
+# A 1x1 GIF: photo URLs stay on the page (no network) and the CSP allows data: images.
+PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+
+
+def _point(lng, lat, **properties):
+    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lng, lat]}, "properties": properties}
+
+
+RAYMONDVILLE = (-97.78, 26.48)
+FEMA_PHOTOS = _collection([_point(*RAYMONDVILLE, overlay_type="fema_photos", town="Raymondville", county="Willacy", photos=[
+    {"taken": f"2008-07-2{n}", "caption": f"Raymondville, TX -- Flooded street number {n}.", "credit": "Jacinta Quesada",
+     "thumb_url": PIXEL, "page_url": f"https://commons.wikimedia.org/wiki/File:{n}.jpg"}
+    for n in range(1, 6)
+])])
+HIDALGO_PHOTOS = _collection([
+    _point(-98.2, 26.2, overlay_type="flood_photo", event="June 2019", taken="2019-06-27 09:54", photo_url=PIXEL),
+    _point(-98.1, 26.3, overlay_type="flood_photo", event="June 2018", taken="2018-06-21 17:56"),
+])
+INFRASTRUCTURE = _collection([
+    _point(-98.4, 26.1, overlay_type="flood_infrastructure", kind="dam", name="Retamal Diversion Dam",
+           source="Overture Maps Foundation", county="Hidalgo"),
+    _point(-98.0, 26.45, overlay_type="flood_infrastructure", kind="dam", name="<b>x</b>", county="Hidalgo"),
+])
+
+
 def browser_layers() -> list[dict]:
     by_id = {row["id"]: dict(row) for row in LAYERS}
     by_id["county-boundaries"]["geojson_gzip"] = gzip.compress(COUNTIES.encode())
     by_id["fema-nfhl"]["geojson_gzip"] = gzip.compress(HAZARD.encode())
     by_id["twdb-cursory-1in100"]["geojson_gzip"] = gzip.compress(TWDB_SQUARE.encode())
-    return [*by_id.values()]
+    by_id["hcdd1-flood-photos"]["geojson_gzip"] = gzip.compress(HIDALGO_PHOTOS.encode())
+    extra = [
+        _layer("fema-flood-photos", FEMA_PHOTOS, position=7, layer_group="evidence", feature_count=1,
+               row_label="Flood photos, FEMA", short_label="Flood photos, FEMA", legend_json='{"shape": "fema", "color": "fema"}'),
+        _layer("flood-infrastructure", INFRASTRUCTURE, position=8, layer_group="works", feature_count=2,
+               row_label="Flood infrastructure, state flood plan", short_label="Flood infrastructure, state flood plan",
+               legend_json='{"shape": "diaf", "color": "infra"}'),
+    ]
+    return [*by_id.values(), *extra]
 
 
 @pytest.fixture(scope="session")

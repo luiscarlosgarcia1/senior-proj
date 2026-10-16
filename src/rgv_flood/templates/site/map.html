@@ -10,16 +10,21 @@
       {% include "site/components/layer_panel.html" %}
     </aside>
     <main class="relative min-w-0 flex-1" data-view="map">
-      <div id="map" class="absolute inset-0"
-           data-basemap-light="{{ settings.basemap_light_style }}" data-basemap-dark="{{ settings.basemap_dark_style }}"></div>
+      {# MapLibre's own stylesheet makes its container position: relative, so the
+         container fills an absolutely positioned wrapper instead of being one. #}
+      <div class="absolute inset-0">
+        <div id="map" class="h-full w-full"
+             data-basemap-light="{{ settings.basemap_light_style }}" data-basemap-dark="{{ settings.basemap_dark_style }}"></div>
+      </div>
       {% include "site/components/legend.html" %}
       {% include "site/components/severity_legend.html" %}
       {% include "site/components/source_details.html" %}
-      <div class="absolute inset-x-0 bottom-0 z-[500] flex h-7 items-center justify-between gap-4 border-t border-line bg-panel px-4 text-[11.5px] text-muted">
-        {% include "site/components/disclaimer.html" %}
-      </div>
+      {% include "site/components/popup.html" %}
     </main>
   </div>
 </div>
 {% endblock %}
-{% block scripts %}<script type="module" src="{{ asset_url('js/panels/layer-panel.js') }}"></script>{% endblock %}
+{% block scripts %}
+<script type="module" src="{{ asset_url('js/panels/layer-panel.js') }}"></script>
+<script type="module" src="{{ asset_url('js/map/popups.js') }}"></script>
+{% endblock %}
