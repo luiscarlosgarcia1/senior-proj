@@ -99,4 +99,4 @@ def test_hazard_zone_popup(map_page):
     popup = page.locator(".maplibregl-popup-content")
     expect(popup).to_contain_text("FEMA NFHL")
     expect(popup).to_contain_text("Zone AE")
-    expect(popup).to_contain_text("Relative severity: high")
+    expect(popup).to_contain_text("Severity: Severe")

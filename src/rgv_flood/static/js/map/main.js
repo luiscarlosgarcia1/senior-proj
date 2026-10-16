@@ -1,9 +1,12 @@
 /* The map: MapLibre on an OpenStreetMap vector basemap (OpenFreeMap by
  * default; the style URLs are settings). Light and dark swap the basemap and
  * recolor our layers; county changes fit the map to the county and emphasize
- * its outline. Other modules get the map from `mapReady`. */
+ * its outline. Basemap labels show on the US side only. Other modules get the
+ * map from `mapReady`. */
 
 import * as maplibregl from "../../vendor/maplibre/maplibre-gl.mjs";
+import { getJson } from "../api.js";
+import { hideForeignLabels, usSideMask } from "./labels.js";
 import { beginStyleSwitch, loadedData, ownStyle } from "./layers.js";
 
 const VALLEY = [[-99.2, 25.8], [-97.1, 26.8]]; // west-south, east-north of the four counties
@@ -11,6 +14,22 @@ const container = document.getElementById("map");
 
 const basemapFor = (theme) => container.dataset[theme === "light" ? "basemapLight" : "basemapDark"];
 const currentTheme = () => document.documentElement.dataset.theme || "light";
+
+let labelMask = null; // set once the county outlines arrive
+
+/** Limit the basemap's land labels to the US side (see labels.js). */
+async function hideLabelsInMexico(map) {
+  try {
+    labelMask = usSideMask(await getJson("layers/county-boundaries.geojson", {}, { cancelPrevious: false }));
+  } catch (error) {
+    console.warn("county outlines unavailable; basemap labels left as they are", error);
+    return;
+  }
+  const before = map.getStyle().layers;
+  hideForeignLabels(before, labelMask).forEach((layer, i) => {
+    if (layer !== before[i]) map.setFilter(layer.id, layer.filter);
+  });
+}
 
 let resolveReady;
 /** Resolves with the map once its first style has loaded. */
@@ -30,7 +49,10 @@ function createMap() {
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
   map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-right");
-  map.once("load", () => resolveReady(map));
+  map.once("load", () => {
+    resolveReady(map);
+    hideLabelsInMexico(map);
+  });
   if (new URLSearchParams(location.search).has("test")) window.__rgvMap = map;
   return map;
 }
@@ -42,7 +64,8 @@ function applyTheme(map, theme) {
     diff: false,
     transformStyle: (_previous, next) => {
       const own = ownStyle();
-      return { ...next, sources: { ...next.sources, ...own.sources }, layers: [...next.layers, ...own.layers] };
+      const basemap = labelMask ? hideForeignLabels(next.layers, labelMask) : next.layers;
+      return { ...next, sources: { ...next.sources, ...own.sources }, layers: [...basemap, ...own.layers] };
     },
   });
 }

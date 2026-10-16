@@ -103,7 +103,8 @@ function describe(p, layerId) {
     return { title: p.summary, lines: [joined(p.source_publisher, p.expires_at && `until ${valleyTime(p.expires_at)}`)], note: "Official live signal", link: p.source_url };
   }
   if (p.infrastructure_type) return { title: p.name || "Bridge", lines: [joined("Bridge", p.county && `${p.county} County`)], note: "Source: Overture Maps Foundation (OpenStreetMap)" };
-  return { title: p.source || "Flood zone", lines: [`Zone ${p.original_category || "—"}`, `Relative severity: ${p.relative_class || "uncategorized"}`] };
+  const severity = { high: "Severe", moderate: "Moderate", low: "Light" }[p.relative_class] || "Uncategorized";
+  return { title: p.source || "Flood zone", lines: [`Zone ${p.original_category || "—"}`, `Severity: ${severity}`] };
 }
 
 const field = (root, name) => root.querySelector(`[data-field="${name}"]`);

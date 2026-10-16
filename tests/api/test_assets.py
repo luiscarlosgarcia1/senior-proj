@@ -103,3 +103,12 @@ def test_tailwind_build_contains_tokens(tmp_path):
 
 def test_build_output_does_not_overwrite_a_tracked_file():
     assert assets.CSS_OUTPUT.name == "site.css"
+
+
+def test_fonts_are_public_sans():
+    css = (assets.STATIC_ROOT / "css" / "input.css").read_text(encoding="utf-8")
+    entries = json.loads(vendor.LOCK_FILE.read_text())["files"]
+
+    assert '"Public Sans"' in css
+    assert "IBM Plex" not in css
+    assert {e["name"] for e in entries if "font" in e["path"]} == {"public-sans-400", "public-sans-500", "public-sans-600"}

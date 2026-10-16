@@ -138,7 +138,7 @@ def _layer(layer_id: str, geojson: str = '{"type":"FeatureCollection","features"
         "panel_row": layer_id,
         "row_label": layer_id.title(),
         "short_label": layer_id.title(),
-        "legend_json": '{"shape": "poly", "color": "nfhl"}',
+        "legend_json": '{"shape": "sev", "color": "nfhl"}',
         "parts_json": "[]",
         "delivery": "geojson",
         "tiles_hash": None,
@@ -202,6 +202,8 @@ LAYERS = [
            parts_json='[{"id": "photos", "label": "Photos you can open", "filter": ["has", "photo_url"]},'
                       ' {"id": "locations", "label": "Photo locations only", "filter": ["!", ["has", "photo_url"]]}]'),
     _layer("flood-projects", position=6, layer_group="projects", legend_json='{"shape": "sqf", "color": "sfp"}'),
+    _layer("dams", position=9, layer_group="works", row_label="Dams", short_label="Dams",
+           legend_json='{"shape": "dot", "color": "dam"}'),
 ]
 # One real-looking tile of twdb-cursory-1in100 (the bytes only need to be gzip).
 TILES = [{"layer_id": "twdb-cursory-1in100", "z": 10, "x": 232, "y": 434, "data": gzip.compress(b"mvt")}]

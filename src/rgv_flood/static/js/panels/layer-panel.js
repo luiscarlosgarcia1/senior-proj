@@ -185,6 +185,6 @@ document.addEventListener("alpine:init", () => {
 const COLOR_VARS = {
   nfhl: "--c-nfhl", firm: "--c-firm", twdb: "--c-twdb", drain: "--c-drain", infra: "--c-infra", city: "--c-city",
   hdrain: "--c-hdrain", bridge: "--c-bridge", mapped: "--c-mapped", photos: "--c-photos", fema: "--c-fema",
-  nws: "--c-nws", proj: "--c-proj", sfp: "--c-sfp", claims: "--c-claims", county: "--county",
+  nws: "--c-nws", proj: "--c-proj", sfp: "--c-sfp", claims: "--c-claims", county: "--county", dam: "--c-dam",
   "sev-high": "--sev-high", warn: "--warn",
 };

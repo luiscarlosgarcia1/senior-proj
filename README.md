@@ -4,7 +4,7 @@ CSCI 4390 Senior Project by Danny McClain and Luis Garcia. Faculty adviser:
 Sergei Chuprov.
 
 A map for comparing flood-hazard information across Cameron, Hidalgo, Starr
-and Willacy counties: hazard zones, drainage and flood-control works, bridges,
+and Willacy counties: hazard zones, drainage and flood-control works, dams, bridges,
 recorded flooding and flood photos, NOAA flood events, rainfall, local reports,
 live official alerts and address search, plus a page that sets
 flood-insurance claims beside rainfall year by year since 1978.
@@ -26,7 +26,7 @@ emergency guidance.
 | Deployment | Docker image behind Caddy (HTTPS), built and published by GitHub Actions |
 
 There is no Node and no JavaScript build step. Third-party front-end files
-(MapLibre, Alpine, Plotly, IBM Plex fonts) are pinned by version and SHA-256 in
+(MapLibre, Alpine, Plotly, the Public Sans font) are pinned by version and SHA-256 in
 `src/rgv_flood/vendor.lock.json` and served by the app itself. Requires Python
 3.13+ and [uv](https://docs.astral.sh/uv/); works the same on Windows, macOS
 and Linux.
@@ -58,6 +58,11 @@ Open <http://127.0.0.1:8000>.
   checkbox turns the whole group on or off and shows a dash when only some of
   it is on. The round "i" opens the layer's source card: what it is, who
   publishes it, how old it is, and what it should not be used for.
+- **Severity colors.** Every hazard layer is colored by relative severity:
+  red for severe, orange for moderate, blue for light, gray where the source
+  gives no class. Each source's own zones are mapped to these three classes.
+- **Dams.** Dams are their own row under drainage and flood works: the State
+  Flood Plan's dams plus named dams it lacks that OpenStreetMap has.
 - **Sub-options.** Some rows have options underneath while they are on: TWDB's
   modeled flood extent splits into the 1% and 0.2% annual-chance areas, and
   Hidalgo's flood photos into "photos you can open" and "photo locations only".
@@ -70,12 +75,15 @@ Open <http://127.0.0.1:8000>.
 - **Flood events.** NOAA's flood events, filtered by type or year. Picking one
   flies to it and shows the rain at the nearest gauges that day (or the full
   day-before-to-day-after table), with local news and NWS reports from the same days.
+  Picking the selected event again clears it.
 - **Rainfall records, local reports, data sources.** The rest of the right
   panel: the wettest single days at the gauges, curated news and government
   reports, and every dataset behind the map with the date it was downloaded and
   the date the database was built.
 - **County.** The county selector fits the map to that county and narrows the
   events, rainfall records, reports and alerts to it.
+- **Basemap labels.** Town, road and place names show on the US side only;
+  labels across the Rio Grande in Mexico are hidden. Water names stay.
 - **Address search.** Type an address, or press `/`, to fly there.
 - **Light and dark.** The page opens in light mode; the "Dark" checkbox in the
   header turns dark on, and the choice is remembered in that browser.
@@ -300,7 +308,7 @@ drainage and flood works from TWDB's State Flood Plan, Census TIGER/Line and the
 cities of Harlingen and Brownsville; boundaries from Census TIGER/Line; events
 and weather from NOAA; reported flooding from NWS (archived by Iowa
 Environmental Mesonet); insurance claims and policies from OpenFEMA; FEMA's
-flood photos from Wikimedia Commons; bridges and some dams from Overture Maps
+flood photos from Wikimedia Commons; bridges and the dams the State Flood Plan lacks from Overture Maps
 Foundation; live alerts from NWS, TxDOT and Hidalgo County; basemaps from
 OpenFreeMap and OpenStreetMap. Curated local reports cover Hidalgo County.
 

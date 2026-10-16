@@ -19,7 +19,7 @@ def test_layers_grouped_in_order(api_client):
     nfhl = hazard[0]
     assert nfhl["title"] == "FEMA effective flood hazard (NFHL)"
     assert nfhl["feature_count"] == 20
-    assert nfhl["legend"] == {"shape": "poly", "color": "nfhl"}
+    assert nfhl["legend"] == {"shape": "sev", "color": "nfhl"}
     assert (nfhl["delivery"], nfhl["url"]) == ("geojson", "/api/v1/layers/fema-nfhl.geojson")
 
 

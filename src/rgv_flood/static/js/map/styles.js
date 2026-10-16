@@ -8,8 +8,9 @@
 const TOKENS = {
   nfhl: "--c-nfhl", firm: "--c-firm", twdb: "--c-twdb", drain: "--c-drain", infra: "--c-infra", city: "--c-city",
   hdrain: "--c-hdrain", bridge: "--c-bridge", mapped: "--c-mapped", photos: "--c-photos", fema: "--c-fema",
-  nws: "--c-nws", proj: "--c-proj", sfp: "--c-sfp", claims: "--c-claims", county: "--county",
-  "sev-high": "--sev-high", warn: "--warn", bg: "--bg", panel: "--panel", brand: "--brand",
+  nws: "--c-nws", proj: "--c-proj", sfp: "--c-sfp", claims: "--c-claims", county: "--county", dam: "--c-dam",
+  "sev-high": "--sev-high", "sev-mod": "--sev-mod", "sev-low": "--sev-low", "sev-unc": "--sev-unc",
+  warn: "--warn", bg: "--bg", panel: "--panel", brand: "--brand",
   r1: "--r1", r2: "--r2", r3: "--r3", r4: "--r4", r5: "--r5",
 };
 
@@ -23,8 +24,11 @@ const POLYGONS = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon
 const LINES = ["in", ["geometry-type"], ["literal", ["LineString", "MultiLineString", "Polygon", "MultiPolygon"]]];
 const POINTS = ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]];
 
-// Hazard zones: stronger fill for the more severe classes.
-const BY_SEVERITY = ["match", ["get", "relative_class"], "high", 0.38, "moderate", 0.24, "low", 0.14, 0.2];
+/** A hazard zone's color by its relative severity: severe red, moderate orange, light blue. */
+const bySeverity = (colors) => [
+  "match", ["get", "relative_class"],
+  "high", colors["sev-high"], "moderate", colors["sev-mod"], "low", colors["sev-low"], colors["sev-unc"],
+];
 
 function pointPaint(shape, color, colors) {
   const base = { "circle-color": color, "circle-radius": 4, "circle-stroke-color": colors.bg, "circle-stroke-width": 1 };
@@ -53,6 +57,14 @@ export function styleLayersFor(info, colors) {
   if (info.id === "county-boundaries") {
     return [at("line", "line", LINES, { "line-color": colors.county, "line-width": 1.2, "line-opacity": 0.8 })];
   }
+  if (shape === "sev") {
+    // The 1981 FIRM is a historic map: dashed outlines tell it apart from current ones.
+    const dashed = info.id === "hidalgo-firm-1981" ? { "line-dasharray": [3, 2] } : {};
+    return [
+      at("fill", "fill", POLYGONS, { "fill-color": bySeverity(colors), "fill-opacity": 0.3 }),
+      at("line", "line", LINES, { "line-color": bySeverity(colors), "line-width": 1, "line-opacity": 0.8, ...dashed }),
+    ];
+  }
   if (info.id === "nfip-claims-by-tract") {
     const ramp = ["match", ["get", "claims_class"], 1, colors.r1, 2, colors.r2, 3, colors.r3, 4, colors.r4, colors.r5];
     return [at("fill", "fill", POLYGONS, { "fill-color": ramp, "fill-opacity": 0.72 })];
@@ -70,7 +82,7 @@ export function styleLayersFor(info, colors) {
 
   const layers = [];
   if (shape === "poly" || shape === "ramp") {
-    const opacity = info.id === "hcdd1-flood-extents" ? 0.5 : BY_SEVERITY;
+    const opacity = info.id === "hcdd1-flood-extents" ? 0.5 : 0.24;
     layers.push(at("fill", "fill", POLYGONS, { "fill-color": color, "fill-opacity": opacity }));
   }
   const dashed = shape === "dash" ? { "line-dasharray": [3, 2] } : {};

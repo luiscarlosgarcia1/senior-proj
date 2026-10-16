@@ -168,7 +168,7 @@ document.addEventListener("alpine:init", () => {
         const i = years.indexOf(year);
         if (!row || !values[i]) return [];
         return [{ x: year, y: values[i], text: `${year} ${stormName(row.flood_event)}`.trim(), showarrow: false,
-          yanchor: "bottom", yshift: 4, font: { size: 11, color: ink, family: "IBM Plex Sans" } }];
+          yanchor: "bottom", yshift: 4, font: { size: 11, color: ink, family: "Public Sans" } }];
       });
       const last = (this.history?.years || []).at(-1)?.year ?? 2025;
       return {
@@ -184,8 +184,8 @@ document.addEventListener("alpine:init", () => {
           plot_bgcolor: "rgba(0,0,0,0)",
           bargap: 0.3,
           hovermode: "x",
-          hoverlabel: { bgcolor: token("--panel2"), bordercolor: token("--accent"), font: { color: ink, family: "IBM Plex Mono", size: 11 } },
-          font: { family: "IBM Plex Mono", size: 10, color: muted },
+          hoverlabel: { bgcolor: token("--panel2"), bordercolor: token("--accent"), font: { color: ink, family: "Public Sans", size: 11 } },
+          font: { family: "Public Sans", size: 10, color: muted },
           xaxis: {
             range: [1977.4, last + 0.6], fixedrange: true, showgrid: false, zeroline: false, ticks: "",
             showticklabels: Boolean(CHARTS[chart].last), dtick: 5, tick0: 1980,

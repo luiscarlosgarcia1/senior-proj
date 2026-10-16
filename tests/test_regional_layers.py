@@ -136,3 +136,45 @@ def test_fema_photos_of_flooding_are_grouped_by_the_town_their_caption_names(mon
     (photo,) = towns["Weslaco"]["properties"]["photos"]
     assert photo["credit"] == "Jacinta Quesada"
     assert photo["page_url"].endswith("Cars travel through flooded Welasco,Texas streets.jpg")
+
+
+def _state_features():
+    point = {"type": "Point", "coordinates": [-98.2, 26.2]}
+    line = {"type": "LineString", "coordinates": [[-98.3, 26.1], [-98.2, 26.15]]}
+    return {
+        "infrastructure_points": [
+            {"type": "Feature", "geometry": point, "properties": {"INFRA_TYPE": "Dam", "NAME": "STATE DAM"}},
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-98.1, 26.3]},
+             "properties": {"INFRA_TYPE": "LWC", "NAME": "LOW WATER CROSSING"}},
+        ],
+        "infrastructure_lines": [
+            {"type": "Feature", "geometry": line, "properties": {"INFRA_TYPE": "Levee", "NAME": "A LEVEE"}},
+        ],
+    }
+
+
+def _patch_sources(monkeypatch):
+    from shapely.geometry import Point
+
+    monkeypatch.setattr(regional_layers, "twdb_flood_plan_layer", lambda name: _state_features()[name])
+    monkeypatch.setattr(regional_layers, "_county_polygons", lambda: {"hidalgo": box(-98.5, 26.0, -98.0, 26.5)})
+    monkeypatch.setattr(regional_layers.overture, "bridges_and_dams", lambda: iter([
+        (Point(-98.4, 26.1), {"class": "dam", "names": {"primary": "Retamal Diversion Dam"}}),
+    ]))
+
+
+def test_dams_layer_holds_state_and_named_overture_dams(monkeypatch):
+    _patch_sources(monkeypatch)
+
+    features = json.loads(regional_layers.build_dams().geojson)["features"]
+
+    assert sorted(f["properties"]["name"] for f in features) == ["Retamal Diversion Dam", "STATE DAM"]
+    assert {f["properties"]["kind"] for f in features} == {"dam"}
+
+
+def test_flood_infrastructure_leaves_dams_to_their_own_layer(monkeypatch):
+    _patch_sources(monkeypatch)
+
+    features = json.loads(regional_layers.build_flood_infrastructure().geojson)["features"]
+
+    assert sorted(f["properties"]["kind"] for f in features) == ["levee", "low_water_crossing"]

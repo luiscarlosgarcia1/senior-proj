@@ -175,3 +175,66 @@ def test_dark_choice_is_remembered(map_page, browser):
 
     assert page.evaluate("document.documentElement.dataset.theme") == "dark"
     expect(page.locator("header label:has-text('Dark') input")).to_be_checked()
+
+
+def test_hazard_layers_colored_by_severity(map_page):
+    page = map_page()
+    _row(page, "fema-nfhl").check()
+    wait_js(page, LAYER.format("lyr-fema-nfhl-fill"))
+
+    color = page.evaluate("window.__rgvMap.getPaintProperty('lyr-fema-nfhl-fill', 'fill-color')")
+    tokens = page.evaluate("""(() => { const s = getComputedStyle(document.documentElement);
+        return ['--sev-high', '--sev-mod', '--sev-low'].map(n => s.getPropertyValue(n).trim()); })()""")
+
+    assert color[:2] == ["match", ["get", "relative_class"]]
+    assert color[2:8] == ["high", tokens[0], "moderate", tokens[1], "low", tokens[2]]
+
+
+def test_severity_colors_are_red_orange_blue(map_page):
+    page = map_page()
+
+    high, moderate, low = page.evaluate("""(() => { const s = getComputedStyle(document.documentElement);
+        return ['--sev-high', '--sev-mod', '--sev-low'].map(n => s.getPropertyValue(n).trim()); })()""")
+
+    def rgb(hex_):
+        return tuple(int(hex_[i:i + 2], 16) for i in (1, 3, 5))
+
+    r, g, b = rgb(high)
+    assert r > 180 and g < 80 and b < 80  # red
+    r, g, b = rgb(moderate)
+    assert r > 200 and 100 < g < 180 and b < 60  # orange (amber, not the UTRGV brand orange)
+    r, g, b = rgb(low)
+    assert b > r and b > g  # blue
+    expect(page.locator("[data-severity-legend] li")).to_have_text(["Severe", "Moderate", "Light", "Uncategorized"])
+
+
+def test_dams_have_their_own_row(map_page):
+    page = map_page()
+
+    expect(page.locator('[data-group="works"] [data-row="dams"]')).to_contain_text("Dams")
+
+
+def test_labels_in_mexico_are_hidden(map_page):
+    page = map_page()
+
+    result = page.evaluate("""(async () => {
+      const labels = await import('/static/js/map/labels.js');
+      const counties = {type: 'FeatureCollection', features: [{type: 'Feature', properties: {},
+        geometry: {type: 'Polygon', coordinates: [[[-98.6, 26.0], [-97.2, 26.0], [-97.2, 26.6], [-98.6, 26.6], [-98.6, 26.0]]]}}]};
+      const mask = labels.usSideMask(counties);
+      const layers = labels.hideForeignLabels([
+        {id: 'label_city', type: 'symbol', 'source-layer': 'place', filter: ['==', ['get', 'class'], 'city']},
+        {id: 'highway', type: 'symbol', 'source-layer': 'transportation_name'},
+        {id: 'water', type: 'symbol', 'source-layer': 'water_name'},
+        {id: 'roads', type: 'line', 'source-layer': 'transportation'},
+      ], mask);
+      return {mask: mask.type, layers};
+    })()""")
+
+    city, highway, water, roads = result["layers"]
+    assert result["mask"] == "MultiPolygon"
+    assert city["filter"][0] == "all" and city["filter"][1] == ["==", ["get", "class"], "city"]
+    assert city["filter"][2][0] == "within"
+    assert highway["filter"][0] == "within"
+    assert "filter" not in water  # the Rio Grande's name stays
+    assert "filter" not in roads

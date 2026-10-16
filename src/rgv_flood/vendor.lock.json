@@ -31,34 +31,22 @@
       "sha256": "fa18ed1c94c06576c0a867bb2477534716c39e5b22affe673f2a184317974926"
     },
     {
-      "name": "plex-sans-400",
-      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/files/ibm-plex-sans-latin-400-normal.woff2",
-      "path": "fonts/ibm-plex-sans-latin-400-normal.woff2",
-      "sha256": "3b646991d30055a93a4ecc499713d4347953a74a947ecab435ab72070cbdab0e"
+      "name": "public-sans-400",
+      "url": "https://cdn.jsdelivr.net/npm/@fontsource/public-sans@5.3.0/files/public-sans-latin-400-normal.woff2",
+      "path": "fonts/public-sans-latin-400-normal.woff2",
+      "sha256": "36274b5787b4f03b27e65ae971d6c808a96838ccd60c9dabaee154889b6bba82"
     },
     {
-      "name": "plex-sans-500",
-      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/files/ibm-plex-sans-latin-500-normal.woff2",
-      "path": "fonts/ibm-plex-sans-latin-500-normal.woff2",
-      "sha256": "0717336fb31fcdcde4b8deb3675bb4a0f7f6d484864afcd6751ac29975962203"
+      "name": "public-sans-500",
+      "url": "https://cdn.jsdelivr.net/npm/@fontsource/public-sans@5.3.0/files/public-sans-latin-500-normal.woff2",
+      "path": "fonts/public-sans-latin-500-normal.woff2",
+      "sha256": "55e866a00caa197bc9fafa52c907f4dfe88e51bbb3f585c777931d03eb961e96"
     },
     {
-      "name": "plex-sans-600",
-      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/files/ibm-plex-sans-latin-600-normal.woff2",
-      "path": "fonts/ibm-plex-sans-latin-600-normal.woff2",
-      "sha256": "8960851d691c054ed38e259bdcf1a6190d157b4203ed5bb32c632a863fb8ec2f"
-    },
-    {
-      "name": "plex-mono-400",
-      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.3.0/files/ibm-plex-mono-latin-400-normal.woff2",
-      "path": "fonts/ibm-plex-mono-latin-400-normal.woff2",
-      "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
-    },
-    {
-      "name": "plex-mono-500",
-      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.3.0/files/ibm-plex-mono-latin-500-normal.woff2",
-      "path": "fonts/ibm-plex-mono-latin-500-normal.woff2",
-      "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22"
+      "name": "public-sans-600",
+      "url": "https://cdn.jsdelivr.net/npm/@fontsource/public-sans@5.3.0/files/public-sans-latin-600-normal.woff2",
+      "path": "fonts/public-sans-latin-600-normal.woff2",
+      "sha256": "c7842f97346df1b3b470e9d71acde90f132dd858508ec5ae6606401e5d0938f7"
     }
   ]
 }

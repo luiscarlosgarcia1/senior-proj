@@ -218,17 +218,28 @@ def _dams_the_state_lacks(state_dams: list[shapely.Geometry], polygons) -> list[
     return features
 
 
-def build_flood_infrastructure() -> MapLayer | None:
-    """Dams, levees, sea walls, storm drain systems, low-water crossings and
-    coastal works the 2024 State Flood Plan inventories in the four counties,
-    plus the named dams it lacks that Overture Maps has."""
-    polygons = _county_polygons()
+def _state_flood_works(polygons) -> list[dict]:
+    """Everything the 2024 State Flood Plan inventories in the four counties."""
     features = []
     for name in ("infrastructure_lines", "infrastructure_points"):  # points drawn last, on top
         features += _in_counties(twdb_flood_plan_layer(name), _infrastructure, polygons)
-    state_dams = [shape(f["geometry"]) for f in features if f["properties"]["kind"] == "dam"]
-    features += _dams_the_state_lacks(state_dams, polygons)
+    return features
+
+
+def build_flood_infrastructure() -> MapLayer | None:
+    """Levees, sea walls, storm drain systems, low-water crossings and coastal
+    works the 2024 State Flood Plan inventories (dams have their own layer)."""
+    features = [f for f in _state_flood_works(_county_polygons()) if f["properties"]["kind"] != "dam"]
     return _layer(features)
+
+
+def build_dams() -> MapLayer | None:
+    """Every dam in the four counties: the State Flood Plan's inventory, plus
+    the named dams it lacks that Overture Maps has."""
+    polygons = _county_polygons()
+    state = [f for f in _state_flood_works(polygons) if f["properties"]["kind"] == "dam"]
+    extra = _dams_the_state_lacks([shape(f["geometry"]) for f in state], polygons)
+    return _layer(state + extra)
 
 
 # ---- flood projects (State Flood Plan) --------------------------------------

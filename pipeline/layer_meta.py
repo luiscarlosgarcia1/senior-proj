@@ -245,18 +245,37 @@ LAYER_META: dict[str, dict] = {
         ),
         "source_url": "https://commons.wikimedia.org/wiki/Category:Effects_of_Hurricane_Dolly_(2008)_in_Texas",
     },
+    "dams": {
+        "title": "Dams",
+        "description": (
+            "Every dam in the four counties: the dams the regional flood planning "
+            "group inventoried for the 2024 State Flood Plan (with type, size and "
+            "condition where reported), plus named dams the plan lacks that "
+            "OpenStreetMap has, such as the Retamal Diversion Dam on the Rio Grande."
+        ),
+        "source": (
+            "Texas Water Development Board — 2024 State Flood Plan; extra named dams "
+            "from Overture Maps Foundation (OpenStreetMap)"
+        ),
+        "vintage": "2024 State Flood Plan (Region 15 inventory, 2023); current Overture release",
+        "hazard_type": "n/a — flood infrastructure",
+        "coverage": "Cameron, Hidalgo, Starr, Willacy",
+        "limitation": (
+            "An OpenStreetMap dam within about 300 m of a state dam is treated as the "
+            "same dam; unnamed OpenStreetMap dams (mostly stock-tank dams) are left out."
+        ),
+        "source_url": STATE_FLOOD_PLAN,
+        "visualizations": [STATE_FLOOD_PLAN_VIEWER],
+    },
     "flood-infrastructure": {
         "title": "Flood infrastructure (state flood plan)",
         "description": (
-            "Dams, levees, sea walls, storm drain systems, low-water crossings "
-            "and coastal works (dunes, jetties, beach nourishment) the regional "
-            "flood planning group inventoried for the 2024 State Flood Plan, "
-            "plus named dams the plan lacks that OpenStreetMap has."
+            "Levees, sea walls, storm drain systems, low-water crossings and "
+            "coastal works (dunes, jetties, beach nourishment) the regional flood "
+            "planning group inventoried for the 2024 State Flood Plan. Dams are "
+            "their own layer."
         ),
-        "source": (
-            "Texas Water Development Board — 2024 State Flood Plan, existing flood "
-            "infrastructure; extra dams from Overture Maps Foundation (OpenStreetMap)"
-        ),
+        "source": "Texas Water Development Board — 2024 State Flood Plan, existing flood infrastructure",
         "vintage": "2024 State Flood Plan (Region 15 inventory, 2023)",
         "hazard_type": "n/a — flood infrastructure",
         "coverage": "Cameron, Hidalgo, Starr, Willacy",
@@ -349,12 +368,14 @@ LAYER_META: dict[str, dict] = {
 # layer's own short label, and its legend swatch (shape, color token key).
 PANEL = {
     "county-boundaries": ("base", "county-boundaries", "County boundaries", "County boundaries", "line", "county"),
+    # Hazard layers are colored by severity (light, moderate, severe), so their
+    # legend swatch is the severity scale.
     "fema-nfhl": ("hazard", "fema-nfhl", "FEMA effective flood hazard (NFHL)", "FEMA effective flood hazard (NFHL)",
-                  "poly", "nfhl"),
+                  "sev", "nfhl"),
     "hidalgo-firm-1981": ("hazard", "hidalgo-firm-1981", "Hidalgo historic flood zones (1981 FIRM)",
-                          "Hidalgo historic flood zones (1981 FIRM)", "dash", "firm"),
-    "twdb-cursory-1in100": ("hazard", "twdb", "TWDB modeled flood extent", "1% annual chance", "poly", "twdb"),
-    "twdb-cursory-1in500": ("hazard", "twdb", "TWDB modeled flood extent", "0.2% annual chance", "dash", "twdb"),
+                          "Hidalgo historic flood zones (1981 FIRM)", "sev", "firm"),
+    "twdb-cursory-1in100": ("hazard", "twdb", "TWDB modeled flood extent", "1% annual chance", "sev", "twdb"),
+    "twdb-cursory-1in500": ("hazard", "twdb", "TWDB modeled flood extent", "0.2% annual chance", "sev", "twdb"),
     "waterways": ("works", "waterways", "Drains, canals and creeks", "Drains, canals and creeks", "line", "drain"),
     "flood-infrastructure": ("works", "flood-infrastructure", "Flood infrastructure, state flood plan",
                              "Flood infrastructure, state flood plan", "diaf", "infra"),
@@ -363,6 +384,7 @@ PANEL = {
     "hcdd1-drainage": ("works", "hcdd1-drainage", "Drainage network, Hidalgo", "Drainage network, Hidalgo",
                        "line", "hdrain"),
     "overture-bridges": ("works", "overture-bridges", "Bridges", "Bridges", "ring", "bridge"),
+    "dams": ("works", "dams", "Dams", "Dams", "dot", "dam"),
     "hcdd1-flood-extents": ("evidence", "hcdd1-flood-extents", "Mapped flooding 2008–2020, Hidalgo",
                             "Mapped flooding 2008–2020, Hidalgo", "poly", "mapped"),
     "hcdd1-flood-photos": ("evidence", "hcdd1-flood-photos", "Flood photos, Hidalgo", "Flood photos, Hidalgo",

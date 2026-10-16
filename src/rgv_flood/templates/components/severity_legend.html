@@ -1,7 +1,7 @@
-{# Relative severity: the hazard layers' fill strength and the event dots. #}
+{# Relative severity: the hazard layers' colors (severe red, moderate orange, light blue) and the event dots. #}
 <div class="pointer-events-none absolute bottom-24 right-4 z-[500] hidden w-44 rounded-lg border border-line bg-panel/95 p-3 shadow-1 sm:block">
   <h3 class="mb-2 text-xs font-semibold uppercase tracking-[1px] text-muted">{{ t("legend.severity") }}</h3>
-  <ul class="flex flex-col gap-1.5 text-sm">
+  <ul class="flex flex-col gap-1.5 text-sm" data-severity-legend>
     {% for key, cls in (("high", "bg-sev-high"), ("moderate", "bg-sev-mod"), ("low", "bg-sev-low"), ("uncategorized", "bg-sev-unc")) %}
     <li class="flex items-center gap-2"><i class="h-3 w-3 rounded-sm {{ cls }}" aria-hidden="true"></i>{{ t("severity." ~ key) }}</li>
     {% endfor %}
