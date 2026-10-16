@@ -99,3 +99,7 @@ def test_tailwind_build_contains_tokens(tmp_path):
     assert "--brand" in css
     assert ".cb" in css
     assert "@font-face" in css
+
+
+def test_build_output_does_not_overwrite_a_tracked_file():
+    assert assets.CSS_OUTPUT.name == "site.css"
