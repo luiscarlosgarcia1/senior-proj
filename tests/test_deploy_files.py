@@ -2,15 +2,9 @@
 
 from pathlib import Path
 
-import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-
-# deploy/ and .github/ are kept out of the repository for now (see .gitignore);
-# these tests run wherever a copy of them is present.
-if not (ROOT / "deploy").is_dir() or not (ROOT / ".github").is_dir():
-    pytest.skip("deployment files are not in this checkout", allow_module_level=True)
 
 
 def _yaml(path: str) -> dict:
