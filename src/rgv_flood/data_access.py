@@ -11,12 +11,9 @@ from __future__ import annotations
 
 import json
 import math
-import sqlite3
-from contextlib import closing
 from datetime import date, timedelta
-from pathlib import Path
 
-from flask import current_app
+from rgv_flood.db import Database
 
 LAYER_COLUMNS = (
     "id, title, description, source, vintage, hazard_type, coverage, limitation, source_url, "
@@ -31,21 +28,6 @@ RAINFALL_TOP_N = 15
 CONTEXT_DAYS = 1
 # How many gauges to show for an event that has a point to measure from.
 NEAREST_GAUGES = 3
-
-
-def _rows(query: str, parameters: tuple | dict = ()) -> list[dict] | None:
-    """Rows of a query as dicts, or None when the database hasn't been built yet."""
-    database = Path(current_app.config["DATABASE"])
-    if not database.exists():
-        return None
-    # closing(): sqlite3's own context manager commits but never closes the file.
-    with closing(sqlite3.connect(database)) as connection:
-        connection.row_factory = sqlite3.Row
-        return [dict(row) for row in connection.execute(query, parameters)]
-
-
-def _app_rows(query: str, parameters: tuple | dict = ()) -> list[dict]:
-    return _rows(query, parameters) or []
 
 
 def _where(equals: dict[str, str | None]) -> tuple[str, tuple]:
@@ -64,59 +46,59 @@ def _layer(row: dict) -> dict:
     return row
 
 
-def available_layers() -> list[dict]:
+def available_layers(db: Database) -> list[dict]:
     """Every layer's descriptive metadata (not its geometry), in sidebar order."""
-    return [_layer(row) for row in _app_rows(f"select {LAYER_COLUMNS} from layers order by position")]
+    return [_layer(row) for row in db.app_rows(f"select {LAYER_COLUMNS} from layers order by position")]
 
 
-def layer(layer_id: str) -> dict | None:
+def layer(db: Database, layer_id: str) -> dict | None:
     """One layer's descriptive metadata."""
-    rows = _app_rows(f"select {LAYER_COLUMNS} from layers where id = ?", (layer_id,))
+    rows = db.app_rows(f"select {LAYER_COLUMNS} from layers where id = ?", (layer_id,))
     return _layer(rows[0]) if rows else None
 
 
-def layer_etag(layer_id: str) -> str | None:
+def layer_etag(db: Database, layer_id: str) -> str | None:
     """A token that changes whenever the layer's GeoJSON does (None for an unknown layer)."""
-    rows = _app_rows("select etag from layers where id = ?", (layer_id,))
+    rows = db.app_rows("select etag from layers where id = ?", (layer_id,))
     return rows[0]["etag"] if rows else None
 
 
-def layer_geojson_gzip(layer_id: str) -> bytes | None:
+def layer_geojson_gzip(db: Database, layer_id: str) -> bytes | None:
     """The layer's FeatureCollection, gzipped, exactly as the pipeline built it."""
-    rows = _app_rows("select geojson_gzip from layers where id = ?", (layer_id,))
+    rows = db.app_rows("select geojson_gzip from layers where id = ?", (layer_id,))
     return rows[0]["geojson_gzip"] if rows else None
 
 
 # ---- flood events, reports, rainfall ----
 
 
-def _events(where: str = "", parameters: tuple = ()) -> list[dict] | None:
+def _events(db: Database, where: str = "", parameters: tuple = ()) -> list[dict] | None:
     query = f"select {EVENT_COLUMNS} from flood_events{where} order by date desc, id desc"
-    return _rows(query, parameters)
+    return db.rows(query, parameters)
 
 
-def flood_events(year: str | None = None, county_slug: str | None = None) -> list[dict]:
+def flood_events(db: Database, year: str | None = None, county_slug: str | None = None) -> list[dict]:
     """Event rows (newest first), optionally filtered to one year and/or county.
 
     ``lat`` / ``lon`` are None when the event has no point to fly the map to.
     """
-    return _events(*_where({"substr(date, 1, 4)": year, "county": county_slug})) or []
+    return _events(db, *_where({"substr(date, 1, 4)": year, "county": county_slug})) or []
 
 
-def flood_event_count() -> int:
-    rows = _app_rows("select count(*) as total from flood_events")
+def flood_event_count(db: Database) -> int:
+    rows = db.app_rows("select count(*) as total from flood_events")
     return rows[0]["total"] if rows else 0
 
 
-def flood_event_years(county_slug: str | None = None) -> list[str]:
+def flood_event_years(db: Database, county_slug: str | None = None) -> list[str]:
     where, parameters = _where({"county": county_slug})
-    rows = _app_rows(f"select distinct substr(date, 1, 4) as year from flood_events{where} order by year desc", parameters)
+    rows = db.app_rows(f"select distinct substr(date, 1, 4) as year from flood_events{where} order by year desc", parameters)
     return [row["year"] for row in rows]
 
 
-def flood_events_geojson() -> dict | None:
+def flood_events_geojson(db: Database) -> dict | None:
     """Every event as a GeoJSON feature for the map (None before the first build)."""
-    events = _events()
+    events = _events(db)
     if events is None:
         return None
     features = []
@@ -127,14 +109,14 @@ def flood_events_geojson() -> dict | None:
     return {"type": "FeatureCollection", "features": features}
 
 
-def flood_reports(county_slug: str | None = None) -> list[dict]:
+def flood_reports(db: Database, county_slug: str | None = None) -> list[dict]:
     """Local-news and local-government reports tied to documented flood events.
 
     Historical only — never live closure data. Each report carries its source
     URL and the date of the event it describes. Oldest first.
     """
     where, parameters = _where({"county": county_slug})
-    return _app_rows(f"select * from flood_reports{where} order by event_date, rowid", parameters)
+    return db.app_rows(f"select * from flood_reports{where} order by event_date, rowid", parameters)
 
 
 def _inches(tenths_of_mm: float, digits: int) -> float:
@@ -142,12 +124,12 @@ def _inches(tenths_of_mm: float, digits: int) -> float:
     return round(tenths_of_mm / 254.0, digits)
 
 
-def rainfall_records(county_slug: str | None = None) -> list[dict]:
+def rainfall_records(db: Database, county_slug: str | None = None) -> list[dict]:
     """The wettest single gauge-days on record (date, mm, inches, station):
     one county's own records when a county is given, otherwise the wettest
     across all four."""
     in_county, parameters = (" and s.county = ?", (county_slug,)) if county_slug else ("", ())
-    wettest = _app_rows(
+    wettest = db.app_rows(
         f"""select s.county, o.date, o.value as tenths_of_mm, s.name as station
             from weather_observations o join weather_stations s using (station_id)
             where o.element = 'PRCP' and o.value > 0{in_county}
@@ -165,8 +147,8 @@ def rainfall_records(county_slug: str | None = None) -> list[dict]:
 # ---- what else is known about one flood event ----
 
 
-def flood_event(event_id: str) -> dict | None:
-    rows = _events(" where id = ?", (event_id,))
+def flood_event(db: Database, event_id: str) -> dict | None:
+    rows = _events(db, " where id = ?", (event_id,))
     return rows[0] if rows else None
 
 
@@ -184,7 +166,7 @@ def _km_between(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     return 6371.0 * 2 * math.asin(math.sqrt(a))
 
 
-def rainfall_near_event(event: dict) -> dict:
+def rainfall_near_event(db: Database, event: dict) -> dict:
     """Daily rain at gauges in the event's county, from the day before it began
     to the day after it ended.
 
@@ -193,7 +175,7 @@ def rainfall_near_event(event: dict) -> dict:
     """
     first, began, last = _days_around(event)
     days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
-    readings = _app_rows(
+    readings = db.app_rows(
         """select s.station_id, s.name, s.lon, s.lat, o.date, o.value
            from weather_observations o join weather_stations s using (station_id)
            where o.element = 'PRCP' and s.county = ? and o.date between ? and ?""",
@@ -218,7 +200,7 @@ def rainfall_near_event(event: dict) -> dict:
     }
 
 
-def reports_near_event(event: dict) -> list[dict]:
+def reports_near_event(db: Database, event: dict) -> list[dict]:
     """Curated local reports from the event's county and the same days.
 
     Reports about one flood share a group. If a group's dates overlap the
@@ -228,7 +210,7 @@ def reports_near_event(event: dict) -> list[dict]:
     date, and the page says so.
     """
     first, _, last = _days_around(event)
-    return _app_rows(
+    return db.app_rows(
         """with flood as (
              select coalesce(duplicate_group, id) as name,
                     min(event_date) as first_day,
@@ -246,10 +228,10 @@ def reports_near_event(event: dict) -> list[dict]:
 # ---- provenance ----
 
 
-def data_sources() -> list[dict]:
+def data_sources(db: Database) -> list[dict]:
     """Every dataset in the database: who published it, when it was fetched,
     how many records it holds. Events, weather and reports first, then layers."""
-    return _app_rows("select * from data_sources order by id like 'layer:%', dataset")
+    return db.app_rows("select * from data_sources order by id like 'layer:%', dataset")
 
 
 # ---- live signals ----
@@ -268,11 +250,11 @@ SIDEBAR_SIGNAL_COLUMNS = (
 )
 
 
-def _active_official_signals(
+def _active_official_signals(db: Database,
     columns: tuple[str, ...], *, only_mappable: bool, order_by: str = ""
 ) -> list[dict] | None:
     """Active, official live signals (None if the database doesn't exist yet)."""
-    return _rows(
+    return db.rows(
         f"select {', '.join(columns)} from live_signals "
         "where lifecycle_state = 'active' and provenance = 'official'"
         + (" and is_mappable = 1" if only_mappable else "")
@@ -280,9 +262,9 @@ def _active_official_signals(
     )
 
 
-def active_official_signal_features() -> dict | None:
+def active_official_signal_features(db: Database) -> dict | None:
     """Active official signals that carry source geometry, as GeoJSON for the map."""
-    rows = _active_official_signals(MAP_SIGNAL_COLUMNS, only_mappable=True)
+    rows = _active_official_signals(db, MAP_SIGNAL_COLUMNS, only_mappable=True)
     if rows is None:
         return None
     features = []
@@ -294,13 +276,13 @@ def active_official_signal_features() -> dict | None:
     return {"type": "FeatureCollection", "features": features}
 
 
-def active_official_signals(county_slug: str | None = None) -> list[dict]:
+def active_official_signals(db: Database, county_slug: str | None = None) -> list[dict]:
     """Active official signals for the sidebar, including notices.
 
     Signals without source geometry stay in this list so the UI can link to
     them without inventing a map location.
     """
-    rows = _active_official_signals(
+    rows = _active_official_signals(db,
         SIDEBAR_SIGNAL_COLUMNS, only_mappable=False, order_by="retrieved_at desc, source_publisher, summary"
     )
     signals = []
@@ -322,10 +304,10 @@ HISTORY_FIRST_YEAR = 1978
 COMPLETE_GAUGE_DAYS = 330
 
 
-def _by_year(query: str, county_slug: str | None, county_column: str = "county") -> dict[int, dict]:
+def _by_year(db: Database, query: str, county_slug: str | None, county_column: str = "county") -> dict[int, dict]:
     """Rows of a per-year query, keyed by year, optionally for one county."""
     where = f" and {county_column} = :county" if county_slug else ""
-    rows = _app_rows(query.format(where=where), {"county": county_slug, "first": HISTORY_FIRST_YEAR})
+    rows = db.app_rows(query.format(where=where), {"county": county_slug, "first": HISTORY_FIRST_YEAR})
     return {row.pop("year"): row for row in rows}
 
 
@@ -356,30 +338,30 @@ def rank_correlation(xs: list[float], ys: list[float]) -> float | None:
     return round(covariance / spread, 2) if spread else None
 
 
-def history_by_year(county_slug: str | None, last_year: int) -> dict:
+def history_by_year(db: Database, county_slug: str | None, last_year: int) -> dict:
     """Every year from 1978 to `last_year`: flood-insurance claims and what they
     paid, policies in force, the year's rain, its wettest day, and how many
     flood events and flood reports were recorded."""
-    claims = _by_year(
+    claims = _by_year(db,
         """select year_of_loss as year, count(*) as claims,
                   sum(paid_building + paid_contents + paid_increased_cost_of_compliance) as paid
            from nfip_claims where year_of_loss >= :first{where} group by year_of_loss""",
         county_slug,
     )
-    named = _by_year(
+    named = _by_year(db,
         """select year_of_loss as year, flood_event, count(*) as n from nfip_claims
            where year_of_loss >= :first and flood_event is not null{where}
            group by year_of_loss, flood_event order by n""",  # the last row per year wins: the biggest
         county_slug,
     )
-    busiest_month = _by_year(
+    busiest_month = _by_year(db,
         """select year_of_loss as year, substr(date_of_loss, 6, 2) as month, count(*) as n from nfip_claims
            where year_of_loss >= :first and date_of_loss is not null{where}
            group by year_of_loss, month order by n""",  # the last row per year wins: the busiest
         county_slug,
     )
-    policies = _by_year("select year, sum(policies) as policies from nfip_policies_by_year where 1=1{where} group by year", county_slug)
-    rain = _by_year(
+    policies = _by_year(db, "select year, sum(policies) as policies from nfip_policies_by_year where 1=1{where} group by year", county_slug)
+    rain = _by_year(db,
         f"""select r.year,
                    avg(case when r.days_reported >= {COMPLETE_GAUGE_DAYS} then r.total_tenths_mm end) as total_tenths_mm,
                    sum(r.days_reported >= {COMPLETE_GAUGE_DAYS}) as complete_gauges,
@@ -390,8 +372,8 @@ def history_by_year(county_slug: str | None, last_year: int) -> dict:
         county_slug,
         county_column="s.county",
     )
-    events = _by_year("select cast(substr(date, 1, 4) as integer) as year, count(*) as n from flood_events where 1=1{where} group by year", county_slug)
-    reports = _by_year("select cast(substr(reported_at, 1, 4) as integer) as year, count(*) as n from nws_flood_reports where 1=1{where} group by year", county_slug)
+    events = _by_year(db, "select cast(substr(date, 1, 4) as integer) as year, count(*) as n from flood_events where 1=1{where} group by year", county_slug)
+    reports = _by_year(db, "select cast(substr(reported_at, 1, 4) as integer) as year, count(*) as n from nws_flood_reports where 1=1{where} group by year", county_slug)
 
     years = []
     for year in range(HISTORY_FIRST_YEAR, last_year + 1):

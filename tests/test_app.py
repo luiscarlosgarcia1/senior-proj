@@ -377,10 +377,10 @@ def history_client(client):
 
 
 def test_history_counts_claims_and_rain_year_by_year(history_client):
-    with history_client.application.app_context():
-        from rgv_flood import data_access
+    from rgv_flood import data_access
+    from rgv_flood.db import Database
 
-        history = data_access.history_by_year("hidalgo", 2020)
+    history = data_access.history_by_year(Database(history_client.application.config["DATABASE"]), "hidalgo", 2020)
 
     by_year = {y["year"]: y for y in history["years"]}
     assert history["years"][0]["year"] == data_access.HISTORY_FIRST_YEAR
