@@ -1,4 +1,4 @@
-"""GHCN-Daily stations used for each county's rainfall and temperature record.
+"""GHCN-Daily stations used for each county's rainfall record.
 
 Only official NOAA COOP ("USC00...") and WBAN airport ("USW00...") stations, no
 CoCoRaHS/volunteer ("US1...") stations, to match the longer, more consistent

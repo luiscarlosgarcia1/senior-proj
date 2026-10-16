@@ -22,13 +22,20 @@ emergency guidance.
 - **Flood events.** Click an event on the map or in the list to see NOAA's
   account of it, the rain nearby gauges recorded from the day before to the day
   after, and any local reports from the same days.
-- **Flood photos.** On the flood photos layer, a magenta dot is a photo: click
-  it to see the drainage district's picture taken at that spot (it loads from
-  the district's own server). A grey dot is a photo location: a crew took a
-  photo there, but the district has not published the image.
+- **Flood photos.** On the Hidalgo drainage district's photo layer, a magenta
+  dot is a photo: click it to see the district's picture taken at that spot (it
+  loads from the district's own server). A grey dot is a photo location: a crew
+  took a photo there, but the district has not published the image. The two
+  checkboxes under the layer turn each kind on and off.
+- **FEMA flood photos.** FEMA's own photos of flooding from Hurricane Dolly
+  (2008), the Roma flood of 2008 and Hurricane Alex (2010), in Brownsville,
+  La Feria, Raymondville, Roma, La Grulla, Mission and Weslaco. A ringed
+  magenta dot is a town: click it to scroll through its photos. FEMA's captions
+  name only the town, so that is where each photo is placed.
 - **Drainage and flood works in every county.** Drains, canals, resacas and
-  creeks (Census) and the dams, levees, ponds, storm drains and low-water
-  crossings in the State Flood Plan (TWDB) cover all four counties, as do the
+  creeks (Census) and the dams, levees, sea walls, storm drains, low-water
+  crossings and coastal works in the State Flood Plan (TWDB) cover all four
+  counties, as do the
   plan's ongoing and recommended flood projects. Harlingen and Brownsville add
   their own storm ditches, ponds and sewers. Hidalgo's drainage district layers
   (photos, mapped flooding, its own network) have no published counterpart in
@@ -88,7 +95,7 @@ Flask refreshes official live signals at startup and every 15 minutes. Set
 - `uv` errors: run `uv sync --group dev --group pipeline` again.
 - Map has no layers or events: run `build_all.py` (it builds `data/generated/rgv-flood.sqlite3`).
 - Build fails on a download: confirm network access to NOAA, Overture, FEMA, TWDB, the Census Bureau,
-  Iowa Environmental Mesonet, the cities' ArcGIS services and the Hidalgo drainage district, then re-run;
+  Iowa Environmental Mesonet, Wikimedia Commons, the cities' ArcGIS services and the Hidalgo drainage district, then re-run;
   finished downloads are kept in `tmp/`.
 - A layer is missing after a build: its publisher was unreachable. The build says which; re-run it.
 - Live signals unavailable: source outages are logged; the app remains usable.
@@ -103,7 +110,7 @@ Everything lives in one SQLite file, `data/generated/rgv-flood.sqlite3`:
 | `flood_events` | Flood-type events from NOAA's Storm Events Database, 1996–2025 |
 | `flood_reports` | Hand-curated local-news and government flood reports |
 | `nws_flood_reports` | Flooding reported to the National Weather Service in Brownsville, 2005 on |
-| `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily readings, 1978–2025 |
+| `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily rain readings, 1978–2025 |
 | `rainfall_station_years` | Each gauge's yearly rain, wettest day and days reported |
 | `nfip_claims`, `nfip_policies_by_year` | Every NFIP flood-insurance claim since 1978; policies per county and year since 2009 |
 | `data_sources` | Where each dataset came from and when it was downloaded |
@@ -240,8 +247,9 @@ comes from FEMA, Hidalgo County Drainage District No. 1, and TWDB; drainage and
 flood works from TWDB's State Flood Plan, Census TIGER/Line and the cities of
 Harlingen and Brownsville; boundaries from Census TIGER/Line; events and weather
 from NOAA; reported flooding from NWS (archived by Iowa Environmental Mesonet);
-insurance claims and policies from OpenFEMA; bridges and dams from Overture Maps
-Foundation; live signals from NWS, TxDOT, and Hidalgo County.
+insurance claims and policies from OpenFEMA; FEMA's flood photos from Wikimedia
+Commons; bridges and some dams from Overture Maps Foundation; live signals from
+NWS, TxDOT, and Hidalgo County.
 Local reports currently cover Hidalgo County only.
 
 Contributions should preserve source attribution, include focused tests, and

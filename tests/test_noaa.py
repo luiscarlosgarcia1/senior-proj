@@ -103,7 +103,7 @@ def test_weather_observations_keep_clean_readings_in_range(tmp_path):
     station = next(iter(noaa.STATIONS_BY_COUNTY["hidalgo"]))
     write_station_file(tmp_path, "hidalgo", station, [
         f"{station},20180621,PRCP,1234,,,7,",  # kept
-        f"{station},20180621,TMAX,350,,,7,0700",  # kept, same day
+        f"{station},20180621,TMAX,350,,,7,0700",  # temperature: not retained
         f"{station},20180622,PRCP,50,,G,7,",  # quality-flagged: dropped
         f"{station},19771231,PRCP,10,,,7,",  # before 1978: dropped
         f"{station},20180623,SNOW,10,,,7,",  # element not retained
@@ -115,10 +115,6 @@ def test_weather_observations_keep_clean_readings_in_range(tmp_path):
         {
             "station_id": station, "date": "2018-06-21", "element": "PRCP", "value": 1234,
             "measurement_flag": None, "source_flag": "7", "observation_time_flag": None,
-        },
-        {
-            "station_id": station, "date": "2018-06-21", "element": "TMAX", "value": 350,
-            "measurement_flag": None, "source_flag": "7", "observation_time_flag": "0700",
         },
     ]
 

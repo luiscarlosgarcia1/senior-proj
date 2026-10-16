@@ -21,10 +21,8 @@ const SEVERITY = Object.fromEntries(["high", "moderate", "low", "uncategorized"]
 const BOUNDARY = { color: "#1b2a4a", weight: 1.5, fill: false, dashArray: "3 3" };
 
 const BRIDGE = cssVar("--infra-bridge");
-const DAM = cssVar("--infra-dam");
 export const INFRA = {
   bridge: { color: BRIDGE, weight: 2, fillColor: BRIDGE, fillOpacity: 0.35 },
-  dam: { color: DAM, weight: 1, fillColor: DAM, fillOpacity: 0.45 },
 };
 
 export const OVERLAY = {
@@ -34,6 +32,9 @@ export const OVERLAY = {
   // district took a photo it hasn't published (grey).
   photo: { radius: 3.5, color: "#ffffff", weight: 0.8, fillColor: "#c026d3", fillOpacity: 0.95 },
   photo_location: { radius: 3, color: "#ffffff", weight: 0.6, fillColor: "#94a3b8", fillOpacity: 0.8 },
+  // A town with FEMA photos: the same magenta as a photo you can open, larger
+  // and ringed, since one dot holds several photos.
+  town_photos: { radius: 8, color: "#701a75", weight: 2, fillColor: "#c026d3", fillOpacity: 0.9 },
   channel: { color: "#475569", weight: 1.5 },
   planned_channel: { color: "#475569", weight: 1.5, dashArray: "5 4" },
   detention_pond: { color: "#0369a1", weight: 1, fillColor: "#38bdf8", fillOpacity: 0.45 },
@@ -51,14 +52,14 @@ export const WATERWAY = {
   creek: { color: "#60a5fa", weight: 1.2, dashArray: "4 3" },
 };
 
-// Flood works in the state flood plan. Ponds match the district's detention ponds.
+// Flood works in the state flood plan.
 export const FLOOD_WORKS = {
   dam: { radius: 5, color: "#ffffff", weight: 1, fillColor: "#92400e", fillOpacity: 1 },
   low_water_crossing: { radius: 5, color: "#ffffff", weight: 1, fillColor: "#dc2626", fillOpacity: 1 },
   levee: { color: "#78350f", weight: 3 },
   sea_wall: { color: "#57534e", weight: 3 },
   storm_drain: { color: "#334155", weight: 1.4 },
-  pond: OVERLAY.detention_pond,
+  coastal: { radius: 4, color: "#ffffff", weight: 1, fillColor: "#0e7490", fillOpacity: 1 },
   other: { radius: 4, color: "#78716c", weight: 1.5, fillColor: "#a8a29e", fillOpacity: 0.35 },
 };
 
@@ -87,11 +88,13 @@ const CLAIMS_RAMP = ["#ffffff", "#fce7f3", "#f9a8d4", "#ec4899", "#be185d", "#83
 export function styleFor(feature) {
   const p = feature.properties || {};
   if (p.original_category === "county boundary") return BOUNDARY;
-  if (p.infrastructure_type) return INFRA[p.infrastructure_type] || INFRA.bridge;
+  if (p.infrastructure_type) return INFRA.bridge;
 
   switch (p.overlay_type) {
     case "flood_extent":
       return OVERLAY.extent;
+    case "fema_photos":
+      return OVERLAY.town_photos;
     case "flood_photo":
       return p.photo_url ? OVERLAY.photo : OVERLAY.photo_location;
     case "drainage":
@@ -130,8 +133,11 @@ export function pointStyleFor(feature) {
 export const LEGENDS = {
   "hcdd1-flood-extents": [{ shape: "square", color: OVERLAY.extent.fillColor, label: "Mapped flooding" }],
   "hcdd1-flood-photos": [
-    { shape: "dot", color: OVERLAY.photo.fillColor, label: "Flood photo (click to view)" },
-    { shape: "dot", color: OVERLAY.photo_location.fillColor, label: "Photo location (image not published)" },
+    { shape: "dot", color: OVERLAY.photo.fillColor, label: "Flood photo (click to view)", part: "photos" },
+    { shape: "dot", color: OVERLAY.photo_location.fillColor, label: "Photo location (image not published)", part: "locations" },
+  ],
+  "fema-flood-photos": [
+    { shape: "dot", color: OVERLAY.town_photos.fillColor, label: "Town FEMA photographed flooding (click to view)" },
   ],
   "hcdd1-drainage": [
     { shape: "line", color: OVERLAY.channel.color, label: "Channel" },
@@ -158,7 +164,7 @@ export const LEGENDS = {
     { shape: "line", color: FLOOD_WORKS.levee.color, label: "Levee" },
     { shape: "line", color: FLOOD_WORKS.sea_wall.color, label: "Sea wall" },
     { shape: "line", color: FLOOD_WORKS.storm_drain.color, label: "Storm drain system" },
-    { shape: "square", color: FLOOD_WORKS.pond.fillColor, label: "Pond" },
+    { shape: "dot", color: FLOOD_WORKS.coastal.fillColor, label: "Coastal works (dune, jetty, beach)" },
   ],
   "city-drainage": [
     { shape: "line", color: CITY_DRAINAGE.ditch.color, label: "Drainage ditch" },
@@ -177,5 +183,15 @@ export const LEGENDS = {
   ],
   "nfip-claims-by-tract": [
     { ramp: CLAIMS_RAMP.slice(1), label: "Insurance claims per tract (fewer → more)" },
+  ],
+};
+
+// Layers whose features fall into parts a reader can switch on and off one at a
+// time, under the layer's own checkbox. Listed in sidebar order; the first is
+// drawn on top. A legend row with the same `part` hides along with it.
+export const LAYER_PARTS = {
+  "hcdd1-flood-photos": [
+    { id: "photos", label: "Photos you can open", includes: (p) => Boolean(p.photo_url) },
+    { id: "locations", label: "Photo locations only", includes: (p) => !p.photo_url },
   ],
 };

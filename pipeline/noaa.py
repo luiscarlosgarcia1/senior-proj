@@ -51,7 +51,9 @@ MONTHS = {
         ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"), start=1
     )
 }
-GHCN_ELEMENTS = ("PRCP", "TMAX", "TMIN", "AWND")
+# Rain only: nothing in the app reads temperature or wind, which were two
+# thirds of the readings.
+GHCN_ELEMENTS = ("PRCP",)
 GHCN_FIRST_DAY, GHCN_LAST_DAY = f"{GHCN_FIRST_YEAR}0101", f"{LAST_YEAR}1231"
 
 

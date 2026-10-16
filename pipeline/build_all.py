@@ -10,9 +10,12 @@ data files are generated along the way. Steps, in order:
   2. build_history.py   the year-by-year record: NFIP claims and policies, NWS
                         flood reports, each rain gauge's yearly totals
   3. build_layers.py    every map layer (seed GeoJSON in data/seed/, waterways,
-                        the state flood plan, city drainage, Overture bridges
-                        and dams, the Hidalgo drainage district's layers, NWS
-                        flood reports, FEMA insurance claims by census tract)
+                        the state flood plan, city drainage, Overture bridges,
+                        the Hidalgo drainage district's layers, NWS flood
+                        reports, FEMA insurance claims by census tract)
+
+Then the database is compacted, so space freed by rows a step dropped is given
+back instead of left inside the file.
 
 The publishers' own files are kept in the gitignored `tmp/` download cache, so a
 rebuild only fetches what is missing; delete that folder to download everything
@@ -24,8 +27,10 @@ Safe to re-run: each step replaces only its own tables, in one transaction.
 
 from __future__ import annotations
 
+import sqlite3
 import subprocess
 import sys
+from contextlib import closing
 
 from paths import DATABASE, REPO_ROOT
 
@@ -41,7 +46,11 @@ def main() -> None:
         # Flushed so each heading lands above its step's own output.
         print(f"\n== {number}/{len(STEPS)} {title} ==\n$ python {script}", flush=True)
         subprocess.run([sys.executable, script], check=True, cwd=REPO_ROOT)
-    print(f"\nDone: {DATABASE.relative_to(REPO_ROOT)} is up to date.")
+    before = DATABASE.stat().st_size
+    with closing(sqlite3.connect(DATABASE)) as connection:
+        connection.execute("VACUUM")
+    print(f"\ncompacted: {before / 2**20:,.0f} MB -> {DATABASE.stat().st_size / 2**20:,.0f} MB")
+    print(f"Done: {DATABASE.relative_to(REPO_ROOT)} is up to date.")
 
 
 if __name__ == "__main__":

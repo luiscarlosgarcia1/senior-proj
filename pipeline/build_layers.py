@@ -10,9 +10,10 @@ Hazard layers come from the seed GeoJSON in `data/seed/<county>/`. For each one 
 
 Each layer becomes one row of the `layers` table (see `database.py`): its
 map-ready GeoJSON, which the Flask app serves as is, next to its description.
-Bridges and dams are pulled from Overture Maps (`overture.py`); flood-evidence,
+Bridges are pulled from Overture Maps (`overture.py`); flood-evidence,
 drainage and insurance-claims layers from their publishers
-(`evidence_layers.py`); layer descriptions come from `layer_meta.py`.
+(`evidence_layers.py`, `regional_layers.py`); layer descriptions come from
+`layer_meta.py`.
 
 Run:  uv run --group pipeline python pipeline/build_layers.py
 Safe to re-run (replaces the `layers` table only).
@@ -144,10 +145,11 @@ def build_twdb(freq: str, chance: str) -> MapLayer:
     return _finish(_stack(parts), tolerance=TOLERANCE_MODELED)
 
 
-def build_overture_infrastructure(kind: str) -> MapLayer | None:
-    """Bridges or dams, kept as individual features (no dissolve, no severity:
-    these are discrete structures at risk, not hazard zones). A structure that
-    spans two counties is listed under each."""
+def build_overture_bridges() -> MapLayer | None:
+    """Bridges, kept as individual features (no dissolve, no severity: these
+    are structures at risk, not hazard zones). A bridge that spans two
+    counties is listed under each. (Overture's dams go into the flood
+    infrastructure layer, where the state does not already list them.)"""
     rows = [
         {
             "geometry": geometry,
@@ -156,14 +158,14 @@ def build_overture_infrastructure(kind: str) -> MapLayer | None:
             "name": (attributes.get("names") or {}).get("primary"),  # Overture: {"primary": ...}
         }
         for slug, geometry, attributes in overture.in_counties(overture.bridges_and_dams())
-        if attributes["class"] == kind
+        if attributes["class"] == "bridge"
     ]
     if not rows:
         return None
     rows.sort(key=lambda row: list(SHORT_NAMES).index(row["county_slug"]))  # stable: county by county
     out = gpd.GeoDataFrame(rows, crs=4326)
     out["geometry"] = out.geometry.make_valid()
-    return _as_layer(_drop_empty(out).assign(source="Overture Maps Foundation", infrastructure_type=kind))
+    return _as_layer(_drop_empty(out).assign(source="Overture Maps Foundation", infrastructure_type="bridge"))
 
 
 # Layer id -> builder. Order is the order layers appear in the sidebar. A layer
@@ -174,13 +176,13 @@ BUILDERS = {
     "hidalgo-firm-1981": build_hidalgo_firm,
     "twdb-cursory-1in100": lambda: build_twdb("1in100", "1% annual chance"),
     "twdb-cursory-1in500": lambda: build_twdb("1in500", "0.2% annual chance"),
-    "overture-bridges": lambda: build_overture_infrastructure("bridge"),
-    "overture-dams": lambda: build_overture_infrastructure("dam"),
+    "overture-bridges": build_overture_bridges,
     "waterways": regional_layers.build_waterways,
     "flood-infrastructure": regional_layers.build_flood_infrastructure,
     "city-drainage": regional_layers.build_city_drainage,
     "hcdd1-flood-extents": evidence_layers.build_hcdd1_flood_extents,
     "hcdd1-flood-photos": evidence_layers.build_hcdd1_flood_photos,
+    "fema-flood-photos": regional_layers.build_fema_flood_photos,
     "hcdd1-drainage": evidence_layers.build_hcdd1_drainage,
     "hcdd1-bond-projects": evidence_layers.build_hcdd1_bond_projects,
     "flood-projects": regional_layers.build_flood_projects,
@@ -210,17 +212,17 @@ def _row(layer_id: str, position: int, layer: MapLayer) -> dict:
 # are built from the seed files, which are not downloaded.
 DOWNLOADED_INTO = {
     "overture-bridges": ("overture",),
-    "overture-dams": ("overture",),
     "hcdd1-flood-extents": ("hcdd1",),
     "hcdd1-flood-photos": ("hcdd1",),
     "hcdd1-drainage": ("hcdd1",),
     "hcdd1-bond-projects": ("hcdd1",),
     "nfip-claims-by-tract": ("nfip", "tracts"),
-    "waterways": ("tiger",),
-    "flood-infrastructure": ("twdb",),
+    "waterways": ("tiger", "hcdd1", "cities"),
+    "flood-infrastructure": ("twdb", "overture"),
     "flood-projects": ("twdb",),
     "city-drainage": ("cities",),
     "nws-flood-reports": ("nws",),
+    "fema-flood-photos": ("commons", "census"),
 }
 
 
@@ -264,6 +266,8 @@ def main(database: Path = DATABASE) -> None:
 
     with open_database(database) as connection:
         replace_table(connection, "layers", rows)
+        # Like the layers themselves: a layer no longer built loses its source row.
+        connection.execute("DELETE FROM data_sources WHERE id LIKE 'layer:%'")
         record_sources(connection, [_source(row["id"], row["feature_count"]) for row in rows])
     print(f"wrote {len(rows)} layer(s) to the layers table")
     if skipped:

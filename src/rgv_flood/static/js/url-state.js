@@ -1,8 +1,8 @@
 /* Keeps the current view in the page address so it can be bookmarked or sent
- * to someone: the county, which layers are on, whether event points show, and
- * where the map is. For example
+ * to someone: the county, which layers are on, any layer parts switched off,
+ * whether event points show, and where the map is. For example
  *
- *   #county=hidalgo&layers=fema-nfhl,overture-bridges&events=1&map=26.2034,-98.2300,11
+ *   #county=hidalgo&layers=hcdd1-flood-photos&off=hcdd1-flood-photos.locations&events=1&map=26.2034,-98.2300,11
  *
  * Call it after the other modules have attached their listeners: a view is
  * restored by setting the same controls a person would.
@@ -16,6 +16,8 @@ export function initUrlState(map) {
   const county = document.getElementById("county-select");
   const events = document.getElementById("events-toggle");
   const layerBoxes = [...document.querySelectorAll(".layer-toggle")];
+  const partBoxes = [...document.querySelectorAll(".layer-part")];
+  const partKey = (box) => `${box.dataset.layer}.${box.value}`;
   let applying = false;
 
   function setChecked(box, wanted) {
@@ -30,6 +32,8 @@ export function initUrlState(map) {
     const saved = new URLSearchParams(location.hash.slice(1));
 
     const wantedLayers = new Set((saved.get("layers") ?? "").split(",").filter(Boolean));
+    const partsOff = new Set((saved.get("off") ?? "").split(",").filter(Boolean));
+    for (const box of partBoxes) setChecked(box, !partsOff.has(partKey(box))); // parts first: the layer loads with them
     for (const box of layerBoxes) setChecked(box, wantedLayers.has(box.value));
     setChecked(events, saved.get("events") === "1");
 
@@ -53,6 +57,7 @@ export function initUrlState(map) {
     const state = {
       county: county.value,
       layers: layerBoxes.filter((box) => box.checked).map((box) => box.value).join(","),
+      off: partBoxes.filter((box) => !box.checked).map(partKey).join(","),
       events: events.checked ? "1" : "",
       map: `${center.lat.toFixed(4)},${center.lng.toFixed(4)},${map.getZoom()}`,
     };
@@ -66,7 +71,7 @@ export function initUrlState(map) {
   if (location.hash) apply();
   window.addEventListener("hashchange", apply); // a link pasted into a tab that is already open
 
-  for (const control of [county, events, ...layerBoxes]) control.addEventListener("change", write);
+  for (const control of [county, events, ...layerBoxes, ...partBoxes]) control.addEventListener("change", write);
   // The map settles its own size as the page loads; only moves after that are the reader's.
   window.addEventListener("load", () => setTimeout(() => map.on("moveend", write)));
 }

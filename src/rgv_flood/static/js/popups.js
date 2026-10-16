@@ -24,6 +24,17 @@ function photo(p) {
   );
 }
 
+/** A town's FEMA photos, each linked to its Wikimedia Commons page. */
+function femaGallery(photos) {
+  const figures = photos.map(
+    (photo) =>
+      `<figure><a class="popup-photo" href="${esc(photo.page_url)}" target="_blank" rel="noopener" ` +
+      `title="Open on Wikimedia Commons"><img src="${esc(photo.thumb_url)}" alt="${esc(photo.caption)}" loading="lazy"></a>` +
+      `<figcaption>${esc(photo.caption)}</figcaption></figure>`,
+  );
+  return `<div class="popup-gallery">${figures.join("")}</div>`;
+}
+
 function yearRange(start, end) {
   if (start && end) return `${start}–${end}`;
   return start ? `started ${start}` : "";
@@ -44,7 +55,7 @@ const FLOOD_WORK_KINDS = {
   levee: "Levee",
   sea_wall: "Sea wall",
   storm_drain: "Storm drain system",
-  pond: "Pond",
+  coastal: "Coastal works",
   low_water_crossing: "Low-water crossing",
   other: "Flood infrastructure",
 };
@@ -88,7 +99,7 @@ const POPUPS = {
       `<strong>${esc(p.name || kind)}</strong><br>${kind} · ${esc(p.county)} County` +
       (p.description && p.description !== p.name ? `<br>${esc(p.description)}` : "") +
       (p.condition ? `<br>Condition: ${esc(p.condition)}` : "") +
-      `<br>${note(TWDB)}`
+      `<br>${note(p.source ? `Source: ${esc(p.source)} (OpenStreetMap)` : TWDB)}`
     );
   },
 
@@ -138,6 +149,16 @@ const POPUPS = {
         (p.taken ? `Photo taken ${esc(p.taken)}<br>` : "") +
         note(`A crew from ${HCDD1} photographed conditions here. The district has not published the image.`),
 
+  fema_photos: (p) => {
+    const photos = p.photos || [];
+    return (
+      `<strong>${esc(p.town)}</strong> · ${esc(p.county)} County<br>` +
+      `${photos.length} FEMA photo${photos.length === 1 ? "" : "s"} of flooding` +
+      femaGallery(photos) +
+      note("Placed at the town FEMA's caption names, not where each photo was taken. Public domain, via Wikimedia Commons.")
+    );
+  },
+
   drainage: (p) => {
     const detail = p.acres ? `${p.acres} acres` : esc(p.owner);
     return (
@@ -172,9 +193,8 @@ const POPUPS = {
 };
 
 function infrastructurePopup(p) {
-  const kind = p.infrastructure_type === "dam" ? "Dam" : "Bridge";
   return (
-    `<strong>${esc(p.name || kind)}</strong><br>${kind} · ${esc(p.county || "—")} County<br>` +
+    `<strong>${esc(p.name || "Bridge")}</strong><br>Bridge · ${esc(p.county || "—")} County<br>` +
     note("Source: Overture Maps Foundation (OpenStreetMap)")
   );
 }

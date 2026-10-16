@@ -25,7 +25,7 @@ Every table is defined in `database.py`. Every query the app runs is in
 | `flood_events` | flood-type event in NOAA's Storm Events Database, 1996–2025, with NOAA's coordinate and the point the map plots | `build_events.py` |
 | `flood_reports` | hand-curated local-news or government report tied to a flood | `build_events.py` |
 | `weather_stations` | GHCN-Daily station used for a county | `build_events.py` |
-| `weather_observations` | daily reading at a station (rain, max/min temperature, wind), 1978–2025 | `build_events.py` |
+| `weather_observations` | daily rain reading at a station, 1978–2025 | `build_events.py` |
 | `rainfall_station_years` | station and year: days with a rain reading, total, wettest day, days over 2 inches | `build_history.py` |
 | `nfip_claims` | NFIP flood-insurance claim in the four counties, 1978 on | `build_history.py` |
 | `nfip_policies_by_year` | county and year: NFIP policies in force, 2009 on | `build_history.py` |
@@ -46,7 +46,7 @@ sqlite3 data/generated/rgv-flood.sqlite3 "select id, publisher, retrieved_at, re
 | --- | --- |
 | NOAA Storm Events, NOAA GHCN-Daily | downloaded (`noaa.py`) |
 | Overture Maps bridges and dams | downloaded (`overture.py`) |
-| Hidalgo drainage district layers, FEMA NFIP claims, Census tracts and water lines, TWDB State Flood Plan, Harlingen and Brownsville drainage, NWS storm reports | downloaded (`public_sources.py`) |
+| Hidalgo drainage district layers, FEMA NFIP claims, Census tracts, water lines and places, TWDB State Flood Plan, Harlingen and Brownsville drainage, NWS storm reports, FEMA flood photos on Wikimedia Commons | downloaded (`public_sources.py`) |
 | FEMA NFHL, TWDB floodplain, Hidalgo 1981 FIRM, county boundaries | seed files in `data/seed/<county>/` |
 | Curated local flood reports | seed file `data/seed/hidalgo/public-reports.ndjson` |
 | NFIP policies per county and year | seed file `data/seed/nfip-policies-by-year.csv` (FEMA retired the source) |
@@ -103,7 +103,7 @@ uv run --group pipeline python pipeline/build_layers.py      # ~90 s
 For each hazard layer in the seed folder: reprojects to EPSG:4326, clips FEMA
 NFHL to the true county boundary, assigns `relative_class` from
 `rgv_flood.severity`, dissolves adjacent same-class polygons, and simplifies
-geometry. Bridges and dams are kept as individual features (no severity, no
+geometry. Bridges are kept as individual features (no severity, no
 dissolve) and only where they touch a county's real boundary, since the
 bounding box used to query Overture also covers a strip of Mexico.
 
@@ -113,11 +113,12 @@ bounding box used to query Overture also covers a strip of Mexico.
 | `fema-nfhl` | FEMA NFHL — Cameron, Starr, Willacy |
 | `hidalgo-firm-1981` | Hidalgo County DD No. 1 digitized 1981 FIRM |
 | `twdb-cursory-1in100` / `-1in500` | TWDB 2025 cursory floodplain, all four |
-| `overture-bridges` / `overture-dams` | Overture Maps |
-| `waterways` | Census TIGER 2023 linear water: drains, canals, resacas and creeks, all four |
-| `flood-infrastructure` | TWDB State Flood Plan: dams, levees, sea walls, storm drains, ponds, low-water crossings |
+| `overture-bridges` | Overture Maps |
+| `waterways` | Census TIGER 2023 linear water: drains, canals, resacas and creeks, all four, except lines a local layer already maps |
+| `flood-infrastructure` | TWDB State Flood Plan: dams, levees, sea walls, storm drains, low-water crossings, coastal works; plus named Overture dams the plan lacks |
 | `city-drainage` | Harlingen storm ditches, ponds and sewers; Brownsville drainage ditches |
 | `hcdd1-flood-extents`, `-flood-photos`, `-drainage`, `-bond-projects` | Hidalgo drainage district's published layers |
+| `fema-flood-photos` | FEMA's flood photos on Wikimedia Commons, one point per town a caption names (Census place point) |
 | `flood-projects` | TWDB State Flood Plan: ongoing and recommended flood projects |
 | `nws-flood-reports` | the `nws_flood_reports` table, as points |
 | `nfip-claims-by-tract` | FEMA NFIP claims per census tract |
@@ -133,6 +134,15 @@ map).
 Flood photos carry a `photo_url` wherever the drainage district publishes the
 image (as an ArcGIS attachment). Only the listing of attachments is downloaded;
 the images stay on the district's server and the map links to them.
+
+**Where sources overlap, one is kept.** A Census water line that runs along a
+drainage-district channel or a Harlingen or Brownsville ditch for 80% of its
+length is left out, since the local line carries the ditch's name and owner.
+An Overture dam within about 300 m of a State Flood Plan dam is the same dam;
+Overture adds only named dams the plan lacks. The plan's lakes (listed as
+ponds), parks, wetlands and "otherwise protected areas" are not flood works and
+are left out. GHCN-Daily readings are kept for rain only: nothing reads
+temperature or wind.
 
 If a publisher can't be reached and its files aren't cached, that one layer is
 left out, the rest are still written, and the script exits with an error naming

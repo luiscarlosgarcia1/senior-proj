@@ -4,8 +4,11 @@ Flood Plan records; the flood projects it lists; the two cities that publish
 their storm drainage; and the flooding the National Weather Service was told
 about.
 
-Sources are pulled by `public_sources.py` (and, for the storm reports, read
-back from the database `build_events.py` filled). Every feature is kept only
+Sources are pulled by `public_sources.py` and `overture.py` (and, for the
+storm reports, read back from the database `build_history.py` filled). Where two
+sources map the same thing, the one with more to say about it is kept: the
+drainage district's and cities' ditches over the Census lines along them, and
+the state's dam inventory over Overture's. Every feature is kept only
 where it touches one of the four counties, tested against the county's real
 boundary, and carries that county's name.
 """
@@ -19,16 +22,21 @@ from contextlib import closing
 from pathlib import Path
 
 import geopandas as gpd
+import overture
 import shapely
 from database import MapLayer
 from jsonio import feature_collection
 from paths import DATABASE, county_boundary
 from public_sources import (
+    census_places,
     census_water_lines,
     city_drainage_layer,
+    commons_flood_photos,
+    hcdd1_layer,
     twdb_flood_plan_layer,
 )
-from shapely.geometry import shape
+from shapely.geometry import Point, shape
+from shapely.strtree import STRtree
 
 from rgv_flood.counties import COUNTIES, SHORT_NAMES
 
@@ -111,15 +119,43 @@ def _waterway_kind(mtfcc: str, name: str | None) -> str | None:
     return "canal_or_ditch"
 
 
+# Where the drainage district or a city maps a ditch, its line (with the
+# ditch's own name and owner) is drawn and the Census line along it is left
+# out: a Census line is the same ditch when this share of it runs within
+# about 100 m of a local one.
+SAME_DITCH_SHARE = 0.8
+NEAR_DEGREES = 0.0009  # ~100 m
+
+
+def _local_ditches() -> shapely.Geometry:
+    """The area within ~100 m of a ditch the drainage district or a city maps."""
+    sources = [
+        *hcdd1_layer("drainage_system"),
+        *city_drainage_layer("harlingen_ditches"),
+        *city_drainage_layer("brownsville_ditches"),
+    ]
+    area = shapely.union_all([shape(f["geometry"]) for f in sources if f.get("geometry")]).buffer(NEAR_DEGREES)
+    shapely.prepare(area)
+    return area
+
+
+def _mapped_locally(line: shapely.Geometry, local_ditches: shapely.Geometry) -> bool:
+    return line.length > 0 and line.intersection(local_ditches).length / line.length >= SAME_DITCH_SHARE
+
+
 def build_waterways() -> MapLayer | None:
-    """Drains, canals, resacas and creeks in each county (Census TIGER 2023)."""
+    """Drains, canals, resacas and creeks in each county (Census TIGER 2023),
+    except those the drainage district or a city already maps."""
+    local_ditches = _local_ditches()
     features = []
     for slug in COUNTIES:
         lines = gpd.read_file(f"zip://{census_water_lines(slug)}").to_crs(4326)
         for row in lines.itertuples():
             name = row.FULLNAME if isinstance(row.FULLNAME, str) else None
             kind = _waterway_kind(row.MTFCC, name)
-            if kind and row.geometry is not None and not row.geometry.is_empty:
+            if not kind or row.geometry is None or row.geometry.is_empty:
+                continue
+            if not _mapped_locally(row.geometry, local_ditches):
                 features.append(_feature(row.geometry, {
                     "overlay_type": "waterway", "kind": kind, "name": name, "county": SHORT_NAMES[slug],
                 }))
@@ -133,30 +169,65 @@ INFRASTRUCTURE_KINDS = {
     "Levee": "levee",
     "Sea Wall": "sea_wall",
     "Storm Drain System": "storm_drain",
-    "Pond": "pond",
     "LWC": "low_water_crossing",
 }
+# Land set aside rather than built: left out. (The plan's polygons, all lakes it
+# calls ponds, parks and wetlands here, aren't downloaded at all.)
+NOT_FLOOD_WORKS = {"Otherwise Protected Area"}
+COASTAL_WORKS = re.compile(r"\b(dune|jetty|beach|revetments?)\b", re.IGNORECASE)
 UNKNOWN = ("Unknown", "999999")
 
 
 def _infrastructure(p: dict) -> dict | None:
-    kind = INFRASTRUCTURE_KINDS.get(p.get("INFRA_TYPE"), "other")
+    description = _text(p.get("DESCR"))
+    if description in NOT_FLOOD_WORKS:
+        return None
+    kind = INFRASTRUCTURE_KINDS.get(p.get("INFRA_TYPE"))
+    if not kind:
+        kind = "coastal" if description and COASTAL_WORKS.search(description) else "other"
     return {
         "overlay_type": "flood_infrastructure",
         "kind": kind,
         "name": _text(p.get("NAME"), 120),
-        "description": _text(p.get("DESCR")),
+        "description": description,
         "condition": None if p.get("CONDITION") in UNKNOWN else _text(p.get("CONDITION"), 60),
     }
 
 
+# Overture Maps (from OpenStreetMap) has dams the state inventory lacks, such
+# as the Retamal Diversion Dam on the Rio Grande. One within ~300 m of a state
+# dam is the same dam; one without a name (mostly stock-tank dams in Starr)
+# can't be checked, so it is left out.
+SAME_DAM_DEGREES = 0.003
+
+
+def _dams_the_state_lacks(state_dams: list[shapely.Geometry], polygons) -> list[dict]:
+    known = STRtree(state_dams)
+    features = []
+    for geometry, attributes in overture.bridges_and_dams():
+        name = (attributes.get("names") or {}).get("primary")
+        if attributes["class"] != "dam" or not name:
+            continue
+        if len(known.query(geometry, predicate="dwithin", distance=SAME_DAM_DEGREES)):
+            continue
+        if county := _county_of(geometry, polygons):
+            features.append(_feature(geometry, {
+                "overlay_type": "flood_infrastructure", "kind": "dam", "name": name,
+                "source": "Overture Maps Foundation", "county": SHORT_NAMES[county],
+            }))
+    return features
+
+
 def build_flood_infrastructure() -> MapLayer | None:
-    """Dams, levees, sea walls, storm drain systems, ponds and low-water
-    crossings the 2024 State Flood Plan inventories in the four counties."""
+    """Dams, levees, sea walls, storm drain systems, low-water crossings and
+    coastal works the 2024 State Flood Plan inventories in the four counties,
+    plus the named dams it lacks that Overture Maps has."""
     polygons = _county_polygons()
     features = []
-    for name in ("infrastructure_polygons", "infrastructure_lines", "infrastructure_points"):  # points drawn last, on top
+    for name in ("infrastructure_lines", "infrastructure_points"):  # points drawn last, on top
         features += _in_counties(twdb_flood_plan_layer(name), _infrastructure, polygons)
+    state_dams = [shape(f["geometry"]) for f in features if f["properties"]["kind"] == "dam"]
+    features += _dams_the_state_lacks(state_dams, polygons)
     return _layer(features)
 
 
@@ -250,6 +321,87 @@ def build_city_drainage() -> MapLayer | None:
         ("harlingen_detention_ponds", harlingen_pond),
     ):
         features += _in_counties(city_drainage_layer(name), to_properties, polygons)
+    return _layer(features)
+
+
+# ---- FEMA flood photos (Wikimedia Commons) ----------------------------------
+
+# A FEMA caption starts with the place and date: "Raymondville, TX, July 25,
+# 2008 -- Flood waters remain ...". That place is the only location a photo
+# has, so photos are grouped by town and drawn at the Census point for it.
+CAPTION_PLACE = re.compile(r"^\s*([A-Za-z .']+?)\s*,\s*(?:TX|Texas)\b")
+# Place names as FEMA's captions misspell them.
+PLACE_SPELLINGS = {
+    "Welasco": "Weslaco",
+    "Wesllaco": "Weslaco",
+    "Harlinger": "Harlingen",
+    "Harlingren": "Harlingen",
+    "Edingburg": "Edinburg",
+    "Rio Grende City": "Rio Grande City",
+    "Point Isabel": "Port Isabel",
+}
+# Whether a photo shows flooding is judged from what FEMA says it shows: the
+# file's title and the caption's first sentence. Later sentences often mention
+# the flood when the photo is of a relief line, an office or a press briefing.
+SHOWS_FLOODING = re.compile(r"flood|submerg|high water|waters recede", re.IGNORECASE)
+NOT_FLOODING = re.compile(
+    r"\b(DRC|Disaster Recovery Center|EOC|Operations? Center|TV|television|media|interview|meetings?|meets?|"
+    r"talks?|speaks?|volunteers?)\b",
+    re.IGNORECASE,
+)
+FEMA_TITLE = re.compile(r"^File:(FEMA - \d+ - )?|\.\w+$")
+PLACE_KIND = re.compile(r" (city|town|village|CDP)$")
+
+
+def _places() -> dict[str, Point]:
+    """Texas place name -> the Census Bureau's internal point for it."""
+    places = {}
+    with census_places().open(encoding="utf-8") as gazetteer:
+        header = next(gazetteer).rstrip().split("\t")
+        for line in gazetteer:
+            row = dict(zip(header, (value.strip() for value in line.split("\t")), strict=False))
+            places[PLACE_KIND.sub("", row["NAME"])] = Point(float(row["INTPTLONG"]), float(row["INTPTLAT"]))
+    return places
+
+
+def _scene(photo: dict) -> str:
+    """What a photo shows, in FEMA's words: its title and the caption's first sentence."""
+    first_sentence = photo["caption"].partition("--")[2].strip().split(". ")[0]
+    return f"{FEMA_TITLE.sub('', photo['title'])}. {first_sentence}"
+
+
+def _flood_photo(photo: dict) -> tuple[str, dict] | None:
+    """(town, photo) for a FEMA photo of flooding whose caption names a town."""
+    caption, scene = photo["caption"], _scene(photo)
+    named = CAPTION_PLACE.match(caption)
+    if not named or not photo.get("thumb_url") or not SHOWS_FLOODING.search(scene) or NOT_FLOODING.search(scene):
+        return None
+    town = PLACE_SPELLINGS.get(named.group(1).strip(), named.group(1).strip())
+    return town, {
+        "taken": photo["taken"] or None,
+        "caption": caption[:400],
+        "credit": photo["artist"] or "FEMA",
+        "thumb_url": photo["thumb_url"],
+        "page_url": photo["page_url"],
+    }
+
+
+def build_fema_flood_photos() -> MapLayer | None:
+    """FEMA's photos of flooding in the four counties, one dot per town."""
+    polygons, places = _county_polygons(), _places()
+    by_town: dict[str, list[dict]] = {}
+    for source in commons_flood_photos():
+        if found := _flood_photo(source):
+            by_town.setdefault(found[0], []).append(found[1])
+    features = []
+    for town, photos in sorted(by_town.items()):
+        point = places.get(town)
+        county = _county_of(point, polygons) if point else None
+        if county:
+            features.append(_feature(point, {
+                "overlay_type": "fema_photos", "town": town, "county": SHORT_NAMES[county],
+                "photos": sorted(photos, key=lambda photo: photo["taken"] or ""),
+            }))
     return _layer(features)
 
 

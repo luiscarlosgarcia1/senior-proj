@@ -102,15 +102,14 @@ TABLES: dict[str, tuple[str, ...]] = {
              source_url TEXT NOT NULL
            )""",
     ),
-    # Daily station readings, 2000-2025, as NOAA publishes them: no unit
-    # conversion. PRCP is tenths of a millimetre, TMAX/TMIN tenths of a degree
-    # Celsius, AWND tenths of a metre per second. Readings NOAA flagged for
-    # quality are left out.
+    # Daily station readings, 1978-2025, as NOAA publishes them: no unit
+    # conversion. Only rain (PRCP, tenths of a millimetre) is kept; `element`
+    # leaves room for others. Readings NOAA flagged for quality are left out.
     "weather_observations": (
         """CREATE TABLE IF NOT EXISTS weather_observations (
              station_id TEXT NOT NULL REFERENCES weather_stations(station_id),
              date TEXT NOT NULL,
-             element TEXT NOT NULL,                -- PRCP, TMAX, TMIN or AWND
+             element TEXT NOT NULL,                -- PRCP
              value REAL NOT NULL,
              measurement_flag TEXT,
              source_flag TEXT,

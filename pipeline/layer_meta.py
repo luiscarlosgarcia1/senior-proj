@@ -122,23 +122,6 @@ LAYER_META: dict[str, dict] = {
         "source_url": "https://overturemaps.org/",
         "visualizations": [OVERTURE_EXPLORER],
     },
-    "overture-dams": {
-        "title": "Dams",
-        "description": (
-            "Dams and levees — flood-control infrastructure, relevant to both "
-            "flood risk and flood mitigation depending on the structure."
-        ),
-        "source": "Overture Maps Foundation — infrastructure theme (OpenStreetMap)",
-        "vintage": "current Overture release",
-        "hazard_type": "n/a — infrastructure, not a hazard zone",
-        "coverage": "all four counties",
-        "limitation": (
-            "Crowd-sourced (OpenStreetMap); coverage and names vary by area. "
-            "Not an official inventory."
-        ),
-        "source_url": "https://overturemaps.org/",
-        "visualizations": [OVERTURE_EXPLORER],
-    },
     "hcdd1-flood-extents": {
         "title": "Mapped flooding, 2008–2020 (Hidalgo)",
         "description": (
@@ -228,7 +211,9 @@ LAYER_META: dict[str, dict] = {
             "The water lines that carry runoff across the valley: drainage "
             "ditches and floodways, irrigation canals, resacas, and the creeks "
             "and arroyos of Starr County. Kinds come from each line's own name "
-            "(a \"Drn\" is a drain, a \"Cnl\" a canal)."
+            "(a \"Drn\" is a drain, a \"Cnl\" a canal). Where the Hidalgo "
+            "drainage district, Harlingen or Brownsville map a ditch, their line "
+            "is shown in their own layer instead."
         ),
         "source": "U.S. Census Bureau — TIGER/Line 2023 linear water",
         "vintage": "2023",
@@ -241,21 +226,44 @@ LAYER_META: dict[str, dict] = {
         ),
         "source_url": "https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html",
     },
+    "fema-flood-photos": {
+        "title": "Flood photos (FEMA)",
+        "description": (
+            "FEMA's own photographs of flooding in the valley: Hurricane Dolly "
+            "in 2008 (Brownsville, La Feria, Raymondville, Weslaco), the Roma "
+            "flood of August 2008, and Hurricane Alex in 2010 (Roma, La Grulla, "
+            "Mission). Click a town to see its photos."
+        ),
+        "source": "FEMA photo library, as kept on Wikimedia Commons (public domain)",
+        "vintage": "2008–2010",
+        "hazard_type": "observed — photographs of flooding",
+        "coverage": "Cameron, Hidalgo, Starr, Willacy (towns FEMA photographed)",
+        "limitation": (
+            "Each photo is placed at the town its caption names (the Census "
+            "point for that town), not where it was taken. Only the storms FEMA "
+            "photographed and Commons keeps are here."
+        ),
+        "source_url": "https://commons.wikimedia.org/wiki/Category:Effects_of_Hurricane_Dolly_(2008)_in_Texas",
+    },
     "flood-infrastructure": {
         "title": "Flood infrastructure (state flood plan)",
         "description": (
-            "Dams, levees, sea walls, storm drain systems, detention ponds and "
-            "low-water crossings the regional flood planning group inventoried "
-            "for the 2024 State Flood Plan."
+            "Dams, levees, sea walls, storm drain systems, low-water crossings "
+            "and coastal works (dunes, jetties, beach nourishment) the regional "
+            "flood planning group inventoried for the 2024 State Flood Plan, "
+            "plus named dams the plan lacks that OpenStreetMap has."
         ),
-        "source": "Texas Water Development Board — 2024 State Flood Plan, existing flood infrastructure",
+        "source": (
+            "Texas Water Development Board — 2024 State Flood Plan, existing flood "
+            "infrastructure; extra dams from Overture Maps Foundation (OpenStreetMap)"
+        ),
         "vintage": "2024 State Flood Plan (Region 15 inventory, 2023)",
         "hazard_type": "n/a — flood infrastructure",
         "coverage": "Cameron, Hidalgo, Starr, Willacy",
         "limitation": (
             "Only what local entities reported to the planning group; most "
             "items have no condition or level-of-service rating. The plan also "
-            "maps wetlands as infrastructure; those are left out here."
+            "lists wetlands, lakes (as ponds) and parks; those are left out here."
         ),
         "source_url": STATE_FLOOD_PLAN,
         "visualizations": [STATE_FLOOD_PLAN_VIEWER],

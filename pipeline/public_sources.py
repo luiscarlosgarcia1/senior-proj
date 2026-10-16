@@ -10,6 +10,7 @@ exactly as the publisher sent it. The map build uses the default cache under
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import urllib.parse
 from collections.abc import Callable
@@ -167,7 +168,6 @@ TWDB_FLOOD_PLAN = "https://gis2.twdb.texas.gov/server/rest/services/OOP_FP_SFPV/
 TWDB_LAYERS = {
     "infrastructure_points": (9, "1=1"),
     "infrastructure_lines": (7, "1=1"),
-    "infrastructure_polygons": (8, "INFRA_TYPE <> 'Wetland'"),
     "ongoing_projects": (10, "1=1"),
     "recommended_projects": (12, "1=1"),
 }
@@ -289,3 +289,69 @@ def census_water_lines(slug: str, cache_dir: Path = DOWNLOAD_CACHE / "tiger", *,
     cached = cache_dir / name
     download(f"https://www2.census.gov/geo/tiger/TIGER2023/LINEARWATER/{name}", cached, force=force)
     return cached
+
+
+def census_places(cached: Path = DOWNLOAD_CACHE / "census" / "2023_gaz_place_48.txt", *, force: bool = False) -> Path:
+    """The Census Bureau's 2023 gazetteer of Texas places: each city, town and
+    census-designated place with its official internal point."""
+    download("https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_gaz_place_48.txt", cached, force=force)
+    return cached
+
+
+# ---- FEMA flood photos (Wikimedia Commons) ----------------------------------
+
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+# FEMA's photographs of the valley's floods, as Wikimedia Commons keeps them.
+# They are public domain (the work of a U.S. federal agency).
+COMMONS_FLOOD_CATEGORIES = (
+    "Category:Effects of Hurricane Dolly (2008) in Texas",
+    "Category:Images from FEMA, Hurricane Alex in Texas",
+)
+COMMONS_PHOTOS_FILE = DOWNLOAD_CACHE / "commons" / "fema-flood-photos.json"
+THUMBNAIL_WIDTH = 500  # twice the popup width; Commons serves this size as is
+
+
+def _commons(params: dict) -> dict:
+    return get_json(f"{COMMONS_API}?{urllib.parse.urlencode({'action': 'query', 'format': 'json', **params})}", attempts=3)
+
+
+def _plain(html: str | None) -> str:
+    """Commons metadata is HTML; the text of it, on one line."""
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html or "")).strip()
+
+
+def commons_flood_photos(cached: Path = COMMONS_PHOTOS_FILE, *, force: bool = False) -> list[dict]:
+    """Every photo in COMMONS_FLOOD_CATEGORIES with its caption, photographer,
+    date, license, page and a thumbnail address."""
+    if already_have(cached, force=force):
+        return json.loads(cached.read_text(encoding="utf-8"))
+    photos = []
+    for category in COMMONS_FLOOD_CATEGORIES:
+        listing = {"list": "categorymembers", "cmtitle": category, "cmtype": "file", "cmlimit": 500}
+        titles: list[str] = []
+        while True:
+            page = _commons(listing)
+            titles += [member["title"] for member in page["query"]["categorymembers"]]
+            if "continue" not in page:
+                break
+            listing |= page["continue"]
+        for start in range(0, len(titles), 50):  # the API's limit per request
+            batch = _commons({"titles": "|".join(titles[start:start + 50]), "prop": "imageinfo",
+                              "iiprop": "url|extmetadata", "iiurlwidth": THUMBNAIL_WIDTH})
+            for file in batch["query"]["pages"].values():
+                info = (file.get("imageinfo") or [{}])[0]
+                meta = info.get("extmetadata", {})
+                photos.append({
+                    "title": file["title"],
+                    "category": category,
+                    "caption": _plain(meta.get("ImageDescription", {}).get("value")),
+                    "artist": _plain(meta.get("Artist", {}).get("value")),
+                    "taken": _plain(meta.get("DateTimeOriginal", {}).get("value"))[:10],
+                    "license": _plain(meta.get("LicenseShortName", {}).get("value")),
+                    "page_url": info.get("descriptionurl"),
+                    "thumb_url": (info.get("thumburl") or "").split("?")[0] or None,  # minus tracking parameters
+                })
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_text(json.dumps(photos), encoding="utf-8")
+    print(f"  [ok]   {cached.stem}: {len(photos)} photos", flush=True)
+    return photos
