@@ -1,0 +1,21 @@
+{# Address search. `phone` makes it the full-width box of the phone header row. #}
+{% macro search_box(phone=False) -%}
+<div class="relative {{ 'flex-1' if phone else 'hidden lg:block' }}" x-data="searchBox" x-on:click.outside="close()" data-search>
+  <div class="flex items-center gap-2 border border-line bg-bg px-2.5 {{ 'h-11 rounded-lg px-3' if phone else 'h-8 w-[340px] rounded-md' }}">
+    <span class="text-muted" aria-hidden="true">⌕</span>
+    <input x-ref="input" type="search" class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted"
+           x-bind:value="q" x-on:input="typed($event)" x-on:keydown.enter.prevent="pickFirst()" x-on:keydown.escape="close()"
+           placeholder="{{ t('search.placeholder') }}" aria-label="{{ t('search.placeholder') }}" autocomplete="off">
+    {% if not phone %}<kbd class="rounded-sm border border-line px-1.5 font-mono text-xs text-faint">/</kbd>{% endif %}
+  </div>
+  <div x-show="open" x-cloak class="absolute left-0 top-full z-[1200] mt-1 w-full overflow-hidden rounded-md border border-line2 bg-panel shadow-2">
+    <ul>
+      <template x-for="place in results" x-bind:key="place.label">
+        <li><button type="button" class="w-full px-3 py-2 text-left hover:bg-panel2" data-result x-on:click="pick()" x-text="place.label"></button></li>
+      </template>
+    </ul>
+    <p class="px-3 py-2 text-sm text-muted" x-show="message" x-text="message" role="status"></p>
+  </div>
+</div>
+{%- endmacro %}
+{{ search_box() }}

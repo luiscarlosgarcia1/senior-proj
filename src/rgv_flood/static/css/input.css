@@ -229,6 +229,12 @@
   .nav-active { box-shadow: inset 0 -2px 0 var(--brand); color: var(--text); }
 }
 
+/* Phones: the map page shows one of its views (map, layers, events) at a time,
+   chosen in the bottom navigation; from lg up all three sit side by side. */
+@media (width < 64rem) {
+  #map-page > [data-view]:not([data-active="true"]) { display: none !important; }
+}
+
 @keyframes rgv-load { 0% { transform: translateX(-100%); } 100% { transform: translateX(280%); } }
 
 /* MapLibre, themed with the tokens */

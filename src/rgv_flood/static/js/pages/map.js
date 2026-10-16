@@ -7,3 +7,5 @@ import "../map/popups.js";
 import "../panels/alerts.js";
 import "../panels/events.js";
 import "../panels/records.js";
+import "../panels/search.js";
+import "../share-link.js";

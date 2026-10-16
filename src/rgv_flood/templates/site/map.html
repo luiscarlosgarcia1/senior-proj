@@ -6,10 +6,11 @@
   {% include "site/components/header.html" %}
   {% if not data_ready %}{% include "site/components/no_data.html" %}{% endif %}
   <div class="flex min-h-0 flex-1" id="map-page">
-    <aside class="hidden min-h-0 w-full shrink-0 flex-col border-r border-line bg-panel lg:flex lg:w-72" x-data="layerPanel" data-view="layers">
+    <aside class="flex min-h-0 w-full shrink-0 flex-col border-r border-line bg-panel lg:w-72" x-data="layerPanel" data-view="layers"
+           x-bind:data-active="$store.app.view === 'layers'">
       {% include "site/components/layer_panel.html" %}
     </aside>
-    <main class="relative min-w-0 flex-1" data-view="map">
+    <main class="relative min-w-0 flex-1" data-view="map" data-active="true" x-data x-bind:data-active="$store.app.view === 'map'">
       {# MapLibre's own stylesheet makes its container position: relative, so the
          container fills an absolutely positioned wrapper instead of being one. #}
       <div class="absolute inset-0">
@@ -21,10 +22,12 @@
       {% include "site/components/source_details.html" %}
       {% include "site/components/popup.html" %}
     </main>
-    <aside class="hidden min-h-0 w-full shrink-0 overflow-auto border-l border-line bg-panel lg:block lg:w-[344px]" data-view="events">
+    <aside class="block min-h-0 w-full shrink-0 overflow-auto border-l border-line bg-panel lg:w-[344px]" data-view="events"
+           x-data x-bind:data-active="$store.app.view === 'events'">
       {% include "site/components/side_panel.html" %}
     </aside>
   </div>
+  {% include "site/components/bottom_nav.html" %}
 </div>
 {% endblock %}
 {% block scripts %}<script type="module" src="{{ asset_url('js/pages/map.js') }}"></script>{% endblock %}

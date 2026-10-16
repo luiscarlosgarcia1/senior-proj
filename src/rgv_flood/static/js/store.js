@@ -17,6 +17,7 @@ document.addEventListener("alpine:init", () => {
     county: "",
     theme: document.documentElement.dataset.theme || "dark",
     loading: false,
+    view: "map", // phones show one view at a time: map, layers or events
     setCounty(slug) {
       if (slug === this.county) return;
       this.county = slug;
@@ -40,6 +41,20 @@ document.addEventListener("alpine:init", () => {
     },
     toggle(event) {
       Alpine.store("app").setTheme(event.target.checked ? "light" : "dark");
+    },
+  }));
+
+  Alpine.data("bottomNav", () => ({
+    // the buttons carry data-view; `this.$el` is the button being evaluated
+    show() {
+      Alpine.store("app").view = this.$el.dataset.view;
+      if (this.$el.dataset.view === "map") emit("map-shown");
+    },
+    pressed() {
+      return Alpine.store("app").view === this.$el.dataset.view;
+    },
+    classFor() {
+      return this.pressed() ? "text-ink nav-active" : "text-muted";
     },
   }));
 

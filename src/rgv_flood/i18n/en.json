@@ -66,5 +66,8 @@
   "rainfall.none": "No rainfall records.",
   "reports.title": "Local reports",
   "reports.none": "No local reports for this county.",
-  "sources.title": "Data sources"
+  "sources.title": "Data sources",
+  "search.placeholder": "Search an address in the Valley",
+  "search.none": "No matching places in the four counties.",
+  "search.unavailable": "Search is unavailable right now"
 }

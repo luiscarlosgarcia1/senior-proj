@@ -72,6 +72,7 @@ if (container) {
   const map = createMap();
   window.addEventListener("rgv:theme", (event) => applyTheme(map, event.detail));
   window.addEventListener("rgv:county", (event) => showCounty(map, event.detail));
+  window.addEventListener("rgv:map-shown", () => requestAnimationFrame(() => map.resize())); // phones: map view again
 }
 
 export { maplibregl };

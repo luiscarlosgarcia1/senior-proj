@@ -1,8 +1,8 @@
 {# Phone navigation between the map page's views (below the lg breakpoint). #}
-<nav class="grid h-16 shrink-0 grid-cols-4 border-t border-line bg-panel lg:hidden" x-data="bottomNav" aria-label="{{ t('nav.label') }}">
+<nav class="grid h-16 shrink-0 grid-cols-4 border-t border-line bg-panel lg:hidden" x-data="bottomNav" data-bottom-nav aria-label="{{ t('nav.label') }}">
   {% for view, icon in (("map", "◫"), ("layers", "☰"), ("events", "◔")) %}
   <button type="button" class="flex flex-col items-center justify-center gap-0.5 text-xs" data-view="{{ view }}"
-          x-on:click="show" x-bind:class="classFor" x-bind:aria-pressed="pressed">
+          x-on:click="show()" x-bind:class="classFor()" x-bind:aria-pressed="pressed()">
     <span class="text-[17px]" aria-hidden="true">{{ icon }}</span>{{ t("mobile." ~ view) }}
   </button>
   {% endfor %}

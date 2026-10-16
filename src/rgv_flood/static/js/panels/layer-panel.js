@@ -46,6 +46,8 @@ document.addEventListener("alpine:init", () => {
     info(id) {
       return this.rows.flatMap((row) => row.layers).find((layer) => layer.id === id);
     },
+    loaded: false,
+    setLayer: (info, on) => setLayer(info, on), // for the shareable link
   });
 
   const store = () => Alpine.store("layers");
@@ -76,6 +78,7 @@ document.addEventListener("alpine:init", () => {
       try {
         const body = await getJson("layers");
         store().groups = body.groups.map((group) => ({ id: group.id, title: group.title, rows: rowsOf(group) }));
+        store().loaded = true;
         const map = await mapReady;
         for (const base of body.base) showLayer(map, base);
       } catch (error) {

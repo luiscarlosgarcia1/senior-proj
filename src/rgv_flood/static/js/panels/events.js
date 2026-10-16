@@ -16,6 +16,32 @@ document.addEventListener("alpine:init", () => {
     selectedId: null,
     context: null,
     showTable: false,
+    /** Select an event: fly to it (when it has a point), ring it, load its context. */
+    async open(event) {
+      this.selectedId = event.id;
+      this.showTable = false;
+      if (event.lat !== null && event.lat !== undefined) {
+        const map = await mapReady;
+        map.flyTo({ center: [event.lon, event.lat], zoom: 11, duration: 800 });
+        select([event.lon, event.lat]);
+      }
+      try {
+        this.context = await getJson(`events/${encodeURIComponent(event.id)}/context`);
+      } catch (error) {
+        if (!isAbort(error)) console.warn("event context unavailable", error);
+      }
+    },
+    /** Select an event known only by id (from a shared link); unknown ids are ignored. */
+    async openById(id, { fly = true } = {}) {
+      try {
+        const context = await getJson(`events/${encodeURIComponent(id)}/context`);
+        this.selectedId = id;
+        this.context = context;
+        if (fly && context.event.lat !== null) select([context.event.lon, context.event.lat]);
+      } catch (error) {
+        if (!isAbort(error) && error.status !== 404) console.warn("event unavailable", error);
+      }
+    },
   });
 
   Alpine.data("eventsPanel", () => ({
@@ -66,21 +92,8 @@ document.addEventListener("alpine:init", () => {
     rowClass() {
       return Alpine.store("events").selectedId === this.event.id ? "is-selected" : "";
     },
-    async choose() {
-      const event = this.event;
-      const store = Alpine.store("events");
-      store.selectedId = event.id;
-      store.showTable = false;
-      if (event.lat !== null) {
-        const map = await mapReady;
-        map.flyTo({ center: [event.lon, event.lat], zoom: 11, duration: 800 });
-        select([event.lon, event.lat]);
-      }
-      try {
-        store.context = await getJson(`events/${encodeURIComponent(event.id)}/context`);
-      } catch (error) {
-        if (!isAbort(error)) console.warn("event context unavailable", error);
-      }
+    choose() {
+      Alpine.store("events").open(this.event);
     },
   }));
 

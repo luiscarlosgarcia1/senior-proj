@@ -1,0 +1,7 @@
+{# Below the lg breakpoint: search and county get their own full-width header row. #}
+{% from "site/components/county_select.html" import county_select %}
+{% import "site/components/search_box.html" as search %}
+<div class="flex gap-2 px-3 pb-2.5 lg:hidden">
+  {{ search.search_box(phone=True) }}
+  {{ county_select("phone", size="lg") }}
+</div>
