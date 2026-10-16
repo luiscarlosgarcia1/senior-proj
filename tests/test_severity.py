@@ -1,8 +1,10 @@
+from typing import get_args
+
 import pytest
 
 from rgv_flood.severity import (
     MAPPING,
-    RELATIVE_CLASSES,
+    RelativeClass,
     classify_fema_zone,
     relative_class_for,
 )
@@ -10,7 +12,7 @@ from rgv_flood.severity import (
 
 def test_every_mapping_entry_uses_a_known_class():
     for entry in MAPPING:
-        assert entry["relative_class"] in RELATIVE_CLASSES
+        assert entry["relative_class"] in get_args(RelativeClass)
         assert entry["rationale"].strip()
 
 

@@ -24,7 +24,3 @@ RGV_BBOX: tuple[float, float, float, float] = (-99.7, 25.6, -96.9, 27.1)
 
 FIPS_TO_SLUG: dict[str, str] = {c["fips"]: slug for slug, c in COUNTIES.items()}
 SHORT_NAMES: dict[str, str] = {slug: c["name"].removesuffix(" County") for slug, c in COUNTIES.items()}
-
-
-def is_county(slug: str) -> bool:
-    return slug in COUNTIES

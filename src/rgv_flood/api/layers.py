@@ -65,14 +65,13 @@ def layer_geojson(layer_id: str, request: Request, db: Db):
     """The layer's GeoJSON as the pipeline built it: stored gzipped and sent that
     way to any browser that accepts it (all of them); a browser that already has
     this version gets a 304 without the geometry being read at all."""
-    etag = data_access.layer_etag(db, layer_id)
-    if etag is None:
+    layer = data_access.layer_geojson_gzip(db, layer_id, request.headers.get("if-none-match", ""))
+    if layer is None:
         raise HTTPException(404, "No such layer")
-    quoted = f'"{etag}"'
-    headers = {"ETag": quoted, "Cache-Control": LAYER_CACHE, "Vary": "Accept-Encoding"}
-    if quoted in request.headers.get("if-none-match", ""):
+    headers = {"ETag": f'"{layer["etag"]}"', "Cache-Control": LAYER_CACHE, "Vary": "Accept-Encoding"}
+    body = layer["body"]
+    if body is None:
         return Response(status_code=304, headers=headers)
-    body = data_access.layer_geojson_gzip(db, layer_id)
     if "gzip" in request.headers.get("accept-encoding", ""):
         return Response(body, media_type="application/json", headers={**headers, "Content-Encoding": "gzip"})
     return Response(gzip.decompress(body), media_type="application/json", headers=headers)

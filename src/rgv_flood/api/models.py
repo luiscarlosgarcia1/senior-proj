@@ -190,14 +190,11 @@ class HistoryYear(BaseModel):
     claims: int
     paid: int
     flood_event: str | None = None
-    busiest_month: int | None = None
     policies: int | None = None
     claims_per_1000_policies: float | None = None
     rain_inches: float | None = None
     complete_gauges: int
     wettest_day_inches: float | None = None
-    noaa_flood_events: int | None = None
-    nws_flood_reports: int | None = None
 
 
 class HistoryTotals(BaseModel):

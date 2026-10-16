@@ -1,6 +1,7 @@
 """App settings (RGV_* environment) and read-only database access."""
 
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
@@ -50,3 +51,33 @@ def test_database_is_read_only(fixture_db):
 
 def test_database_scalar(fixture_db):
     assert Database(fixture_db).scalar("select count(*) from weather_stations") == 3
+
+
+def _database_with(path: Path, value: int) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute("create table t (n integer)")
+        connection.execute("insert into t values (?)", (value,))
+    connection.close()
+
+
+def test_database_keeps_one_connection_per_thread(fixture_db):
+    database = Database(fixture_db)
+    database.rows("select 1")
+    first = database._local.held[1]
+
+    database.rows("select 1")
+
+    assert database._local.held[1] is first
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows can't replace a file another connection holds open")
+def test_database_reopens_a_replaced_file(tmp_path):
+    path = tmp_path / "db.sqlite3"
+    _database_with(path, 1)
+    database = Database(path)
+    assert database.scalar("select n from t") == 1
+
+    _database_with(tmp_path / "rebuilt.sqlite3", 2)
+    (tmp_path / "rebuilt.sqlite3").replace(path)
+
+    assert database.scalar("select n from t") == 2

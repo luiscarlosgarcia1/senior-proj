@@ -24,9 +24,6 @@ from typing import Literal
 
 RelativeClass = Literal["high", "moderate", "low", "uncategorized"]
 
-# Ordered worst-to-best for legend rendering.
-RELATIVE_CLASSES: tuple[RelativeClass, ...] = ("high", "moderate", "low", "uncategorized")
-
 _NUMBERED_A_ZONE = re.compile(r"^A\d+$")  # A1..A30 — legacy numbered SFHA zones
 _NUMBERED_V_ZONE = re.compile(r"^V\d+$")  # V1..V30 — legacy numbered coastal SFHA zones
 

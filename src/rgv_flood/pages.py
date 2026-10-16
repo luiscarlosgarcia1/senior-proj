@@ -13,7 +13,6 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from rgv_flood import data_access
@@ -47,14 +46,14 @@ def _built_label(db) -> str | None:
     return t("footer.built", date=f"{when:%b} {when.day}, {when.year}")
 
 
-def _render(request: Request, template: str, db, nav_active: str):
+def _render(request: Request, template: str, db, nav_active: str, **context):
     response = templates.TemplateResponse(request, template, {
         "nav_active": nav_active,
         "theme_bootstrap": THEME_BOOTSTRAP,
         "catalog": load_catalog(),
-        "built_label": _built_label(db),
         "data_ready": db.exists,
         "settings": request.app.state.settings,
+        **context,
     })
     response.headers["Cache-Control"] = "no-cache"
     return response
@@ -67,9 +66,4 @@ def map_page(request: Request, db: Db):
 
 @router.get("/claims", include_in_schema=False)
 def claims_page(request: Request, db: Db):
-    return _render(request, "claims.html", db, "claims")
-
-
-@router.get("/analysis", include_in_schema=False)
-def analysis_moved():
-    return RedirectResponse("/claims", status_code=308)
+    return _render(request, "claims.html", db, "claims", built_label=_built_label(db))

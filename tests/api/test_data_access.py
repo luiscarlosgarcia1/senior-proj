@@ -18,7 +18,7 @@ def test_history_by_year_totals(fixture_db):
 
     by_year = {y["year"]: y for y in history["years"]}
     hanna = by_year[2020]
-    assert (hanna["claims"], hanna["paid"], hanna["flood_event"], hanna["busiest_month"]) == (2, 1500, "Hurricane Hanna", 7)
+    assert (hanna["claims"], hanna["paid"], hanna["flood_event"]) == (2, 1500, "Hurricane Hanna")
     assert hanna["claims_per_1000_policies"] == 2.0
     assert hanna["rain_inches"] == 15.0  # the average of the two complete gauges
     assert by_year[2018]["rain_inches"] is None  # the only gauge missed too many days

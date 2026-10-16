@@ -28,13 +28,6 @@ def test_claims_page_renders(api_client):
     assert "Claims &amp; rainfall by year" in response.text
 
 
-def test_analysis_redirects(api_client):
-    response = api_client.get("/analysis", follow_redirects=False)
-
-    assert response.status_code == 308
-    assert response.headers["location"] == "/claims"
-
-
 def test_county_selector_lists_the_four_counties(api_client):
     html = api_client.get("/").text
 

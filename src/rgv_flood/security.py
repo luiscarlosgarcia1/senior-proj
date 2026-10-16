@@ -9,8 +9,8 @@ workers from blob: URLs. Plotly inserts <style> elements, hence
 
 from __future__ import annotations
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
 def content_security_policy(inline_script_hashes: list[str] | tuple[str, ...] = ()) -> str:
@@ -30,9 +30,12 @@ def content_security_policy(inline_script_hashes: list[str] | tuple[str, ...] = 
     ])
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, inline_script_hashes: list[str] | tuple[str, ...] = ()) -> None:
-        super().__init__(app)
+class SecurityHeadersMiddleware:
+    """Adds the headers to every response that doesn't set its own (plain ASGI,
+    so response bodies stream through untouched)."""
+
+    def __init__(self, app: ASGIApp, inline_script_hashes: list[str] | tuple[str, ...] = ()) -> None:
+        self.app = app
         self.headers = {
             "Content-Security-Policy": content_security_policy(inline_script_hashes),
             "X-Content-Type-Options": "nosniff",
@@ -40,8 +43,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Permissions-Policy": "geolocation=(), camera=(), microphone=()",
         }
 
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        for name, value in self.headers.items():
-            response.headers.setdefault(name, value)
-        return response
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                for name, value in self.headers.items():
+                    headers.setdefault(name, value)
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)

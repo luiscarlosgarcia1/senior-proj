@@ -54,31 +54,27 @@ def available_layers(db: Database) -> list[dict]:
     return [_layer(row) for row in db.app_rows(f"select {LAYER_COLUMNS} from layers order by position")]
 
 
-def layer(db: Database, layer_id: str) -> dict | None:
-    """One layer's descriptive metadata."""
-    rows = db.app_rows(f"select {LAYER_COLUMNS} from layers where id = ?", (layer_id,))
-    return _layer(rows[0]) if rows else None
+def layer_geojson_gzip(db: Database, layer_id: str, if_none_match: str = "") -> dict | None:
+    """The layer's ETag and its FeatureCollection, gzipped exactly as the
+    pipeline built it, in one query. `body` is None (the geometry isn't read)
+    when `if_none_match` already names the ETag. None for an unknown layer."""
+    rows = db.app_rows(
+        """select etag, case when instr(:held, '"' || etag || '"') then null else geojson_gzip end as body
+           from layers where id = :id""",
+        {"id": layer_id, "held": if_none_match},
+    )
+    return rows[0] if rows else None
 
 
-def layer_etag(db: Database, layer_id: str) -> str | None:
-    """A token that changes whenever the layer's GeoJSON does (None for an unknown layer)."""
-    rows = db.app_rows("select etag from layers where id = ?", (layer_id,))
-    return rows[0]["etag"] if rows else None
-
-
-def layer_geojson_gzip(db: Database, layer_id: str) -> bytes | None:
-    """The layer's FeatureCollection, gzipped, exactly as the pipeline built it."""
-    rows = db.app_rows("select geojson_gzip from layers where id = ?", (layer_id,))
-    return rows[0]["geojson_gzip"] if rows else None
-
-
-def is_tiled(db: Database, layer_id: str) -> bool:
-    return db.scalar("select delivery = 'tiles' from layers where id = ?", (layer_id,)) == 1
-
-
-def layer_tile(db: Database, layer_id: str, z: int, x: int, y: int) -> bytes | None:
-    """One vector tile (gzipped MVT), or None where the layer has nothing."""
-    return db.scalar("select data from layer_tiles where layer_id = ? and z = ? and x = ? and y = ?", (layer_id, z, x, y))
+def layer_tile(db: Database, layer_id: str, z: int, x: int, y: int) -> dict | None:
+    """{"data": one vector tile (gzipped MVT), or None where the layer has nothing}
+    for a tiled layer; None for a layer that isn't tiled."""
+    rows = db.app_rows(
+        """select (select data from layer_tiles t where t.layer_id = l.id and z = ? and x = ? and y = ?) as data
+           from layers l where l.id = ? and l.delivery = 'tiles'""",
+        (z, x, y, layer_id),
+    )
+    return rows[0] if rows else None
 
 
 # ---- flood events, reports, rainfall ----
@@ -196,8 +192,8 @@ def rainfall_near_event(db: Database, event: dict) -> dict:
     days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
     readings = db.app_rows(
         """select s.station_id, s.name, s.lon, s.lat, o.date, o.value
-           from weather_observations o join weather_stations s using (station_id)
-           where o.element = 'PRCP' and s.county = ? and o.date between ? and ?""",
+           from weather_stations s cross join weather_observations o using (station_id)
+           where s.county = ? and o.date between ? and ? and o.element = 'PRCP'""",
         (event["county"], first.isoformat(), last.isoformat()),
     )
     gauges: dict[str, dict] = {}
@@ -385,8 +381,7 @@ def rank_correlation(xs: list[float], ys: list[float]) -> float | None:
 
 def history_by_year(db: Database, county_slug: str | None, last_year: int) -> dict:
     """Every year from 1978 to `last_year`: flood-insurance claims and what they
-    paid, policies in force, the year's rain, its wettest day, and how many
-    flood events and flood reports were recorded."""
+    paid, policies in force, the year's rain and its wettest day."""
     claims = _by_year(db,
         """select year_of_loss as year, count(*) as claims,
                   sum(paid_building + paid_contents + paid_increased_cost_of_compliance) as paid
@@ -397,12 +392,6 @@ def history_by_year(db: Database, county_slug: str | None, last_year: int) -> di
         """select year_of_loss as year, flood_event, count(*) as n from nfip_claims
            where year_of_loss >= :first and flood_event is not null{where}
            group by year_of_loss, flood_event order by n""",  # the last row per year wins: the biggest
-        county_slug,
-    )
-    busiest_month = _by_year(db,
-        """select year_of_loss as year, substr(date_of_loss, 6, 2) as month, count(*) as n from nfip_claims
-           where year_of_loss >= :first and date_of_loss is not null{where}
-           group by year_of_loss, month order by n""",  # the last row per year wins: the busiest
         county_slug,
     )
     policies = _by_year(db, "select year, sum(policies) as policies from nfip_policies_by_year where 1=1{where} group by year", county_slug)
@@ -417,8 +406,6 @@ def history_by_year(db: Database, county_slug: str | None, last_year: int) -> di
         county_slug,
         county_column="s.county",
     )
-    events = _by_year(db, "select cast(substr(date, 1, 4) as integer) as year, count(*) as n from flood_events where 1=1{where} group by year", county_slug)
-    reports = _by_year(db, "select cast(substr(reported_at, 1, 4) as integer) as year, count(*) as n from nws_flood_reports where 1=1{where} group by year", county_slug)
 
     years = []
     for year in range(HISTORY_FIRST_YEAR, last_year + 1):
@@ -430,14 +417,11 @@ def history_by_year(db: Database, county_slug: str | None, last_year: int) -> di
             "claims": count,
             "paid": round(c.get("paid") or 0),
             "flood_event": (named.get(year) or {}).get("flood_event"),
-            "busiest_month": int(busiest_month[year]["month"]) if count and year in busiest_month else None,
             "policies": p["policies"] if p else None,
             "claims_per_1000_policies": round(1000 * count / p["policies"], 1) if p and p["policies"] else None,
             "rain_inches": round(annual / 254, 1) if annual is not None else None,
             "complete_gauges": r.get("complete_gauges") or 0,
             "wettest_day_inches": round(r["wettest_tenths_mm"] / 254, 2) if r.get("wettest_tenths_mm") else None,
-            "noaa_flood_events": events.get(year, {}).get("n", 0) if year >= 1996 else None,
-            "nws_flood_reports": reports.get(year, {}).get("n", 0) if year >= 2005 else None,
         })
 
     with_rain = [y for y in years if y["rain_inches"] is not None and y["wettest_day_inches"] is not None]

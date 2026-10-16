@@ -13,10 +13,10 @@ import mimetypes
 import sys
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from rgv_flood import pages
 from rgv_flood.api import api_router, geocode
@@ -38,8 +38,6 @@ else:
         LiveSignalScheduler,
         build_refresh_commands,
     )
-
-PACKAGE = Path(__file__).parent
 
 # Windows can map .js to text/plain in the registry; module scripts must be JS.
 mimetypes.add_type("text/javascript", ".js")
@@ -65,6 +63,35 @@ def configure_logging(level: str) -> None:
         handler.setFormatter(_JsonFormatter())
         root.addHandler(handler)
     root.setLevel(level)
+
+
+class AccessLogMiddleware:
+    """One JSON line per request: method, path, status and how long it took."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        started = time.perf_counter()
+        status = 500  # unless the app gets as far as starting a response
+
+        async def send_noting_status(message: Message) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_noting_status)
+        finally:
+            access_log.info(json.dumps({
+                "method": scope["method"],
+                "path": scope["path"],
+                "status": status,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+            }))
 
 
 def _start_scheduler(app: FastAPI, settings: Settings) -> None:
@@ -94,18 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db = Database(settings.database)
     geocode.install(app)
 
-    @app.middleware("http")
-    async def log_requests(request: Request, call_next):
-        started = time.perf_counter()
-        response = await call_next(request)
-        access_log.info(json.dumps({
-            "method": request.method,
-            "path": request.url.path,
-            "status": response.status_code,
-            "duration_ms": round((time.perf_counter() - started) * 1000, 1),
-        }))
-        return response
-
+    app.add_middleware(AccessLogMiddleware)
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(SecurityHeadersMiddleware, inline_script_hashes=pages.inline_script_hashes())
     app.include_router(health_api.router)
