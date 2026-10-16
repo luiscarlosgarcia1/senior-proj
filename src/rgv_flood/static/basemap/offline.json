@@ -1,0 +1,8 @@
+{
+  "version": 8,
+  "name": "RGV offline",
+  "sources": {},
+  "layers": [
+    {"id": "background", "type": "background", "paint": {"background-color": "#e7e6e3"}}
+  ]
+}

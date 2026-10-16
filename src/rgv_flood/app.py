@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -19,6 +20,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from rgv_flood.api import api_router, geocode
 from rgv_flood.api import health as health_api
+from rgv_flood.assets import STATIC_ROOT, VersionedStaticFiles
 from rgv_flood.db import Database
 from rgv_flood.security import SecurityHeadersMiddleware
 from rgv_flood.settings import Settings, get_settings
@@ -37,6 +39,10 @@ else:
     )
 
 PACKAGE = Path(__file__).parent
+
+# Windows can map .js to text/plain in the registry; module scripts must be JS.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/javascript", ".mjs")
 access_log = logging.getLogger("rgv_flood.access")
 
 
@@ -103,4 +109,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.include_router(health_api.router)
     app.include_router(api_router)
+    app.mount("/static", VersionedStaticFiles(directory=STATIC_ROOT), name="static")
     return app

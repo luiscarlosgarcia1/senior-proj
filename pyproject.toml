@@ -15,6 +15,10 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
 ]
 
+[project.scripts]
+dev = "rgv_flood.cli:dev"
+serve = "rgv_flood.cli:serve"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

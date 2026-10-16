@@ -1,0 +1,64 @@
+{
+  "files": [
+    {
+      "name": "maplibre-gl",
+      "url": "https://cdn.jsdelivr.net/npm/maplibre-gl@6.14.0/dist/maplibre-gl.mjs",
+      "path": "vendor/maplibre/maplibre-gl.mjs",
+      "sha256": "244d36122c1398da3a8259817cc6d71e04321afe6404f32606b4b6c6cc4f26fb"
+    },
+    {
+      "name": "maplibre-gl-worker",
+      "url": "https://cdn.jsdelivr.net/npm/maplibre-gl@6.14.0/dist/maplibre-gl-worker.mjs",
+      "path": "vendor/maplibre/maplibre-gl-worker.mjs",
+      "sha256": "5f1e2f0e1624082b7e88a06e4c86085992b0f8c02929801e552f3f7a119856a9"
+    },
+    {
+      "name": "maplibre-gl-css",
+      "url": "https://cdn.jsdelivr.net/npm/maplibre-gl@6.14.0/dist/maplibre-gl.css",
+      "path": "vendor/maplibre/maplibre-gl.css",
+      "sha256": "bacba6a85a867fcf602f2ff88331b8acf7edf3fbd063a519888cfbff39970193"
+    },
+    {
+      "name": "alpine-csp",
+      "url": "https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.17.4/dist/cdn.min.js",
+      "path": "vendor/alpine/alpine-csp.min.js",
+      "sha256": "0d18d7f8d7910e2e0212f0f056b12f50bebc3abb7d88d2f7c7cb4c336fe4519a"
+    },
+    {
+      "name": "plotly-basic",
+      "url": "https://cdn.jsdelivr.net/npm/plotly.js-basic-dist-min@4.1.2/plotly-basic.min.js",
+      "path": "vendor/plotly/plotly-basic.min.js",
+      "sha256": "fa18ed1c94c06576c0a867bb2477534716c39e5b22affe673f2a184317974926"
+    },
+    {
+      "name": "plex-sans-400",
+      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/files/ibm-plex-sans-latin-400-normal.woff2",
+      "path": "fonts/ibm-plex-sans-latin-400-normal.woff2",
+      "sha256": "3b646991d30055a93a4ecc499713d4347953a74a947ecab435ab72070cbdab0e"
+    },
+    {
+      "name": "plex-sans-500",
+      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/files/ibm-plex-sans-latin-500-normal.woff2",
+      "path": "fonts/ibm-plex-sans-latin-500-normal.woff2",
+      "sha256": "0717336fb31fcdcde4b8deb3675bb4a0f7f6d484864afcd6751ac29975962203"
+    },
+    {
+      "name": "plex-sans-600",
+      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/files/ibm-plex-sans-latin-600-normal.woff2",
+      "path": "fonts/ibm-plex-sans-latin-600-normal.woff2",
+      "sha256": "8960851d691c054ed38e259bdcf1a6190d157b4203ed5bb32c632a863fb8ec2f"
+    },
+    {
+      "name": "plex-mono-400",
+      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.3.0/files/ibm-plex-mono-latin-400-normal.woff2",
+      "path": "fonts/ibm-plex-mono-latin-400-normal.woff2",
+      "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
+    },
+    {
+      "name": "plex-mono-500",
+      "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.3.0/files/ibm-plex-mono-latin-500-normal.woff2",
+      "path": "fonts/ibm-plex-mono-latin-500-normal.woff2",
+      "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22"
+    }
+  ]
+}
