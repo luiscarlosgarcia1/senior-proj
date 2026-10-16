@@ -89,3 +89,19 @@ def test_map_page_loads_one_entry_module(api_client):
     modules = [line for line in html.splitlines() if 'type="module"' in line]
     assert len(modules) == 2  # store.js and the page entry
     assert "/static/js/pages/map.js?v=" in html
+
+
+def test_claims_table_says_where_each_column_comes_from(api_client):
+    html = api_client.get("/claims").text
+    notes = html[html.index("data-column-notes"):]
+
+    for column in ("Claims, Paid", "Per 1,000 pol.", "Rain, in · Wettest day, in", "Event"):
+        assert f">{column}</dt>" in notes
+    links = re.findall(r'href="([^"]+)"', notes[: notes.index("</dl>")])
+    assert links == [
+        "https://www.fema.gov/openfema-data-page/nfip-redacted-claims-v3",
+        "https://www.fema.gov/openfema-data-page/nfip-redacted-policies-v3",
+        "https://www.ncei.noaa.gov/cdo-web/search?datasetid=GHCND",
+        "https://www.fema.gov/openfema-data-page/nfip-redacted-claims-v3",
+    ]
+    assert "/api/open/" not in html  # pages people can read, not the raw API

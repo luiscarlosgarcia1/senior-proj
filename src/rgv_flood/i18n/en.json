@@ -102,7 +102,14 @@
   "claims.col.rain": "Rain, in",
   "claims.col.wettest": "Wettest day, in",
   "claims.col.event": "Event",
-  "claims.footnote": "Rain is the average of the gauges that reported on at least 330 days of the year; a dash means no gauge did. Dollars are as paid, not adjusted for inflation. Policies are counted from 2009.",
-  "claims.sources": "Sources",
-  "theme.dark": "Dark"
+  "theme.dark": "Dark",
+  "claims.notes.title": "Where each column comes from",
+  "claims.notes.claims": "Every flood-insurance claim FEMA lists for the county, counted by the year of the loss. Paid adds up the building, contents and compliance payments, as paid (not adjusted for inflation). Source:",
+  "claims.notes.claims_source": "FEMA, NFIP Redacted Claims (OpenFEMA)",
+  "claims.notes.rate": "Claims for every 1,000 flood-insurance policies in force that year. Policy counts start in 2009; earlier years show a dash. Policies:",
+  "claims.notes.rate_source": "FEMA, NFIP Redacted Policies (OpenFEMA)",
+  "claims.notes.rain": "Daily readings from NOAA rain gauges in the county. Rain is the average yearly total of the gauges that reported on at least 330 days; wettest day is the most any of them caught in one day. A dash means no gauge reported that often. Source:",
+  "claims.notes.rain_source": "NOAA, Global Historical Climatology Network Daily (Climate Data Online)",
+  "claims.notes.event": "The storm name FEMA gives the claims: the one the most claims carry that year. FEMA names only some claims, often a handful, so a blank doesn't mean there was no flood. Source:",
+  "claims.notes.event_source": "FEMA, NFIP Redacted Claims (floodEvent field)"
 }

@@ -89,15 +89,29 @@
         </tbody>
       </table>
     </div>
+    {# Each column, what it counts and who publishes it: links go to pages a person can read. #}
+    <div class="border-t border-line px-4 py-3" data-column-notes>
+      <h3 class="text-xs font-semibold uppercase tracking-[.9px] text-muted">{{ t("claims.notes.title") }}</h3>
+      <dl class="mt-2 grid gap-x-8 gap-y-2.5 text-sm leading-snug md:grid-cols-2">
+        {% for columns, note, url in (
+             ((t("claims.col.claims"), t("claims.col.paid")), "claims", "https://www.fema.gov/openfema-data-page/nfip-redacted-claims-v3"),
+             ((t("claims.col.rate"),), "rate", "https://www.fema.gov/openfema-data-page/nfip-redacted-policies-v3"),
+             ((t("claims.col.rain"), t("claims.col.wettest")), "rain", "https://www.ncei.noaa.gov/cdo-web/search?datasetid=GHCND"),
+             ((t("claims.col.event"),), "event", "https://www.fema.gov/openfema-data-page/nfip-redacted-claims-v3"),
+           ) %}
+        <div>
+          <dt class="font-semibold">{{ columns | join(", " if note == "claims" else " · ") }}</dt>
+          <dd class="text-muted">{{ t("claims.notes." ~ note) }}
+            <a href="{{ url }}" target="_blank" rel="noopener">{{ t("claims.notes." ~ note ~ "_source") }}</a></dd>
+        </div>
+        {% endfor %}
+      </dl>
+    </div>
   </div>
 
-  <footer class="mt-4 flex flex-col gap-1 text-[11.5px] leading-relaxed text-muted" data-claims-footer>
-    <p>{{ t("claims.footnote") }}</p>
-    <p><span>{{ t("claims.sources") }}</span>
-      <template x-for="source in sources" x-bind:key="source.id"><span> · <a x-bind:href="source.url" target="_blank" rel="noopener" x-text="source.dataset"></a></span></template>
-    </p>
-    {% if built_label %}<p>{{ built_label }}</p>{% endif %}
-  </footer>
+  {% if built_label %}
+  <footer class="mt-4 text-[11.5px] leading-relaxed text-muted" data-claims-footer><p>{{ built_label }}</p></footer>
+  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}

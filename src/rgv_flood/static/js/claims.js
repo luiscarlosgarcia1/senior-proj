@@ -23,22 +23,14 @@ document.addEventListener("alpine:init", () => {
 
   Alpine.data("claimsPage", () => ({
     history: null,
-    sources: [],
     metric: "claims",
     hoverYear: null,
     tables: { claims: false, rain: false, wettest: false },
     syncing: false,
 
-    async init() {
+    init() {
       Alpine.effect(() => this.load(Alpine.store("app").county));
       window.addEventListener("rgv:theme", () => this.draw());
-      try {
-        const body = await getJson("sources");
-        const wanted = new Set(["fema-nfip-claims", "fema-nfip-policies", "noaa-ghcn-daily", "noaa-storm-events"]);
-        this.sources = body.sources.filter((source) => wanted.has(source.id));
-      } catch (error) {
-        if (!isAbort(error)) console.warn("sources unavailable", error);
-      }
     },
     async load(county) {
       try {
