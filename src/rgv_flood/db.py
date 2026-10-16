@@ -12,8 +12,9 @@ from __future__ import annotations
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Depends, Request
 
 
 class Database:
@@ -50,3 +51,7 @@ class Database:
 def get_db(request: Request) -> Database:
     """FastAPI dependency: the app's database."""
     return request.app.state.db
+
+
+# Use as an endpoint parameter type: `def endpoint(db: Db): ...`
+Db = Annotated[Database, Depends(get_db)]
