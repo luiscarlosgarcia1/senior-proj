@@ -54,6 +54,32 @@ def test_public_boundary_hard_codes_the_public_profile_and_preserves_provider_co
     assert advisory.retrieved_at == NOW
 
 
+def test_public_boundary_suppresses_a_route_that_contains_a_blocked_segment():
+    provider = CapturingProvider(result(route_segment_ids=("open-road", "closure-a")))
+
+    advisory = WayfinderBoundary(provider).public_advisory(
+        Coordinate(26.2, -98.2), Coordinate(26.1, -98.1), ("closure-a",)
+    )
+
+    assert advisory.status == AdvisoryStatus.SUPPRESSED
+    assert advisory.route_segment_ids == ()
+    assert "route withheld because it includes a blocked segment" in advisory.reasons
+    assert "provider route included a caller-supplied blocked segment" in advisory.limitations
+
+
+def test_public_boundary_suppresses_a_route_when_provider_reports_violations():
+    provider = CapturingProvider(result(provider_violations=("avoided restriction was violated",)))
+
+    advisory = WayfinderBoundary(provider).public_advisory(
+        Coordinate(26.2, -98.2), Coordinate(26.1, -98.1)
+    )
+
+    assert advisory.status == AdvisoryStatus.SUPPRESSED
+    assert advisory.route_segment_ids == ()
+    assert "route withheld because the provider reported safety violations" in advisory.reasons
+    assert "provider-reported violations prevent publishing a route" in advisory.limitations
+
+
 def test_responder_profile_needs_a_complete_current_written_authorization():
     provider = CapturingProvider(result())
     incomplete = WrittenResponderAuthorization("", "County", NOW, NOW + timedelta(days=1), "RGV")
