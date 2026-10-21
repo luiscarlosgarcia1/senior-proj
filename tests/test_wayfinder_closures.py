@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from rgv_flood.wayfinder_closures import (
     ClosureEvidencePolicy,
     ClosureRecord,
@@ -95,6 +97,50 @@ def test_only_fresh_authoritative_conservatively_matched_flood_or_closure_is_a_h
     assert all(item.disposition == RestrictionDisposition.CAUTION for item in assessment.cautions)
     assert assessment.cautions[0].geometry is not None
     assert assessment.cautions[0].attributes
+
+
+@pytest.mark.parametrize(
+    "invalid_time",
+    (
+        NOW.replace(tzinfo=None),
+        NOW + timedelta(minutes=1),
+    ),
+    ids=("naive", "future"),
+)
+def test_invalid_feed_completion_time_makes_coverage_unavailable(invalid_time: datetime):
+    assessment = ClosureEvidencePolicy().assess(
+        (coverage("drivetexas:points", completed_at=invalid_time), coverage("drivetexas:lines")),
+        (),
+        NOW,
+    )
+
+    assert assessment.can_publish_route is False
+    assert assessment.status == "uncertain"
+    invalid_feed = next(feed for feed in assessment.feeds if feed.source == "drivetexas:points")
+    assert invalid_feed.status == "unavailable"
+    assert invalid_feed.age is None
+    assert "invalid completion time" in invalid_feed.limitation
+
+
+@pytest.mark.parametrize(
+    "invalid_time",
+    (
+        NOW.replace(tzinfo=None),
+        NOW + timedelta(minutes=1),
+    ),
+    ids=("naive", "future"),
+)
+def test_invalid_record_retrieval_time_remains_a_caution(invalid_time: datetime):
+    assessment = ClosureEvidencePolicy().assess(
+        (coverage("drivetexas:points"), coverage("drivetexas:lines")),
+        (record("invalid-time", retrieved_at=invalid_time),),
+        NOW,
+    )
+
+    assert assessment.can_publish_route is True
+    assert assessment.hard_restrictions == ()
+    assert [item.native_id for item in assessment.cautions] == ["invalid-time"]
+    assert assessment.cautions[0].limitation == "official record has an invalid retrieval time"
 
 
 def test_unknown_condition_and_unknown_match_remain_visible_cautions_without_an_inferred_status():
