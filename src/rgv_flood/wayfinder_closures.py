@@ -146,7 +146,7 @@ class ClosureEvidencePolicy:
             if item is None:
                 statuses.append(FeedStatus(source, "TxDOT", "", "unavailable", None, None, "required official feed has no snapshot"))
                 continue
-            age = now - item.completed_at if item.completed_at else None
+            age = self._valid_age(item.completed_at, now)
             if item.retrieval_failure:
                 status, limitation = "failed", item.retrieval_failure
             elif not item.corridor_covered:
@@ -154,7 +154,11 @@ class ClosureEvidencePolicy:
             elif not item.is_complete:
                 status, limitation = "incomplete", "latest official snapshot did not complete"
             elif age is None:
-                status, limitation = "unavailable", "latest official snapshot has no completion time"
+                if item.completed_at is None:
+                    limitation = "latest official snapshot has no completion time"
+                else:
+                    limitation = "latest official snapshot has an invalid completion time"
+                status = "unavailable"
             elif age > self._freshness_budget:
                 status, limitation = "stale", "latest official snapshot exceeds the freshness budget"
             else:
@@ -163,14 +167,17 @@ class ClosureEvidencePolicy:
         return tuple(statuses)
 
     def _evaluate_record(self, record: ClosureRecord, now: datetime) -> EvaluatedRestriction:
-        fresh = now - record.retrieved_at <= self._freshness_budget
+        age = self._valid_age(record.retrieved_at, now)
+        fresh = age is not None and age <= self._freshness_budget
         hard_restriction = (
             record.condition_type_code in HARD_BLOCKING_CONDITION_CODES
             and record.match_basis == MatchBasis.CONSERVATIVE_ROUTE_MATCH
             and fresh
         )
         limitation = None
-        if not fresh:
+        if age is None:
+            limitation = "official record has an invalid retrieval time"
+        elif not fresh:
             limitation = "official record exceeds the freshness budget"
         elif record.condition_type_code not in HARD_BLOCKING_CONDITION_CODES:
             limitation = "condition type is not a verified closure or flooding restriction"
@@ -182,6 +189,19 @@ class ClosureEvidencePolicy:
             RestrictionDisposition.HARD_RESTRICTION if hard_restriction else RestrictionDisposition.CAUTION,
             limitation,
         )
+
+    @staticmethod
+    def _valid_age(timestamp: datetime | None, now: datetime) -> timedelta | None:
+        """Return an age only for timestamps safe to use as current evidence."""
+        if not isinstance(timestamp, datetime) or not isinstance(now, datetime):
+            return None
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            return None
+        if now.tzinfo is None or now.utcoffset() is None:
+            return None
+        if timestamp > now:
+            return None
+        return now - timestamp
 
     @staticmethod
     def _as_caution(record: EvaluatedRestriction, limitation: str) -> EvaluatedRestriction:
