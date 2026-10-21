@@ -132,6 +132,24 @@ class WayfinderBoundary:
                 blocked_segment_ids=blocked_segment_ids,
             )
         )
+        blocked_segments_in_route = set(result.route_segment_ids) & set(blocked_segment_ids)
+        if blocked_segments_in_route or result.provider_violations:
+            reasons = list(result.reasons)
+            limitations = list(result.limitations)
+            if blocked_segments_in_route:
+                reasons.append("route withheld because it includes a blocked segment")
+                limitations.append("provider route included a caller-supplied blocked segment")
+            if result.provider_violations:
+                reasons.append("route withheld because the provider reported safety violations")
+                limitations.append("provider-reported violations prevent publishing a route")
+            return RouteAdvisory(
+                status=AdvisoryStatus.SUPPRESSED,
+                reasons=tuple(reasons),
+                limitations=tuple(limitations),
+                evidence=result.evidence,
+                retrieved_at=result.retrieved_at,
+                route_segment_ids=(),
+            )
         return RouteAdvisory(
             status=result.status,
             reasons=result.reasons,
