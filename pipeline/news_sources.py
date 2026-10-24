@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from typing import Protocol
 from xml.etree import ElementTree
@@ -144,3 +144,68 @@ class KrgvSource:
             return None
         description = head.meta.get("og:description") or head.meta.get("description") or ""
         return Page(url=url, headline=headline, description=description, published_at=listing.published)
+
+
+_PATH_DATE = re.compile(r"/(\d{4})/(\d{2})/(\d{2})/")
+_TRUNCATED = re.compile(r"\s*\[(?:…|\.\.\.)\]\s*$")
+
+
+def _date_in_path(url: str) -> str | None:
+    """'/featured/2021/01/12/slug/' -> '2021-01-12'; None for a path with no real date."""
+    hit = _PATH_DATE.search(url)
+    if not hit:
+        return None
+    year, month, day = map(int, hit.groups())
+    try:
+        date(year, month, day)
+    except ValueError:
+        return None
+    return f"{year:04d}-{month:02d}-{day:02d}" if 2000 <= year <= 2100 else None
+
+
+class MyrgvSource:
+    """myrgv.com: The Monitor, The Brownsville Herald and the Valley Morning Star.
+
+    A WordPress site. Its robots.txt allows crawling, and `wp-sitemap.xml` lists
+    every post (about 62,000 from 2016 on) in `wp-sitemap-posts-post-N.xml`. The
+    sitemap's dates are last-modified times, but each post's address carries the
+    day it was published (`/featured/2021/01/12/headline-words/`), and the page
+    itself gives the exact time as `article:published_time`.
+    """
+
+    id = "news-myrgv"
+    publisher = "The Monitor / Brownsville Herald / Valley Morning Star (myrgv.com)"
+    home_url = "https://myrgv.com"
+    index_url = "https://myrgv.com/wp-sitemap.xml"
+
+    def listings(self, fetcher: Fetcher) -> Iterator[Listing]:
+        index = fetcher.get(self.index_url)
+        if index is None:
+            return
+        seen: set[str] = set()
+        for entry in _sitemap_entries(index, "sitemap"):
+            location = (entry.findtext(f"{SITEMAP}loc") or "").strip()
+            if "/wp-sitemap-posts-post-" not in location:
+                continue
+            page = fetcher.get(location)
+            if page is None:
+                continue
+            for url in _sitemap_entries(page, "url"):
+                address = normalize_url((url.findtext(f"{SITEMAP}loc") or "").strip())
+                day = _date_in_path(address)
+                if day is None or address in seen:
+                    continue
+                seen.add(address)
+                yield Listing(url=address, published=day, title=None)
+
+    def parse(self, url: str, html: str, listing: Listing) -> Page | None:
+        if NOT_FREE.search(html):
+            return None
+        head = _Head()
+        head.feed(html)
+        headline = head.meta.get("og:title") or head.title.strip()
+        if not headline or listing.published is None:
+            return None
+        description = _TRUNCATED.sub("…", head.meta.get("og:description") or head.meta.get("description") or "")
+        published = to_utc(head.meta.get("article:published_time")) or listing.published
+        return Page(url=url, headline=headline, description=description, published_at=published)
