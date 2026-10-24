@@ -177,3 +177,11 @@ def test_limit_stops_after_that_many_fetches():
 def test_decode_page_handles_windows_1252_pages():
     assert build_news.decode_page("Inundación".encode()) == "Inundación"
     assert build_news.decode_page(b"High School\x92s Flooding Issues") == "High School\u2019s Flooding Issues"
+
+
+def test_limit_is_a_dry_run_that_writes_nothing(tmp_path):
+    database = tmp_path / "db.sqlite3"
+    build_news.main(database, sources=[FakeSource([listing(GOOD)], {GOOD: page(GOOD, "Flooding closes streets in McAllen")})],
+                    fetcher=FakeFetcher(), limit=5)
+
+    assert not database.exists()

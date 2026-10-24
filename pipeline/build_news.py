@@ -14,8 +14,8 @@ Fills news_articles, and one `data_sources` row per publisher.
 
 Run:  uv run python pipeline/build_news.py [--limit N]
 Safe to re-run (replaces only its own table). The first run downloads many
-pages at one per second; later runs read the cache. `--limit N` stops after N
-new downloads, for a look at what a run would do.
+pages at one per second; later runs read the cache. `--limit N` is a dry run: it
+stops after N new downloads, prints what it found and writes nothing.
 """
 
 from __future__ import annotations
@@ -155,6 +155,11 @@ def main(
     retrieved_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     rows, stats = collect(sources, fetcher, retrieved_at=retrieved_at, limit=limit)
+    if limit is not None:  # a look at what a run does: never replaces the table with a partial set
+        for source in sources:
+            print(f"{source.id}: {dict(stats[source.id])}")
+        print(f"dry run: {len(rows)} stories would be kept so far; nothing was written")
+        return
     if not rows:
         raise SystemExit("No news stories were collected; news_articles was left as it was.")
 
@@ -173,5 +178,5 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--limit", type=int, help="stop after this many new downloads")
+    parser.add_argument("--limit", type=int, help="dry run: stop after this many new downloads and write nothing")
     main(limit=parser.parse_args().limit)

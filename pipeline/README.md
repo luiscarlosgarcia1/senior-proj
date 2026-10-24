@@ -136,7 +136,7 @@ column is the first county named; `counties` lists every one.
 Each publisher also gets a `data_sources` row saying how many stories it listed,
 kept and skipped. A publisher that can't be reached is skipped and the other
 still loads. The first run downloads thousands of pages at one per second, so it
-takes hours; `--limit N` stops after N new downloads to see what a run does.
+takes hours; `--limit N` is a dry run: it stops after N new downloads, prints what it found and writes nothing.
 
 Known limits: terms like "hurricane" or "drainage" also catch stories that are
 not about a flood; headline capitalization makes the streets and waterways
