@@ -76,10 +76,15 @@ Open <http://127.0.0.1:8000>.
   flies to it and shows the rain at the nearest gauges that day (or the full
   day-before-to-day-after table), with local news and NWS reports from the same days.
   Picking the selected event again clears it.
-- **Rainfall records, local reports, data sources.** The rest of the right
-  panel: the wettest single days at the gauges, curated news and government
-  reports, and every dataset behind the map with the date it was downloaded and
-  the date the database was built.
+- **Rainfall records, local reports, news stories, data sources.** The rest of
+  the right panel: the wettest single days at the gauges, curated news and
+  government reports, flood-related news stories from KRGV and myrgv.com (2018
+  on, each linked to the publisher), and every dataset behind the map with the
+  date it was downloaded and the date the database was built.
+- **News stories.** A picked event also lists news stories for its county from
+  the day before it began to three days after it ended. Nothing links a story
+  to one NOAA event, so this is a match on county and date only, and the panel
+  says so. Stories are not verified flood conditions.
 - **County.** The county selector fits the map to that county and narrows the
   events, rainfall records, reports and alerts to it.
 - **Basemap labels.** Town, road and place names show on the US side only;
@@ -122,9 +127,10 @@ responses at `/docs`:
 | `GET /api/v1/layers/{id}.geojson` | A layer's GeoJSON, sent pre-compressed |
 | `GET /api/v1/tiles/{id}/{z}/{x}/{y}.pbf` | Vector tiles of the layers over 1 MB compressed (the two TWDB layers) |
 | `GET /api/v1/events`, `/api/v1/events.geojson` | NOAA flood events, filterable by county, type and year |
-| `GET /api/v1/events/{id}/context` | One event's gauge rain, curated reports and NWS reports |
+| `GET /api/v1/events/{id}/context` | One event's gauge rain, curated reports, NWS reports and news stories |
 | `GET /api/v1/rainfall-records` | The wettest single days at the gauges |
 | `GET /api/v1/reports` | Curated local news and government reports |
+| `GET /api/v1/news` | Flood-related news stories, 2018 on, filterable by county and year |
 | `GET /api/v1/live-signals`, `/api/v1/live-signals.geojson` | Current official alerts and when they were last refreshed |
 | `GET /api/v1/history` | Claims, payments, policies, rain and events, year by year |
 | `GET /api/v1/sources` | Every dataset's publisher, link, download date and size; the build date |
@@ -146,6 +152,7 @@ Everything lives in `data/generated/rgv-flood.sqlite3`, built by
 | `flood_events` | Flood-type events from NOAA's Storm Events Database, 1996–2025 |
 | `flood_reports` | Hand-curated local news and government flood reports |
 | `nws_flood_reports` | Flooding reported to the National Weather Service in Brownsville, 2005 on |
+| `news_articles` | Flood-related news stories from KRGV and myrgv.com, 2018 on: headline, short excerpt, county, city, link (never the article text) |
 | `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily rain readings, 1978–2025 |
 | `rainfall_station_years` | Each gauge's yearly rain, wettest day and days reported |
 | `nfip_claims`, `nfip_policies_by_year` | Every NFIP flood-insurance claim since 1978; policies per county and year since 2009 |
