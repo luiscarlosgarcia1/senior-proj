@@ -10,6 +10,7 @@ Service, and each rain gauge's yearly totals.
   rainfall_station_years  per gauge and year: days with a reading, total rain,
                           wettest day, days over 2 inches. Worked out from
                           weather_observations, so build_events.py runs first.
+  rainfall_station_months the same per gauge and month, for the trends page
 
 Run:  uv run python pipeline/build_history.py
 Safe to re-run (replaces only its own tables).
@@ -59,6 +60,19 @@ SELECT station_id,
 FROM weather_observations
 WHERE element = 'PRCP'
 GROUP BY station_id, substr(date, 1, 4)
+"""
+
+RAINFALL_STATION_MONTHS = """
+INSERT INTO rainfall_station_months
+SELECT station_id,
+       CAST(substr(date, 1, 4) AS INTEGER),
+       CAST(substr(date, 6, 2) AS INTEGER),
+       count(*),
+       sum(value),
+       max(value)
+FROM weather_observations
+WHERE element = 'PRCP'
+GROUP BY station_id, substr(date, 1, 4), substr(date, 6, 2)
 """
 
 
@@ -193,11 +207,14 @@ def main(database: Path = DATABASE, seed_dir: Path = SEED_DIR) -> None:
         replace_table(connection, "rainfall_station_years", [])
         connection.execute(RAINFALL_STATION_YEARS, {"two_inches": TWO_INCHES_IN_TENTHS_MM})
         station_years = connection.execute("select count(*) from rainfall_station_years").fetchone()[0]
+        replace_table(connection, "rainfall_station_months", [])
+        connection.execute(RAINFALL_STATION_MONTHS)
+        station_months = connection.execute("select count(*) from rainfall_station_months").fetchone()[0]
         record_sources(connection, _sources(STORM_REPORTS_FILE, reports, claims_file, claim_rows))
 
     print(f"nws_flood_reports: {len(reports)} reports")
     print(f"nfip_claims: {len(claim_rows):,} claims; nfip_policies_by_year: {len(policy_rows)} county-years")
-    print(f"rainfall_station_years: {station_years} gauge-years")
+    print(f"rainfall_station_years: {station_years} gauge-years; rainfall_station_months: {station_months} gauge-months")
     print("written to", database)
 
 

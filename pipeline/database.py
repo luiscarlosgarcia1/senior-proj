@@ -5,7 +5,7 @@ everything the app reads:
 
   build_events.py   fills  flood_events, flood_reports, weather_stations,
                            weather_observations
-  build_history.py  fills  rainfall_station_years, nws_flood_reports,
+  build_history.py  fills  rainfall_station_years, rainfall_station_months, nws_flood_reports,
                            nfip_claims, nfip_policies_by_year
   build_news.py     fills  news_articles
   build_layers.py   fills  layers, layer_tiles
@@ -153,6 +153,20 @@ TABLES: dict[str, tuple[str, ...]] = {
              wettest_day_tenths_mm REAL NOT NULL,
              days_over_2_inches INTEGER NOT NULL,
              PRIMARY KEY (station_id, year)
+           ) WITHOUT ROWID""",
+    ),
+    # The same by month, for the trends page: per gauge and month, how many days
+    # the gauge reported rain, the month's total and its wettest day. A month
+    # counts toward a monthly chart only if the gauge reported enough of its days.
+    "rainfall_station_months": (
+        """CREATE TABLE IF NOT EXISTS rainfall_station_months (
+             station_id TEXT NOT NULL REFERENCES weather_stations(station_id),
+             year INTEGER NOT NULL,
+             month INTEGER NOT NULL,
+             days_reported INTEGER NOT NULL,
+             total_tenths_mm REAL NOT NULL,
+             wettest_day_tenths_mm REAL NOT NULL,
+             PRIMARY KEY (station_id, year, month)
            ) WITHOUT ROWID""",
     ),
     # Flooding the public, police, emergency managers and spotters reported to

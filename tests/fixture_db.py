@@ -199,6 +199,21 @@ GAUGE_YEARS = [
 ]
 
 
+def _gauge_month(station_id: str, year: int, month: int, days: int, total: float, wettest: float) -> dict:
+    return {
+        "station_id": station_id, "year": year, "month": month, "days_reported": days,
+        "total_tenths_mm": total, "wettest_day_tenths_mm": wettest,
+    }
+
+
+GAUGE_MONTHS = [
+    _gauge_month(WESLACO, 2020, 6, 30, 508, 254),  # 2 in; wettest day 1 in
+    _gauge_month(WESLACO, 2020, 7, 31, 1270, 1016),  # 5 in; wettest day 4 in
+    _gauge_month(WESLACO, 2020, 8, 10, 100, 50),  # too few days reported to count
+    _gauge_month(MCALLEN, 2020, 7, 31, 2540, 1270),  # 10 in
+]
+
+
 PHOTOS_GEOJSON = (
     '{"type":"FeatureCollection","features":['
     '{"type":"Feature","geometry":{"type":"Point","coordinates":[-98.2,26.2]},'
@@ -258,4 +273,5 @@ def build_fixture_database(path, *, history: bool = False):
             replace_table(connection, "nfip_claims", CLAIMS)
             replace_table(connection, "nfip_policies_by_year", POLICIES)
             replace_table(connection, "rainfall_station_years", GAUGE_YEARS)
+            replace_table(connection, "rainfall_station_months", GAUGE_MONTHS)
     return path
