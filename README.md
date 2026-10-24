@@ -13,6 +13,24 @@ Educational and comparative only. Not for emergency routing, engineering,
 insurance, flood-depth estimates, or flood-zone certification. Follow official
 emergency guidance.
 
+## Trends over time
+
+`/trends` draws the database's time series on one year axis, for the four
+counties together or one at a time, and for all of a county's rain gauges or a
+single gauge:
+
+- **Rain.** Yearly rain, the wettest day of the year, days over 2 inches, and
+  monthly rain. A gauge-year counts only if the gauge reported at least 330
+  days, and a gauge-month only if it reported at least 25; a pale bar marks a
+  year with too many days missing, and an incomplete month is left blank, not
+  drawn as dry.
+- **Flood events** per year from NOAA, stacked by type (1996 on).
+- **Flood reports** per year to NWS Brownsville, stacked by kind (2005 on).
+- **News stories** per year from the news archive (2018 on).
+
+Each chart can be viewed as a table. Flood insurance claims and policies stay
+on `/claims`, which `/trends` links to.
+
 ## Stack
 
 | Part | What it uses |
@@ -21,7 +39,7 @@ emergency guidance.
 | Data | One SQLite database, `data/generated/rgv-flood.sqlite3`, opened read-only by the app (WAL mode) |
 | Pages | Jinja templates built from components, Alpine.js (CSP build) for behaviour, Tailwind CSS v4 compiled by Tailwind's standalone binary through `pytailwindcss` |
 | Map | MapLibre GL JS on OpenStreetMap vector basemaps from OpenFreeMap (Positron in light mode, the default; Dark in dark mode) |
-| Charts | Plotly.js, on the claims page only |
+| Charts | Plotly.js, on the claims and trends pages |
 | Pipeline | Python with geopandas, shapely and GDAL: pulls every source and writes the database |
 | Deployment | Docker image behind Caddy (HTTPS), built and published by GitHub Actions |
 
@@ -133,6 +151,7 @@ responses at `/docs`:
 | `GET /api/v1/news` | Flood-related news stories, 2018 on, filterable by county and year |
 | `GET /api/v1/live-signals`, `/api/v1/live-signals.geojson` | Current official alerts and when they were last refreshed |
 | `GET /api/v1/history` | Claims, payments, policies, rain and events, year by year |
+| `GET /api/v1/trends` | Rain by year and month, flood events, NWS reports and news stories per year; filter by county and gauge |
 | `GET /api/v1/sources` | Every dataset's publisher, link, download date and size; the build date |
 | `GET /api/v1/geocode?q=` | Address search, proxied to Nominatim (cached, one request a second upstream, 30 a minute per visitor) |
 | `GET /health` | Status for Docker and Caddy; 503 when the database is missing |
@@ -155,6 +174,7 @@ Everything lives in `data/generated/rgv-flood.sqlite3`, built by
 | `news_articles` | Flood-related news stories from KRGV and myrgv.com, 2018 on: headline, short excerpt, county, city, link (never the article text) |
 | `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily rain readings, 1978–2025 |
 | `rainfall_station_years` | Each gauge's yearly rain, wettest day and days reported |
+| `rainfall_station_months` | Each gauge's monthly rain, wettest day and days reported |
 | `nfip_claims`, `nfip_policies_by_year` | Every NFIP flood-insurance claim since 1978; policies per county and year since 2009 |
 | `data_sources` | Where each dataset came from and when it was downloaded |
 | `build_info` | When the database was built |

@@ -28,6 +28,7 @@ Every table is defined in `database.py`. Every query the app runs is in
 | `weather_stations` | GHCN-Daily station used for a county | `build_events.py` |
 | `weather_observations` | daily rain reading at a station, 1978–2025 | `build_events.py` |
 | `rainfall_station_years` | station and year: days with a rain reading, total, wettest day, days over 2 inches | `build_history.py` |
+| `rainfall_station_months` | station and month: days with a rain reading, total, wettest day (for the trends page) | `build_history.py` |
 | `nfip_claims` | NFIP flood-insurance claim in the four counties, 1978 on | `build_history.py` |
 | `nfip_policies_by_year` | county and year: NFIP policies in force, 2009 on | `build_history.py` |
 | `nws_flood_reports` | flood, flash flood, heavy rain or coastal flood report to NWS Brownsville, 2005 on | `build_history.py` |
@@ -92,7 +93,9 @@ counts from the seed file, and the flood reports made to NWS Brownsville since
 kept once). Then works out each gauge's yearly totals from
 `weather_observations`, so it runs after `build_events.py`. The app's
 year-by-year page reads these tables; a gauge's year counts toward a year's
-rain only if it reported on at least 330 days.
+rain only if it reported on at least 330 days. `rainfall_station_months` is the
+same per gauge and month for the trends page, where a gauge's month counts only
+if it reported on at least 25 days.
 
 `seed_nfip_policies.py` regenerates the policy seed file from a saved copy of
 FEMA's retired v2 policies export; the build never runs it.
