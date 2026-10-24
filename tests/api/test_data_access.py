@@ -138,3 +138,16 @@ def test_trends_without_the_news_table(fixture_db):
     result = _trends(fixture_db)
 
     assert result["news_by_year"] == [] and result["news_first_year"] is None
+
+
+def test_trends_database_built_before_monthly_rain_existed(fixture_db):
+    import sqlite3
+    from contextlib import closing
+
+    with closing(sqlite3.connect(fixture_db)) as connection, connection:
+        connection.execute("drop table rainfall_station_months")
+
+    result = _trends(fixture_db, county="hidalgo")
+
+    assert result["rain_months"] == []
+    assert result["rain_years"]  # the rest of the page still has its data

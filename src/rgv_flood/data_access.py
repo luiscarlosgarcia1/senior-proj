@@ -595,6 +595,16 @@ def _rain_years(db: Database, county_slug: str | None, station_id: str | None) -
 
 
 def _rain_months(db: Database, county_slug: str | None, station_id: str | None) -> list[dict]:
+    """Monthly rain, or nothing in a database built before the monthly table existed."""
+    try:
+        return _rain_months_in(db, county_slug, station_id)
+    except sqlite3.OperationalError as error:
+        if "no such table" not in str(error):
+            raise
+        return []
+
+
+def _rain_months_in(db: Database, county_slug: str | None, station_id: str | None) -> list[dict]:
     if station_id:
         rows = db.app_rows(
             "select year, month, days_reported, total_tenths_mm as total from rainfall_station_months "
