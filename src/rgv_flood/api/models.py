@@ -234,6 +234,58 @@ class History(BaseModel):
     correlation: Correlation
 
 
+# ---- trends ----
+
+
+class TrendStation(BaseModel):
+    station_id: str
+    name: str
+    county: str
+
+
+class RainYear(BaseModel):
+    year: int
+    inches: float | None = None
+    wettest_day_inches: float | None = None
+    days_over_2_inches: float | None = None
+    complete: bool
+
+
+class RainMonth(BaseModel):
+    year: int
+    month: int
+    inches: float | None = None
+    days_reported: int
+
+
+class EventYear(BaseModel):
+    year: int
+    total: int
+    by_type: dict[str, int]
+
+
+class NwsYear(BaseModel):
+    year: int
+    total: int
+    by_kind: dict[str, int]
+
+
+class NewsYear(BaseModel):
+    year: int
+    count: int
+
+
+class Trends(BaseModel):
+    stations: list[TrendStation]
+    station: str | None = None
+    rain_years: list[RainYear]
+    rain_months: list[RainMonth]
+    events_by_year: list[EventYear]
+    nws_by_year: list[NwsYear]
+    news_by_year: list[NewsYear]
+    news_first_year: int | None = None
+
+
 # ---- sources ----
 
 
