@@ -73,3 +73,15 @@ def test_event_context_news_missing_table_is_empty(make_client, fixture_db):
     context = make_client(fixture_db).get("/api/v1/events/noaa-storm-events-1/context").json()
 
     assert context["news"] == []
+
+
+def test_news_text_keys_exist():
+    import json
+    from pathlib import Path
+
+    import rgv_flood
+
+    catalog = json.loads((Path(rgv_flood.__file__).parent / "i18n" / "en.json").read_text(encoding="utf-8"))
+
+    for key in ("news.title", "news.note", "news.none", "events.news", "events.news_note", "events.no_news"):
+        assert catalog.get(key), key

@@ -145,12 +145,15 @@ document.addEventListener("alpine:init", () => {
     toggleTable() {
       Alpine.store("events").showTable = !Alpine.store("events").showTable;
     },
-    // inside x-for: `this.gauge`, `this.report`, `this.nws`
+    // inside x-for: `this.gauge`, `this.report`, `this.nws`, `this.story`
     cells() {
       return this.gauge.inches.map((value, i) => ({ id: i, text: value == null ? "—" : value.toFixed(2) }));
     },
     reportMeta() {
       return [this.report.publisher, day(this.report.event_date)].filter(Boolean).join(" · ");
+    },
+    newsMeta() {
+      return [this.story.publisher, day(this.story.published_at), this.story.city].filter(Boolean).join(" · ");
     },
     nwsMeta() {
       const when = new Date(this.nws.reported_at).toLocaleTimeString("en-US", { timeZone: "America/Chicago", timeStyle: "short" });

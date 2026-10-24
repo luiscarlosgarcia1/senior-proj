@@ -1,0 +1,12 @@
+{# Flood-related news stories, linked to the publisher (historical, not live conditions). #}
+<h2 class="mb-1 text-md font-semibold">{{ t("news.title") }}</h2>
+<p class="mb-2.5 text-xs text-muted">{{ t("news.note") }}</p>
+<ul class="flex max-h-[360px] flex-col gap-2.5 overflow-auto">
+  <template x-for="article in items" x-bind:key="article.id">
+    <li class="leading-snug" data-news>
+      <div class="mb-0.5 font-mono text-xs text-muted" x-text="meta()"></div>
+      <a x-bind:href="article.source_url" target="_blank" rel="noopener" x-text="article.headline"></a>
+    </li>
+  </template>
+</ul>
+<p class="text-sm text-muted" x-show="empty" x-cloak>{{ t("news.none") }}</p>

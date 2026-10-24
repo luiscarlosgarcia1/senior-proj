@@ -1,5 +1,5 @@
 /* The side panel's reference lists: rainfall records, curated local reports,
- * and where the data came from. The first two follow the selected county. */
+ * news stories, and where the data came from. The county lists follow the selected county. */
 
 import { getJson, isAbort } from "../api.js";
 import { t } from "../i18n.js";
@@ -55,6 +55,13 @@ document.addEventListener("alpine:init", () => {
     // inside x-for: `this.report`
     meta() {
       return [this.report.publisher, day(this.report.event_date)].filter(Boolean).join(" · ");
+    },
+  }));
+
+  Alpine.data("newsPanel", countyList("news", {
+    // inside x-for: `this.article`
+    meta() {
+      return [this.article.publisher, day(this.article.published_at), this.article.city].filter(Boolean).join(" · ");
     },
   }));
 

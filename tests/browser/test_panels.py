@@ -124,3 +124,30 @@ def test_clicking_the_selected_event_again_clears_it(map_page):
     wait_js(page, "window.__rgvMap.getSource('selection').serialize().data.features.length === 0")
     expect(page.locator(".is-selected[data-event]")).to_have_count(0)
     wait_js(page, "!location.hash.includes('event=')")
+
+
+def test_news_panel_lists_stories_and_follows_the_county(map_page):
+    page = map_page()
+    stories = page.locator("[data-panel=news] [data-news]")
+
+    expect(stories).to_have_count(3)
+    expect(stories.first).to_contain_text("Flooding closes Weslaco streets")
+    expect(stories.first).to_contain_text("KRGV Channel 5 News")
+    expect(stories.first.locator("a")).to_have_attribute("href", "https://example.test/news/news-1")
+    expect(page.locator("[data-panel=news]")).to_contain_text("not verified flood conditions")
+
+    page.locator("#county-header").select_option("cameron")
+
+    expect(stories).to_have_count(1)
+    expect(page.locator("[data-panel=news]")).to_contain_text("Brownsville flooding strands drivers")
+
+
+def test_event_detail_lists_nearby_news(map_page):
+    page = map_page()
+
+    page.locator("[data-event='noaa-storm-events-1']").click()
+
+    detail = page.locator("[data-event-detail]")
+    expect(detail.locator("[data-event-news]")).to_have_count(1)
+    expect(detail.locator("[data-event-news]")).to_contain_text("Flooding closes Weslaco streets")
+    expect(detail).to_contain_text("Matched on county and date only")
