@@ -7,9 +7,10 @@ everything the app reads:
                            weather_observations
   build_history.py  fills  rainfall_station_years, nws_flood_reports,
                            nfip_claims, nfip_policies_by_year
+  build_news.py     fills  news_articles
   build_layers.py   fills  layers, layer_tiles
   build_all.py      fills  build_info
-  all three builds  note what they loaded in  data_sources
+  every build       note what they loaded in  data_sources
   run_*.py          keep   live_signals (and its two bookkeeping tables) current
                            while the app runs
 
@@ -170,6 +171,27 @@ TABLES: dict[str, tuple[str, ...]] = {
              lat REAL
            )""",
         "CREATE INDEX IF NOT EXISTS nws_flood_reports_by_county_time ON nws_flood_reports(county, reported_at)",
+    ),
+    # Flood-related news stories, 2018 on: the headline, the page's own short
+    # description and a link, never the article text. `counties` and
+    # `matched_terms` are comma-separated; `county` is the first county the
+    # story names. A story gets no coordinate: nothing here is a location.
+    "news_articles": (
+        """CREATE TABLE IF NOT EXISTS news_articles (
+             id TEXT PRIMARY KEY,                  -- hash of the normalized URL
+             publisher TEXT NOT NULL,
+             source_url TEXT NOT NULL,
+             headline TEXT NOT NULL,
+             published_at TEXT NOT NULL,           -- UTC ISO 8601, or a bare date when that is all the page gave
+             excerpt TEXT,                         -- the page's own description, at most 300 characters
+             county TEXT,
+             counties TEXT NOT NULL,
+             city TEXT,
+             places TEXT,                          -- streets and water named in the headline or description
+             matched_terms TEXT NOT NULL,
+             retrieved_at TEXT NOT NULL
+           )""",
+        "CREATE INDEX IF NOT EXISTS news_articles_by_county_date ON news_articles(county, published_at)",
     ),
     # Every NFIP flood-insurance claim FEMA publishes for the four counties, 1978 on.
     "nfip_claims": (

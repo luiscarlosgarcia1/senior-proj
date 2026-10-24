@@ -117,6 +117,25 @@ SOURCES = [
         "id": "layer:fema-nfhl", "publisher": "FEMA", "dataset": "FEMA effective flood hazard (NFHL)",
         "url": None, "retrieved_at": None, "record_count": 20, "notes": None,
     },
+    {
+        "id": "news-krgv", "publisher": "KRGV Channel 5 News", "dataset": "Flood-related news stories (headline, excerpt, link)",
+        "url": "https://www.krgv.com", "retrieved_at": "2026-10-23T12:00:00Z", "record_count": 3, "notes": None,
+    },
+]
+
+def _news(story_id: str, county: str, published_at: str, headline: str, **values) -> dict:
+    return {
+        "id": story_id, "publisher": "KRGV Channel 5 News", "source_url": f"https://example.test/news/{story_id}",
+        "headline": headline, "published_at": published_at, "excerpt": "A short description.",
+        "county": county, "counties": county, "city": None, "places": None,
+        "matched_terms": "flood", "retrieved_at": "2026-10-23T12:00:00Z", **values,
+    }
+
+
+NEWS = [
+    _news("news-1", "hidalgo", "2020-07-27T14:03:00Z", "Flooding closes Weslaco streets", city="Weslaco"),
+    _news("news-2", "hidalgo", "2018-06-21", "Hidalgo County drainage crews work after June rain"),
+    _news("news-3", "cameron", "2020-07-27T09:00:00Z", "Brownsville flooding strands drivers", city="Brownsville"),
 ]
 
 
@@ -233,6 +252,7 @@ def build_fixture_database(path, *, history: bool = False):
         replace_table(connection, "layers", LAYERS)
         replace_table(connection, "layer_tiles", TILES)
         replace_table(connection, "nws_flood_reports", NWS_REPORTS)
+        replace_table(connection, "news_articles", NEWS)
         replace_table(connection, "build_info", [{"key": "built_at", "value": "2026-10-15T12:00:00Z"}])
         if history:
             replace_table(connection, "nfip_claims", CLAIMS)

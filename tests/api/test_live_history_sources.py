@@ -90,5 +90,5 @@ def test_sources_include_built_at(api_client):
     body = api_client.get("/api/v1/sources").json()
 
     assert body["built_at"] == "2026-10-15T12:00:00Z"
-    assert [s["id"] for s in body["sources"]] == ["noaa-storm-events", "layer:fema-nfhl"]
-    assert body["sources"][0]["retrieved_at"] == "2026-09-16T04:30:40Z"
+    assert [s["id"] for s in body["sources"]] == ["news-krgv", "noaa-storm-events", "layer:fema-nfhl"]
+    assert body["sources"][1]["retrieved_at"] == "2026-09-16T04:30:40Z"
