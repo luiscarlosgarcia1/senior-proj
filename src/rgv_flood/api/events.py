@@ -54,5 +54,6 @@ def event_context(event_id: str, request: Request, db: Db):
         rain=data_access.rainfall_near_event(db, event),
         reports=data_access.reports_near_event(db, event),
         nws_reports=data_access.nws_reports_near_event(db, event),
+        news=data_access.news_near_event(db, event),
     )
     return conditional_json(request, body, MAX_AGE)

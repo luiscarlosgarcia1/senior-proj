@@ -30,6 +30,12 @@ RAINFALL_TOP_N = 15
 CONTEXT_DAYS = 1
 # How many gauges to show for an event that has a point to measure from.
 NEAREST_GAUGES = 3
+# News stories shown for an event: from the day before it began to a few days
+# after it ended, since a story usually follows the flood it reports.
+NEWS_DAYS_BEFORE = 1
+NEWS_DAYS_AFTER = 3
+NEWS_LIMIT = 200
+NEWS_COLUMNS = "id, publisher, source_url, headline, published_at, excerpt, county, counties, city, places"
 
 
 def _where(equals: dict[str, str | None]) -> tuple[str, tuple]:
@@ -250,6 +256,62 @@ def nws_reports_near_event(db: Database, event: dict) -> list[dict]:
            where county = ? and substr(reported_at, 1, 10) between ? and ?
            order by reported_at, id""",
         (event["county"], first.isoformat(), last.isoformat()),
+    )
+
+
+def _news_rows(db: Database, query: str, parameters: tuple | dict = ()) -> list[dict]:
+    """News rows with `counties` as a list. Empty when the database was built
+    before news existed (no such table)."""
+    try:
+        rows = db.app_rows(query, parameters)
+    except sqlite3.OperationalError as error:
+        if "no such table" not in str(error):
+            raise
+        return []
+    for row in rows:
+        row["counties"] = [slug for slug in row["counties"].split(",") if slug]
+    return rows
+
+
+def news_articles(db: Database, county_slug: str | None = None, year: int | None = None) -> list[dict]:
+    """Flood news stories, newest first (at most NEWS_LIMIT), optionally for one
+    county (any story that names it) and/or one year of publication."""
+    conditions, parameters = [], []
+    if county_slug:
+        conditions.append("(county = ? or ',' || counties || ',' like ?)")
+        parameters += [county_slug, f"%,{county_slug},%"]
+    if year:
+        conditions.append("substr(published_at, 1, 4) = ?")
+        parameters.append(str(year))
+    where = f" where {' and '.join(conditions)}" if conditions else ""
+    return _news_rows(
+        db,
+        f"select {NEWS_COLUMNS} from news_articles{where} order by published_at desc, id limit {NEWS_LIMIT}",
+        tuple(parameters),
+    )
+
+
+def news_near_event(db: Database, event: dict) -> list[dict]:
+    """News stories that name the event's county and were published from the day
+    before the event began to a few days after it ended, oldest first.
+
+    Nothing links a story to one NOAA event, so this is a match on place and
+    date, and the page says so.
+    """
+    began = date.fromisoformat(event["date"])
+    ended = max(began, date.fromisoformat(event["date_end"] or event["date"]))
+    return _news_rows(
+        db,
+        f"""select {NEWS_COLUMNS} from news_articles
+            where (county = :county or ',' || counties || ',' like :like)
+              and substr(published_at, 1, 10) between :first and :last
+            order by published_at, id""",
+        {
+            "county": event["county"],
+            "like": f"%,{event['county']},%",
+            "first": (began - timedelta(days=NEWS_DAYS_BEFORE)).isoformat(),
+            "last": (ended + timedelta(days=NEWS_DAYS_AFTER)).isoformat(),
+        },
     )
 
 
