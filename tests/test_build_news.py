@@ -172,3 +172,8 @@ def test_limit_stops_after_that_many_fetches():
     build_news.collect([source], fetcher, retrieved_at="2026-10-23T12:00:00Z", limit=2)
 
     assert len(fetcher.requested) == 2
+
+
+def test_decode_page_handles_windows_1252_pages():
+    assert build_news.decode_page("Inundación".encode()) == "Inundación"
+    assert build_news.decode_page(b"High School\x92s Flooding Issues") == "High School\u2019s Flooding Issues"

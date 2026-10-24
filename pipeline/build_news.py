@@ -37,6 +37,14 @@ NEWS_SINCE = "2018-01-01"
 EXCERPT_LIMIT = 300
 
 
+def decode_page(body: bytes) -> str:
+    """UTF-8 when the page is valid UTF-8, otherwise Windows-1252 (some KRGV pages are)."""
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError:
+        return body.decode("cp1252", errors="replace")
+
+
 def excerpt_of(description: str) -> str | None:
     """The page's description, cut at a word boundary to at most EXCERPT_LIMIT characters."""
     text = " ".join(description.split())
@@ -98,7 +106,7 @@ def collect(
                     counts["unfetched"] += 1
                     continue
                 counts["fetched"] += 1
-                page = source.parse(listing.url, body.decode("utf-8", errors="replace"), listing)
+                page = source.parse(listing.url, decode_page(body), listing)
                 if page is None or page.published_at[:10] < since:
                     counts["unparsed" if page is None else "before_since"] += 1
                     continue
