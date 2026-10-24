@@ -503,3 +503,155 @@ def history_by_year(db: Database, county_slug: str | None, last_year: int) -> di
             "with_wettest_day": rank_correlation([y["claims"] for y in with_rain], [y["wettest_day_inches"] for y in with_rain]),
         },
     }
+
+
+# ---- trends: every time series the trends page draws ----
+
+TRENDS_FIRST_YEAR = 1996  # NOAA's flood events start here
+NWS_FIRST_YEAR = 2005  # NWS Brownsville reports start here
+NEWS_FIRST_YEAR = 2018  # the news archive starts here
+# A gauge's month counts toward a monthly chart only if it reported rain on at
+# least this many of its days (a year needs COMPLETE_GAUGE_DAYS).
+COMPLETE_MONTH_DAYS = 25
+
+
+class UnknownStation(ValueError):
+    """The gauge isn't in the database, or isn't in the county asked for."""
+
+
+def _counts_by_year(
+    db: Database, query: str, parameters: tuple, first: int, last: int, group: str
+) -> list[dict]:
+    """Every year from `first` to `last` with its total and its counts by `group`
+    (event type, report kind), a year with nothing in it included as zero."""
+    by_year: dict[int, dict[str, int]] = {}
+    for row in db.app_rows(query, parameters):
+        by_year.setdefault(int(row["year"]), {})[row["name"]] = row["n"]
+    return [
+        {"year": year, "total": sum(by_year.get(year, {}).values()), group: dict(sorted(by_year.get(year, {}).items()))}
+        for year in range(first, last + 1)
+    ]
+
+
+def _news_by_year(db: Database, county_slug: str | None, last_year: int) -> list[dict]:
+    """Stories per year from NEWS_FIRST_YEAR, or nothing when there is no news table or it is empty."""
+    county, parameters = "", ()
+    if county_slug:
+        county = " where county = ? or ',' || counties || ',' like ?"
+        parameters = (county_slug, f"%,{county_slug},%")
+    try:
+        rows = db.app_rows(
+            f"select substr(published_at, 1, 4) as year, count(*) as n from news_articles{county} group by year", parameters
+        )
+        any_news = db.scalar("select count(*) from news_articles")
+    except sqlite3.OperationalError as error:
+        if "no such table" not in str(error):
+            raise
+        return []
+    if not any_news:
+        return []
+    counts = {int(row["year"]): row["n"] for row in rows}
+    return [{"year": year, "count": counts.get(year, 0)} for year in range(NEWS_FIRST_YEAR, last_year + 1)]
+
+
+def _rain_years(db: Database, county_slug: str | None, station_id: str | None) -> list[dict]:
+    if station_id:
+        rows = db.app_rows(
+            "select year, days_reported, total_tenths_mm, wettest_day_tenths_mm, days_over_2_inches "
+            "from rainfall_station_years where station_id = ? order by year",
+            (station_id,),
+        )
+        return [
+            {
+                "year": row["year"],
+                "inches": _inches(row["total_tenths_mm"], 1),
+                "wettest_day_inches": _inches(row["wettest_day_tenths_mm"], 2),
+                "days_over_2_inches": float(row["days_over_2_inches"]),
+                "complete": row["days_reported"] >= COMPLETE_GAUGE_DAYS,
+            }
+            for row in rows
+        ]
+    where, parameters = _where({"s.county": county_slug})
+    rows = db.app_rows(
+        f"""select r.year,
+                   avg(case when r.days_reported >= {COMPLETE_GAUGE_DAYS} then r.total_tenths_mm end) as total,
+                   max(case when r.days_reported >= {COMPLETE_GAUGE_DAYS} then r.wettest_day_tenths_mm end) as wettest,
+                   avg(case when r.days_reported >= {COMPLETE_GAUGE_DAYS} then r.days_over_2_inches end) as over_2,
+                   sum(r.days_reported >= {COMPLETE_GAUGE_DAYS}) as complete_gauges
+            from rainfall_station_years r join weather_stations s using (station_id){where}
+            group by r.year order by r.year""",
+        parameters,
+    )
+    return [
+        {
+            "year": row["year"],
+            "inches": _inches(row["total"], 1) if row["complete_gauges"] else None,
+            "wettest_day_inches": _inches(row["wettest"], 2) if row["complete_gauges"] else None,
+            "days_over_2_inches": round(row["over_2"], 1) if row["complete_gauges"] else None,
+            "complete": bool(row["complete_gauges"]),
+        }
+        for row in rows
+    ]
+
+
+def _rain_months(db: Database, county_slug: str | None, station_id: str | None) -> list[dict]:
+    if station_id:
+        rows = db.app_rows(
+            "select year, month, days_reported, total_tenths_mm as total from rainfall_station_months "
+            "where station_id = ? order by year, month",
+            (station_id,),
+        )
+        for row in rows:
+            if row["days_reported"] < COMPLETE_MONTH_DAYS:
+                row["total"] = None  # too few days reported to say how much rain fell
+    else:
+        where, parameters = _where({"s.county": county_slug})
+        rows = db.app_rows(
+            f"""select m.year, m.month, max(m.days_reported) as days_reported,
+                       avg(case when m.days_reported >= {COMPLETE_MONTH_DAYS} then m.total_tenths_mm end) as total
+                from rainfall_station_months m join weather_stations s using (station_id){where}
+                group by m.year, m.month order by m.year, m.month""",
+            parameters,
+        )
+    return [
+        {
+            "year": row["year"],
+            "month": row["month"],
+            "inches": _inches(row["total"], 2) if row["total"] is not None else None,
+            "days_reported": row["days_reported"],
+        }
+        for row in rows
+    ]
+
+
+def trends(db: Database, county_slug: str | None, station_id: str | None, last_year: int) -> dict:
+    """The series behind the trends page, for one county (or all four) and
+    optionally one gauge: rain by year and by month, NOAA flood events, NWS flood
+    reports and news stories per year.
+
+    Raises UnknownStation if `station_id` isn't a gauge in that county.
+    """
+    where, parameters = _where({"county": county_slug})
+    stations = db.app_rows(f"select station_id, name, county from weather_stations{where} order by name", parameters)
+    if station_id and station_id not in {s["station_id"] for s in stations}:
+        raise UnknownStation(station_id)
+
+    return {
+        "stations": stations,
+        "station": station_id,
+        "rain_years": _rain_years(db, county_slug, station_id),
+        "rain_months": _rain_months(db, county_slug, station_id),
+        "events_by_year": _counts_by_year(
+            db,
+            f"select substr(date, 1, 4) as year, type as name, count(*) as n from flood_events{where} group by year, type",
+            parameters, TRENDS_FIRST_YEAR, last_year, "by_type",
+        ),
+        "nws_by_year": _counts_by_year(
+            db,
+            f"select substr(reported_at, 1, 4) as year, kind as name, count(*) as n from nws_flood_reports{where} "
+            "group by year, kind",
+            parameters, NWS_FIRST_YEAR, last_year, "by_kind",
+        ),
+        "news_by_year": (news := _news_by_year(db, county_slug, last_year)),
+        "news_first_year": NEWS_FIRST_YEAR if news else None,
+    }

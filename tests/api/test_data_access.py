@@ -53,3 +53,88 @@ def test_rank_correlation():
     assert data_access.rank_correlation([1, 2, 3], [3, 2, 1]) == -1.0
     assert data_access.rank_correlation([1, 2], [1, 2]) is None  # too few years
     assert data_access.rank_correlation([1, 2, 3], [5, 5, 5]) is None  # nothing varies
+
+
+# ---- trends ----
+
+
+def _trends(fixture_db, county=None, station=None, last_year=2021):
+    return data_access.trends(Database(fixture_db), county, station, last_year)
+
+
+def test_trends_events_per_year_include_empty_years(fixture_db):
+    events = {y["year"]: y for y in _trends(fixture_db)["events_by_year"]}
+
+    assert min(events) == data_access.TRENDS_FIRST_YEAR and max(events) == 2021
+    assert events[2018] == {"year": 2018, "total": 1, "by_type": {"Flood": 1}}
+    assert events[2019] == {"year": 2019, "total": 0, "by_type": {}}
+    assert events[2020] == {"year": 2020, "total": 1, "by_type": {"Flash flood": 1}}
+
+
+def test_trends_county_filter(fixture_db):
+    cameron = _trends(fixture_db, county="cameron")
+
+    assert all(y["total"] == 0 for y in cameron["events_by_year"])
+    nws = {y["year"]: y for y in cameron["nws_by_year"]}
+    assert nws[2020] == {"year": 2020, "total": 1, "by_kind": {"flood": 1}}
+    assert min(nws) == data_access.NWS_FIRST_YEAR
+    assert {y["year"]: y["total"] for y in _trends(fixture_db, county="hidalgo")["nws_by_year"]}[2020] == 1
+
+
+def test_trends_station_series(fixture_db):
+    result = _trends(fixture_db, county="hidalgo", station="USC00419588")  # Weslaco
+
+    assert result["station"] == "USC00419588"
+    assert [(y["year"], y["inches"], y["wettest_day_inches"], y["complete"]) for y in result["rain_years"]] == [
+        (2020, 10.0, 5.0, True)
+    ]
+    months = {m["month"]: m for m in result["rain_months"]}
+    assert months[6]["inches"] == 2.0 and months[7]["inches"] == 5.0
+    assert months[8]["inches"] is None and months[8]["days_reported"] == 10  # too few days to count, and never zero
+
+
+def test_trends_county_average_uses_only_complete_gauges(fixture_db):
+    result = _trends(fixture_db, county="hidalgo")
+
+    years = {y["year"]: y for y in result["rain_years"]}
+    assert years[2020]["inches"] == 15.0 and years[2020]["complete"] is True
+    assert years[2018]["inches"] is None and years[2018]["complete"] is False  # the only gauge missed too many days
+    months = {m["month"]: m["inches"] for m in result["rain_months"]}
+    assert months == {6: 2.0, 7: 7.5, 8: None}
+    assert [s["name"] for s in result["stations"]] == ["McAllen Airport", "Weslaco"]
+
+
+def test_trends_station_must_belong_to_the_county(fixture_db):
+    for county, station in (("starr", "USC00419588"), ("hidalgo", "NOPE")):
+        try:
+            _trends(fixture_db, county=county, station=station)
+        except data_access.UnknownStation:
+            continue
+        raise AssertionError(f"{station} in {county} should have been refused")
+
+
+def test_trends_county_without_gauges_is_empty(fixture_db):
+    result = _trends(fixture_db, county="cameron")
+
+    assert result["stations"] == [] and result["rain_years"] == [] and result["rain_months"] == []
+
+
+def test_trends_news_by_year(fixture_db):
+    everything = _trends(fixture_db)
+    hidalgo = _trends(fixture_db, county="hidalgo")
+
+    assert everything["news_first_year"] == data_access.NEWS_FIRST_YEAR
+    assert {y["year"]: y["count"] for y in everything["news_by_year"]} == {2018: 1, 2019: 0, 2020: 2, 2021: 0}
+    assert {y["year"]: y["count"] for y in hidalgo["news_by_year"]}[2020] == 1
+
+
+def test_trends_without_the_news_table(fixture_db):
+    import sqlite3
+    from contextlib import closing
+
+    with closing(sqlite3.connect(fixture_db)) as connection, connection:
+        connection.execute("drop table news_articles")
+
+    result = _trends(fixture_db)
+
+    assert result["news_by_year"] == [] and result["news_first_year"] is None
