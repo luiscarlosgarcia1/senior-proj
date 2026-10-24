@@ -1,6 +1,6 @@
 """Pipeline: pipeline/news_match.py — which news stories are about flooding in the four counties."""
 
-from news_match import match_story, places_in, slug_may_be_flood
+from news_match import match_story, mentions_flood, places_in, slug_may_be_flood
 
 
 def test_flood_story_with_city_matches():
@@ -70,3 +70,8 @@ def test_places_in_finds_streets():
 
 def test_places_in_nothing_found():
     assert places_in("Rain fell all night") is None
+
+
+def test_mentions_flood():
+    assert mentions_flood("City of Pharr Prevents Future Flooding with Trash Pick-Up Event")
+    assert not mentions_flood("Wreaths Across America Project in Need of Volunteers")

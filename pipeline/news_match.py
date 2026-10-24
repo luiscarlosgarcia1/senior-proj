@@ -83,11 +83,15 @@ def match_story(headline: str, description: str) -> StoryMatch | None:
     return StoryMatch(counties=counties, city=city, terms=terms)
 
 
+def mentions_flood(text: str) -> bool:
+    return _TERM.search(text) is not None
+
+
 def slug_may_be_flood(url: str) -> bool:
     """Whether the last part of the URL (a headline, hyphenated) has a flood term."""
     segments = [part for part in urlparse(url).path.split("/") if part]
     slug = segments[-1].rsplit(".", 1)[0].replace("-", " ") if segments else ""
-    return _TERM.search(slug) is not None
+    return mentions_flood(slug)
 
 
 _STREET = re.compile(
