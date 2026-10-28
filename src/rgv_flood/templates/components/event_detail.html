@@ -52,6 +52,15 @@
         </template>
         <li class="text-muted" x-show="!context.reports.length && !context.nws_reports.length">{{ t("events.no_related") }}</li>
       </ul>
+      <div class="mt-3 border-t border-line pt-2.5 text-xs text-muted">{{ t("events.news") }}</div>
+      <p class="mt-0.5 text-[11px] leading-snug text-muted">{{ t("events.news_note") }}</p>
+      <ul class="mt-1.5 flex flex-col gap-1.5 text-sm leading-snug">
+        <template x-for="story in context.news" x-bind:key="story.id">
+          <li class="flex gap-2" data-event-news><span class="text-brand" aria-hidden="true">▤</span>
+            <span><a x-bind:href="story.source_url" target="_blank" rel="noopener" x-text="story.headline"></a> <span class="text-muted" x-text="newsMeta()"></span></span></li>
+        </template>
+        <li class="text-muted" x-show="!context.news.length">{{ t("events.no_news") }}</li>
+      </ul>
     </div>
   </template>
 </div>

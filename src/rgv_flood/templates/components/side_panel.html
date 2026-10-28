@@ -1,5 +1,5 @@
 {# The map page's side panel: live alerts first, then flood events and the selected
-   event, rainfall records, local reports, and where the data came from. #}
+   event, rainfall records, local reports, news stories, and where the data came from. #}
 <section class="px-4 pb-3 pt-3.5" x-data="alertsPanel" data-panel="alerts">
   <div class="mb-2.5 flex items-baseline justify-between">
     <h2 class="flex items-center gap-2 text-md font-semibold"><span class="h-[7px] w-[7px] rounded-full bg-warn" aria-hidden="true"></span>{{ t("alerts.title") }}</h2>
@@ -24,6 +24,10 @@
 
 <section class="border-t border-line px-4 pb-3 pt-3.5" x-data="reportsPanel" data-panel="reports">
   {% include "components/report_list.html" %}
+</section>
+
+<section class="border-t border-line px-4 pb-3 pt-3.5" x-data="newsPanel" data-panel="news">
+  {% include "components/news_list.html" %}
 </section>
 
 <section class="border-t border-line px-4 pb-6 pt-3.5" x-data="sourcesPanel" data-panel="sources">

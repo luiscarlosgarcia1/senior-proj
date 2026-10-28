@@ -105,3 +105,19 @@ def test_claims_table_says_where_each_column_comes_from(api_client):
         "https://www.fema.gov/openfema-data-page/nfip-redacted-claims-v3",
     ]
     assert "/api/open/" not in html  # pages people can read, not the raw API
+
+
+def test_trends_page_renders(api_client):
+    response = api_client.get("/trends")
+
+    assert response.status_code == 200
+    assert 'id="trends-page"' in response.text
+    assert 'href="/trends"' in api_client.get("/").text  # the header links to it
+    assert response.headers["cache-control"] == "no-cache"
+    assert not re.search(r"\son[a-z]+\s*=", response.text)
+
+
+def test_trends_page_renders_before_build(make_client, tmp_path):
+    response = make_client(tmp_path / "not-built.sqlite3").get("/trends")
+
+    assert response.status_code == 200 and "No data yet" in response.text

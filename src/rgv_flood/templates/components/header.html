@@ -20,6 +20,10 @@
          {% if nav_active == "claims" %}aria-current="page"{% endif %}>
         <span class="hidden sm:inline">{{ t("nav.claims") }}</span><span class="sm:hidden">{{ t("nav.claims_short") }}</span>
       </a>
+      <a href="/trends" class="flex items-center px-3 font-medium no-underline {{ 'nav-active' if nav_active == 'trends' else 'text-muted hover:text-ink' }}"
+         {% if nav_active == "trends" %}aria-current="page"{% endif %}>
+        <span class="hidden sm:inline">{{ t("nav.trends") }}</span><span class="sm:hidden">{{ t("nav.trends_short") }}</span>
+      </a>
     </nav>
     {% include "components/theme_toggle.html" %}
     <div x-data="alertPill" class="hidden h-7 items-center gap-2 rounded-full border border-line2 bg-panel2 px-3 text-sm font-medium sm:flex">

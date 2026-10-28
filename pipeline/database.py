@@ -5,11 +5,12 @@ everything the app reads:
 
   build_events.py   fills  flood_events, flood_reports, weather_stations,
                            weather_observations
-  build_history.py  fills  rainfall_station_years, nws_flood_reports,
+  build_history.py  fills  rainfall_station_years, rainfall_station_months, nws_flood_reports,
                            nfip_claims, nfip_policies_by_year
+  build_news.py     fills  news_articles
   build_layers.py   fills  layers, layer_tiles
   build_all.py      fills  build_info
-  all three builds  note what they loaded in  data_sources
+  every build       note what they loaded in  data_sources
   run_*.py          keep   live_signals (and its two bookkeeping tables) current
                            while the app runs
 
@@ -154,6 +155,20 @@ TABLES: dict[str, tuple[str, ...]] = {
              PRIMARY KEY (station_id, year)
            ) WITHOUT ROWID""",
     ),
+    # The same by month, for the trends page: per gauge and month, how many days
+    # the gauge reported rain, the month's total and its wettest day. A month
+    # counts toward a monthly chart only if the gauge reported enough of its days.
+    "rainfall_station_months": (
+        """CREATE TABLE IF NOT EXISTS rainfall_station_months (
+             station_id TEXT NOT NULL REFERENCES weather_stations(station_id),
+             year INTEGER NOT NULL,
+             month INTEGER NOT NULL,
+             days_reported INTEGER NOT NULL,
+             total_tenths_mm REAL NOT NULL,
+             wettest_day_tenths_mm REAL NOT NULL,
+             PRIMARY KEY (station_id, year, month)
+           ) WITHOUT ROWID""",
+    ),
     # Flooding the public, police, emergency managers and spotters reported to
     # NWS Brownsville (Local Storm Reports), 2005 on.
     "nws_flood_reports": (
@@ -170,6 +185,27 @@ TABLES: dict[str, tuple[str, ...]] = {
              lat REAL
            )""",
         "CREATE INDEX IF NOT EXISTS nws_flood_reports_by_county_time ON nws_flood_reports(county, reported_at)",
+    ),
+    # Flood-related news stories, 2018 on: the headline, the page's own short
+    # description and a link, never the article text. `counties` and
+    # `matched_terms` are comma-separated; `county` is the first county the
+    # story names. A story gets no coordinate: nothing here is a location.
+    "news_articles": (
+        """CREATE TABLE IF NOT EXISTS news_articles (
+             id TEXT PRIMARY KEY,                  -- hash of the normalized URL
+             publisher TEXT NOT NULL,
+             source_url TEXT NOT NULL,
+             headline TEXT NOT NULL,
+             published_at TEXT NOT NULL,           -- UTC ISO 8601, or a bare date when that is all the page gave
+             excerpt TEXT,                         -- the page's own description, at most 300 characters
+             county TEXT,
+             counties TEXT NOT NULL,
+             city TEXT,
+             places TEXT,                          -- streets and water named in the headline or description
+             matched_terms TEXT NOT NULL,
+             retrieved_at TEXT NOT NULL
+           )""",
+        "CREATE INDEX IF NOT EXISTS news_articles_by_county_date ON news_articles(county, published_at)",
     ),
     # Every NFIP flood-insurance claim FEMA publishes for the four counties, 1978 on.
     "nfip_claims": (

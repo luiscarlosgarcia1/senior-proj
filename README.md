@@ -13,6 +13,24 @@ Educational and comparative only. Not for emergency routing, engineering,
 insurance, flood-depth estimates, or flood-zone certification. Follow official
 emergency guidance.
 
+## Trends over time
+
+`/trends` draws the database's time series on one year axis, for the four
+counties together or one at a time, and for all of a county's rain gauges or a
+single gauge:
+
+- **Rain.** Yearly rain, the wettest day of the year, days over 2 inches, and
+  monthly rain. A gauge-year counts only if the gauge reported at least 330
+  days, and a gauge-month only if it reported at least 25; a pale bar marks a
+  year with too many days missing, and an incomplete month is left blank, not
+  drawn as dry.
+- **Flood events** per year from NOAA, stacked by type (1996 on).
+- **Flood reports** per year to NWS Brownsville, stacked by kind (2005 on).
+- **News stories** per year from the news archive (2018 on).
+
+Each chart can be viewed as a table. Flood insurance claims and policies stay
+on `/claims`, which `/trends` links to.
+
 ## Stack
 
 | Part | What it uses |
@@ -21,7 +39,7 @@ emergency guidance.
 | Data | One SQLite database, `data/generated/rgv-flood.sqlite3`, opened read-only by the app (WAL mode) |
 | Pages | Jinja templates built from components, Alpine.js (CSP build) for behaviour, Tailwind CSS v4 compiled by Tailwind's standalone binary through `pytailwindcss` |
 | Map | MapLibre GL JS on OpenStreetMap vector basemaps from OpenFreeMap (Positron in light mode, the default; Dark in dark mode) |
-| Charts | Plotly.js, on the claims page only |
+| Charts | Plotly.js, on the claims and trends pages |
 | Pipeline | Python with geopandas, shapely and GDAL: pulls every source and writes the database |
 | Deployment | Docker image behind Caddy (HTTPS), built and published by GitHub Actions |
 
@@ -76,10 +94,15 @@ Open <http://127.0.0.1:8000>.
   flies to it and shows the rain at the nearest gauges that day (or the full
   day-before-to-day-after table), with local news and NWS reports from the same days.
   Picking the selected event again clears it.
-- **Rainfall records, local reports, data sources.** The rest of the right
-  panel: the wettest single days at the gauges, curated news and government
-  reports, and every dataset behind the map with the date it was downloaded and
-  the date the database was built.
+- **Rainfall records, local reports, news stories, data sources.** The rest of
+  the right panel: the wettest single days at the gauges, curated news and
+  government reports, flood-related news stories from KRGV and myrgv.com (2018
+  on, each linked to the publisher), and every dataset behind the map with the
+  date it was downloaded and the date the database was built.
+- **News stories.** A picked event also lists news stories for its county from
+  the day before it began to three days after it ended. Nothing links a story
+  to one NOAA event, so this is a match on county and date only, and the panel
+  says so. Stories are not verified flood conditions.
 - **County.** The county selector fits the map to that county and narrows the
   events, rainfall records, reports and alerts to it.
 - **Basemap labels.** Town, road and place names show on the US side only;
@@ -122,11 +145,13 @@ responses at `/docs`:
 | `GET /api/v1/layers/{id}.geojson` | A layer's GeoJSON, sent pre-compressed |
 | `GET /api/v1/tiles/{id}/{z}/{x}/{y}.pbf` | Vector tiles of the layers over 1 MB compressed (the two TWDB layers) |
 | `GET /api/v1/events`, `/api/v1/events.geojson` | NOAA flood events, filterable by county, type and year |
-| `GET /api/v1/events/{id}/context` | One event's gauge rain, curated reports and NWS reports |
+| `GET /api/v1/events/{id}/context` | One event's gauge rain, curated reports, NWS reports and news stories |
 | `GET /api/v1/rainfall-records` | The wettest single days at the gauges |
 | `GET /api/v1/reports` | Curated local news and government reports |
+| `GET /api/v1/news` | Flood-related news stories, 2018 on, filterable by county and year |
 | `GET /api/v1/live-signals`, `/api/v1/live-signals.geojson` | Current official alerts and when they were last refreshed |
 | `GET /api/v1/history` | Claims, payments, policies, rain and events, year by year |
+| `GET /api/v1/trends` | Rain by year and month, flood events, NWS reports and news stories per year; filter by county and gauge |
 | `GET /api/v1/sources` | Every dataset's publisher, link, download date and size; the build date |
 | `GET /api/v1/geocode?q=` | Address search, proxied to Nominatim (cached, one request a second upstream, 30 a minute per visitor) |
 | `GET /health` | Status for Docker and Caddy; 503 when the database is missing |
@@ -146,8 +171,10 @@ Everything lives in `data/generated/rgv-flood.sqlite3`, built by
 | `flood_events` | Flood-type events from NOAA's Storm Events Database, 1996–2025 |
 | `flood_reports` | Hand-curated local news and government flood reports |
 | `nws_flood_reports` | Flooding reported to the National Weather Service in Brownsville, 2005 on |
+| `news_articles` | Flood-related news stories from KRGV and myrgv.com, 2018 on: headline, short excerpt, county, city, link (never the article text) |
 | `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily rain readings, 1978–2025 |
 | `rainfall_station_years` | Each gauge's yearly rain, wettest day and days reported |
+| `rainfall_station_months` | Each gauge's monthly rain, wettest day and days reported |
 | `nfip_claims`, `nfip_policies_by_year` | Every NFIP flood-insurance claim since 1978; policies per county and year since 2009 |
 | `data_sources` | Where each dataset came from and when it was downloaded |
 | `build_info` | When the database was built |

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+          
+          
+          
+           
+
+
+
+     
+    	
+            
+              <url>
+                <loc>https://www.krgv.com/news/residentes-se-oponen-a-instalacion-de-cercas-automatizadas</loc>
+                <news:news>
+                  <news:publication>
+                    <news:name>KRGV</news:name>
+                    <news:language>en</news:language>
+                  </news:publication>
+                  <news:publication_date>
+					2018-12-10T06:48:06-06:00
+                  </news:publication_date>
+                  <news:title>Residentes Se Oponen A Instalación De Cercas Automatizadas</news:title>
+                  <news:keywords/>
+                </news:news>
+				<image:image>
+          <image:loc>https://www.krgv.com/images/news/2018-12/residentes-se-oponen-a-instalacion-de-cercas-automatizadas.png</image:loc>
+				</image:image>
+                <lastmod>2018-12-10T06:48:06-06:00</lastmod>
+				<changefreq>yearly</changefreq>
+              </url>
+<url>
+                <loc>https://www.krgv.com/news/city-of-pharr-prevents-future-flooding-with-trash-pick-up-event</loc>
+                <news:news>
+                  <news:publication>
+                    <news:name>KRGV</news:name>
+                    <news:language>en</news:language>
+                  </news:publication>
+                  <news:publication_date>
+					2018-11-03T17:15:07-06:00
+                  </news:publication_date>
+                  <news:title>City of Pharr Prevents Future Flooding with Trash Pick-Up Event</news:title>
+                  <news:keywords/>
+                </news:news>
+				<image:image>
+          <image:loc>https://www.krgv.com/images/news/2018-10/city-of-pharr-prevents-future-flooding-with-trash-pick-up-event.png</image:loc>
+				</image:image>
+                <lastmod>2018-11-03T17:15:07-06:00</lastmod>
+				<changefreq>yearly</changefreq>
+              </url>
+<url>
+                <loc>https://www.krgv.com/news/wreaths-across-america-project-in-need-of-volunteers</loc>
+                <news:news>
+                  <news:publication>
+                    <news:name>KRGV</news:name>
+                    <news:language>en</news:language>
+                  </news:publication>
+                  <news:publication_date>
+					2018-12-09T23:30:33-06:00
+                  </news:publication_date>
+                  <news:title>Wreaths Across America Project in Need of Volunteers</news:title>
+                  <news:keywords/>
+                </news:news>
+				<image:image>
+          <image:loc>https://www.krgv.com/images/news/2018-12/wreaths-across-america-project-in-need-of-volunteers.png</image:loc>
+				</image:image>
+                <lastmod>2018-12-09T23:30:33-06:00</lastmod>
+				<changefreq>yearly</changefreq>
+              </url>
+</urlset>

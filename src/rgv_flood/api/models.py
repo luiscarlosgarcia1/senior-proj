@@ -138,11 +138,25 @@ class NwsReport(BaseModel):
     lat: float | None = None
 
 
+class NewsArticle(BaseModel):
+    id: str
+    publisher: str
+    source_url: str
+    headline: str
+    published_at: str
+    excerpt: str | None = None
+    county: str | None = None
+    counties: list[str]
+    city: str | None = None
+    places: str | None = None
+
+
 class EventContext(BaseModel):
     event: Event
     rain: RainNearEvent
     reports: list[Report]
     nws_reports: list[NwsReport]
+    news: list[NewsArticle]
 
 
 class RainfallRecord(BaseModel):
@@ -218,6 +232,58 @@ class History(BaseModel):
     years: list[HistoryYear]
     totals: HistoryTotals
     correlation: Correlation
+
+
+# ---- trends ----
+
+
+class TrendStation(BaseModel):
+    station_id: str
+    name: str
+    county: str
+
+
+class RainYear(BaseModel):
+    year: int
+    inches: float | None = None
+    wettest_day_inches: float | None = None
+    days_over_2_inches: float | None = None
+    complete: bool
+
+
+class RainMonth(BaseModel):
+    year: int
+    month: int
+    inches: float | None = None
+    days_reported: int
+
+
+class EventYear(BaseModel):
+    year: int
+    total: int
+    by_type: dict[str, int]
+
+
+class NwsYear(BaseModel):
+    year: int
+    total: int
+    by_kind: dict[str, int]
+
+
+class NewsYear(BaseModel):
+    year: int
+    count: int
+
+
+class Trends(BaseModel):
+    stations: list[TrendStation]
+    station: str | None = None
+    rain_years: list[RainYear]
+    rain_months: list[RainMonth]
+    events_by_year: list[EventYear]
+    nws_by_year: list[NwsYear]
+    news_by_year: list[NewsYear]
+    news_first_year: int | None = None
 
 
 # ---- sources ----

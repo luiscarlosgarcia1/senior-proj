@@ -28,9 +28,11 @@ Every table is defined in `database.py`. Every query the app runs is in
 | `weather_stations` | GHCN-Daily station used for a county | `build_events.py` |
 | `weather_observations` | daily rain reading at a station, 1978–2025 | `build_events.py` |
 | `rainfall_station_years` | station and year: days with a rain reading, total, wettest day, days over 2 inches | `build_history.py` |
+| `rainfall_station_months` | station and month: days with a rain reading, total, wettest day (for the trends page) | `build_history.py` |
 | `nfip_claims` | NFIP flood-insurance claim in the four counties, 1978 on | `build_history.py` |
 | `nfip_policies_by_year` | county and year: NFIP policies in force, 2009 on | `build_history.py` |
 | `nws_flood_reports` | flood, flash flood, heavy rain or coastal flood report to NWS Brownsville, 2005 on | `build_history.py` |
+| `news_articles` | flood-related news story, 2018 on: headline, excerpt (at most 300 characters), county, city, link | `build_news.py` |
 | `data_sources` | dataset loaded into the database: publisher, URL, when it was downloaded, how many records | every build script |
 | `build_info` | `built_at`: when `build_all.py` last finished | `build_all.py` |
 | `live_signals` | current official alert, road condition or county notice | `run_*.py`, while the app runs |
@@ -91,10 +93,55 @@ counts from the seed file, and the flood reports made to NWS Brownsville since
 kept once). Then works out each gauge's yearly totals from
 `weather_observations`, so it runs after `build_events.py`. The app's
 year-by-year page reads these tables; a gauge's year counts toward a year's
-rain only if it reported on at least 330 days.
+rain only if it reported on at least 330 days. `rainfall_station_months` is the
+same per gauge and month for the trends page, where a gauge's month counts only
+if it reported on at least 25 days.
 
 `seed_nfip_policies.py` regenerates the policy seed file from a saved copy of
 FEMA's retired v2 policies export; the build never runs it.
+
+## `build_news.py` — flood news stories
+
+```bash
+uv run python pipeline/build_news.py [--limit N]
+```
+
+Collects flood-related news from two publishers, 2018 on:
+
+| Publisher | How stories are listed | Date |
+| --- | --- | --- |
+| KRGV Channel 5 News (`krgv.com`) | `sitemap.xml` → 24 `sitemap-news-N.xml` pages of 5,000 stories, not in date order, so each story is judged by its own date | the sitemap's `news:publication_date` (the page has none) |
+| The Monitor, Brownsville Herald and Valley Morning Star (`myrgv.com`) | WordPress `wp-sitemap.xml` → `wp-sitemap-posts-post-N.xml`, about 62,000 posts from 2016 | the day in the post's address, then the page's `article:published_time` |
+
+The steps for each story:
+
+1. Skip it if it is dated before 2018, or if its headline (the sitemap's title,
+   or the words in the address) has no flood term. That is most of them, and
+   they are never downloaded.
+2. Download the page through `news_fetch.Fetcher`: robots.txt is read first and
+   obeyed, requests to one host are at least a second apart, and every page is
+   kept in `tmp/news/`. A rebuild reads the cache and works offline.
+3. Read the headline and the page's own description (`news_sources.py`).
+4. Keep it only if the text has a flood term **and** names a county or a
+   city in one of the four (`news_match.py`: English and Spanish flood terms;
+   city names are case-sensitive, so "Rio Grande Valley" is not Rio Grande City
+   and "mission statement" is not Mission).
+
+What is stored is the headline, the first 300 characters of the page's
+description, the link, the publisher, the county and city, and any streets or
+waterways the headline and description name. **Never the article text**, and no
+coordinate: a story is not given a location it doesn't state. The `county`
+column is the first county named; `counties` lists every one.
+
+Each publisher also gets a `data_sources` row saying how many stories it listed,
+kept and skipped. A publisher that can't be reached is skipped and the other
+still loads. The first run downloads thousands of pages at one per second, so it
+takes hours; `--limit N` is a dry run: it stops after N new downloads, prints what it found and writes nothing.
+
+Known limits: terms like "hurricane" or "drainage" also catch stories that are
+not about a flood; headline capitalization makes the streets and waterways
+list approximate; ValleyCentral and Border Report (no deep archive) and
+2000–2017 coverage (the Wayback Machine) are not included yet.
 
 ## `build_layers.py` — map layers
 

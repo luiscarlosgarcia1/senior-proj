@@ -80,6 +80,27 @@ def test_gauge_years_are_worked_out_from_the_daily_readings(tmp_path):
     assert row == ("S1", 2020, 3, 700.0, 600.0, 1)
 
 
+def test_gauge_months_sum_each_stations_rain(tmp_path):
+    database = tmp_path / "db.sqlite3"
+    flags = {"measurement_flag": None, "source_flag": None, "observation_time_flag": None}
+    readings = [
+        {"station_id": "S1", "date": date, "element": element, "value": value, **flags}
+        for date, element, value in (
+            ("2020-06-01", "PRCP", 100), ("2020-06-02", "PRCP", 200), ("2020-06-03", "PRCP", 0),
+            ("2020-07-04", "PRCP", 50), ("2020-06-02", "TMAX", 300),
+        )
+    ]
+    with open_database(database) as connection:
+        replace_table(connection, "weather_observations", readings)
+        replace_table(connection, "rainfall_station_months", [])
+        connection.execute(build_history.RAINFALL_STATION_MONTHS)
+
+    with closing(sqlite3.connect(database)) as connection:
+        rows = connection.execute("select * from rainfall_station_months order by month").fetchall()
+    # June: three days reported, 30 mm in all, the wettest 20 mm; July: one day. The temperature is ignored.
+    assert rows == [("S1", 2020, 6, 3, 300.0, 200.0), ("S1", 2020, 7, 1, 50.0, 50.0)]
+
+
 def test_open_database_uses_wal(tmp_path):
     with open_database(tmp_path / "db.sqlite3") as connection:
         mode = connection.execute("PRAGMA journal_mode").fetchone()[0]

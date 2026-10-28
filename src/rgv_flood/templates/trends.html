@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "components/county_select.html" import county_select %}
+{% from "components/stat_tile.html" import stat_tile %}
+{% block title %}{{ t("app.trends_title") }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="trends-page" x-data="trendsPage">
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+    {{ county_select("trends") }}
+    <label class="flex h-8 items-center gap-2 rounded-md border border-line bg-bg px-2.5">
+      <span class="text-xs uppercase tracking-[.8px] text-muted">{{ t("trends.gauge") }}</span>
+      <select id="gauge-trends" class="cursor-pointer border-0 bg-transparent font-medium outline-none" x-on:change="chooseStation">
+        <option value="" class="bg-panel">{{ t("trends.all_gauges") }}</option>
+        <template x-for="s in stations" x-bind:key="s.station_id">
+          <option class="bg-panel" x-bind:value="s.station_id" x-bind:selected="isChosen()" x-text="s.name"></option>
+        </template>
+      </select>
+    </label>
+    <p class="text-sm text-muted lg:ml-auto" x-text="span"></p>
+  </div>
+
+  <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {{ stat_tile("wettest", t("trends.tile.wettest"), "tileWettest", "tileWettestSub") }}
+    {{ stat_tile("events", t("trends.tile.events"), "tileEvents", "tileEventsSub") }}
+    {{ stat_tile("nws", t("trends.tile.nws"), "tileNws", "tileNwsSub") }}
+    {{ stat_tile("news", t("trends.tile.news"), "tileNews", "tileNewsSub") }}
+  </div>
+
+  <p class="mt-4 rounded-lg border border-line bg-panel p-3 text-sm text-muted" data-no-rain x-show="noRain" x-cloak>{{ t("trends.no_rain") }}</p>
+
+  <div class="mt-4 flex flex-col rounded-lg border border-line bg-panel shadow-1">
+    {% for chart, dot in (("rain", "bg-layer-nfhl"), ("wettest", "bg-layer-firm"), ("over2", "bg-layer-claims"), ("months", "bg-layer-nfhl"),
+                          ("events", "bg-layer-firm"), ("nws", "bg-layer-nws"), ("news", "bg-layer-photos")) %}
+    <section class="relative px-2 py-1 {{ 'border-b border-line' if not loop.last }}" data-chart-card="{{ chart }}">
+      <div class="flex items-center justify-between gap-3 px-2 pt-2 text-sm">
+        <div class="flex items-center gap-2">
+          <i class="h-2 w-2 rounded-sm {{ dot }}" aria-hidden="true"></i>
+          <b class="font-semibold" data-chart-title>{{ t("trends.chart." ~ chart) }}</b>
+          <span class="text-muted">{{ t("trends.unit." ~ ("inches" if chart in ("rain", "wettest", "months") else "days" if chart == "over2" else "per_year")) }}</span>
+        </div>
+        <button type="button" class="text-xs text-muted underline decoration-line2 underline-offset-2 hover:text-ink"
+                data-view-table data-for="{{ chart }}" x-on:click="toggleTable()">{{ t("events.view_table") }}</button>
+      </div>
+      <p class="px-2 text-xs text-muted">{{ t("trends.note." ~ chart) }}</p>
+      <div data-chart="{{ chart }}" x-show="!tables['{{ chart }}']" class="w-full"></div>
+      <div x-show="tables['{{ chart }}']" x-cloak class="max-h-[220px] overflow-auto px-2 pb-2">
+        <table class="w-full border-collapse font-mono text-sm">
+          <thead class="sticky top-0 bg-panel text-xs text-muted"><tr><th class="py-1 text-left">{{ t("claims.col.year") }}</th><th class="py-1 text-right">{{ t("trends.chart." ~ chart) }}</th></tr></thead>
+          <tbody>
+            <template x-for="row in tableRows('{{ chart }}')" x-bind:key="row.key">
+              <tr class="border-t border-line"><td class="py-1" x-text="row.label"></td><td class="py-1 text-right" x-text="row.value"></td></tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+  <p class="mt-4 text-sm text-muted"><a href="/claims" data-claims-link>{{ t("trends.claims_link") }}</a></p>
+
+  {% if built_label %}
+  <footer class="mt-4 text-[11.5px] leading-relaxed text-muted" data-trends-footer><p>{{ built_label }}</p></footer>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script defer src="{{ asset_url('vendor/plotly/plotly-basic.min.js') }}"></script>
+<script type="module" src="{{ asset_url('js/pages/trends.js') }}"></script>
+{% endblock %}

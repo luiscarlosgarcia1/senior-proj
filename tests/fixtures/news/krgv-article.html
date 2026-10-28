@@ -1,0 +1,313 @@
+<!DOCTYPE html><html lang="en">
+<head>
+<script>
+window.KRGV_CONSENT_MODE = "notice";
+window.KRGV_CONSENT_DAYS = 180;
+window.KRGV_CONSENT_PRIVACY_URL = "/pages/privacy";
+</script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){ dataLayer.push(arguments); }
+// "notice" mode is ungated: default everything GRANTED so GA + ads run fully
+// from the first hit. block/consentmode default DENIED until the visitor acts.
+(function () {
+var g = (window.KRGV_CONSENT_MODE === 'notice') ? 'granted' : 'denied';
+gtag('consent', 'default', {
+ad_storage: g,
+ad_user_data: g,
+ad_personalization: g,
+analytics_storage: g,
+functionality_storage: 'granted',
+security_storage: 'granted',
+wait_for_update: 500
+});
+})();
+</script>
+<script>
+(function () {
+var COOKIE = 'krgv_consent';
+var DAYS = window.KRGV_CONSENT_DAYS || 180;
+var MODE = window.KRGV_CONSENT_MODE || 'block';
+var queue = [];
+var bannerEl = null;
+function read() {
+var m = document.cookie.match(/(?:^|;\s*)krgv_consent=([^;]+)/);
+return m ? decodeURIComponent(m[1]) : null;
+}
+function write(v) {
+var d = new Date(); d.setTime(d.getTime() + DAYS * 86400000);
+document.cookie = COOKIE + '=' + v + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+}
+function gpc() { try { return navigator.globalPrivacyControl === true; } catch (e) { return false; } }
+function drain() { var q = queue.slice(); queue.length = 0; q.forEach(function (fn) { try { fn(); } catch (e) {} }); }
+function show() { if (bannerEl) bannerEl.style.display = 'block'; }
+function hide() { if (bannerEl) bannerEl.style.display = 'none'; }
+// Re-create the scripts/markup inside an inert <template> so they execute.
+function activateTemplate(id) {
+var t = document.getElementById(id);
+if (!t || !t.content) return;
+var frag = t.content.cloneNode(true);
+var olds = frag.querySelectorAll('script');
+for (var i = 0; i < olds.length; i++) {
+var old = olds[i], s = document.createElement('script');
+for (var a = 0; a < old.attributes.length; a++) s.setAttribute(old.attributes[a].name, old.attributes[a].value);
+if (old.textContent) s.text = old.textContent;
+old.parentNode.replaceChild(s, old);
+}
+t.parentNode.insertBefore(frag, t);
+t.parentNode.removeChild(t);
+}
+var state = read();
+var M = {
+mode: MODE,
+get granted() { return state === 'granted'; },
+get decided() { return state === 'granted' || state === 'denied'; },
+onGrant: function (fn) {
+if (typeof fn !== 'function') return;
+if (state === 'granted') { try { fn(); } catch (e) {} }
+else queue.push(fn);
+},
+// Mode-aware: Consent-Mode-aware Google tags may run now in consentmode.
+gate: function (fn) { if (MODE === 'block') this.onGrant(fn); else { try { fn(); } catch (e) {} } },
+// Always require an affirmative opt-in (non-Google third parties).
+// In "notice" mode nothing is gated, so run immediately.
+gateStrict: function (fn) { if (MODE === 'notice') { try { fn(); } catch (e) {} } else { this.onGrant(fn); } },
+// Activate an inert <template> (e.g. the DB-driven display-ad zone JS).
+gateTemplate: function (id) {
+var run = function () { activateTemplate(id); };
+if (MODE === 'block') this.onGrant(run); else run();
+},
+grant: function () {
+state = 'granted'; write('granted');
+gtag('consent', 'update', {
+ad_storage: 'granted', ad_user_data: 'granted',
+ad_personalization: 'granted', analytics_storage: 'granted'
+});
+drain();
+hide();
+},
+deny: function () { state = 'denied'; write('denied'); hide(); },
+// "notice" mode: OK records acknowledgement (consent is already the default),
+// persists it so the banner stops reappearing, and dismisses the banner.
+acknowledge: function () { state = 'granted'; write('granted'); hide(); },
+openBanner: function () { show(); },
+reset: function () {
+document.cookie = COOKIE + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+state = null;
+}
+};
+// consentmode: keep ads serving but NON-personalized + restricted data processing
+// (no ad cookies/profiling; restrictDataProcessing is Google's CCPA "do not sell/share"
+// ad signal) until the visitor affirmatively opts in.
+if (MODE === 'consentmode') {
+window.googletag = window.googletag || { cmd: [] };
+googletag.cmd.push(function () { googletag.pubads().setPrivacySettings({ nonPersonalizedAds: true, restrictDataProcessing: true }); });
+M.onGrant(function () {
+googletag.cmd.push(function () { googletag.pubads().setPrivacySettings({ nonPersonalizedAds: false, restrictDataProcessing: false }); });
+});
+}
+// Honor Global Privacy Control (CCPA opt-out) — auto-deny, skip the banner.
+// Skipped in "notice" mode: nothing is gated, so there is nothing to auto-deny.
+if (MODE !== 'notice' && gpc() && !M.decided) { M.deny(); }
+window.KRGVConsent = M;
+// Build the banner in the BODY (a <div> is illegal in <head>, so we inject it via JS).
+function buildBanner() {
+if (document.getElementById('krgv-consent-banner') || !document.body) return;
+var url = window.KRGV_CONSENT_PRIVACY_URL || '/pages/privacy';
+var b = document.createElement('div');
+b.id = 'krgv-consent-banner';
+b.setAttribute('role', 'dialog');
+b.setAttribute('aria-live', 'polite');
+b.setAttribute('aria-label', 'Privacy notice');
+if (MODE === 'notice') {
+// Notice-only clickwrap: a single "OK" that records acknowledgement.
+b.innerHTML =
+'<div class="kc-inner">' +
+'<p>Our site uses cookies and tracking technologies for web statistics and ads as outlined in our <a href="' + url + '">Privacy Statement</a>. By clicking "OK", you consent to our use of these technologies and agree to be bound by our Terms of Service (including its Texas choice of law and exclusive venue provisions).</p>' +
+'<div class="kc-btns">' +
+'<button id="krgv-consent-ok" type="button">OK</button>' +
+'</div>' +
+'</div>';
+} else {
+// Gated modes (block / consentmode): reject + accept.
+b.innerHTML =
+'<div class="kc-inner">' +
+'<p>We use cookies and third-party technologies including Google Analytics, ad serving, and social tools to measure traffic and help fund our newsroom. They do <strong>not</strong> run until you choose. See our <a href="' + url + '">Privacy Policy</a>.</p>' +
+'<div class="kc-btns">' +
+'<button id="krgv-consent-reject" type="button">Reject non-essential</button>' +
+'<button id="krgv-consent-accept" type="button">Accept</button>' +
+'</div>' +
+'</div>';
+}
+document.body.appendChild(b);
+}
+function initBanner() {
+buildBanner();
+bannerEl = document.getElementById('krgv-consent-banner');
+var ok = document.getElementById('krgv-consent-ok');
+var accept = document.getElementById('krgv-consent-accept');
+var reject = document.getElementById('krgv-consent-reject');
+// "notice" mode: OK just records acknowledgement so the banner stops showing.
+if (ok) ok.addEventListener('click', function () { M.acknowledge(); });
+if (accept) accept.addEventListener('click', function () { M.grant(); });
+if (reject) reject.addEventListener('click', function () { M.deny(); });
+if (!M.decided) show(); else hide();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initBanner);
+else initBanner();
+})();
+</script>
+<style>
+#krgv-consent-banner{display:none;position:fixed;left:0;right:0;bottom:0;z-index:2147483646;background:#0b2545;color:#fff;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;box-shadow:0 -2px 12px rgba(0,0,0,.35)}
+#krgv-consent-banner .kc-inner{max-width:1100px;margin:0 auto;padding:16px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+#krgv-consent-banner p{margin:0;flex:1 1 420px}
+#krgv-consent-banner a{color:#7db8ff;text-decoration:underline}
+#krgv-consent-banner .kc-btns{flex:0 0 auto;display:flex;gap:10px}
+#krgv-consent-banner button{cursor:pointer;border:0;border-radius:4px;padding:11px 20px;font-size:14px;font-weight:700;line-height:1}
+#krgv-consent-accept{background:#1a7f37;color:#fff}
+#krgv-consent-reject{background:#e9e9e9;color:#111}
+@media (max-width:600px){#krgv-consent-banner .kc-btns{flex:1 1 100%}#krgv-consent-banner button{flex:1}}
+</style>
+<link rel="stylesheet" href="/js/outdatedbrowser/outdatedbrowser.min.css">
+<link rel="stylesheet" type="text/css" href="/css/flipclock.css"/>
+<title>City of Pharr Prevents Future Flooding with Trash Pick-Up Event</title>
+<link rel="alternate" media="only screen and (max-width: 640px)" href="https://www.krgv.com/news/city-of-pharr-prevents-future-flooding-with-trash-pick-up-event/"/>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<meta name="robots" content="noarchive" />
+<meta name="robots" content="index, follow" />
+<meta name="author" content="" />
+<meta name="copyright" content="&copy; 2026 KRGV CMS All Rights Reserved" />
+<meta name="description" content="In June, the city of Pharr saw more than 10 inches of rain dumped on streets and neighborhoods. " />
+<meta name="keywords" content="Pharr, Flooding, Trash, Clean Up" />
+<meta name="news_keywords" content="Pharr, Flooding, Trash, Clean Up" />
+<meta name="Date" content="2026-10-23" />
+<meta name="Last-Modified" content="2026-10-23 22:46:48" />
+<meta name="fb_title" content="City of Pharr Prevents Future Flooding with Trash Pick-Up Event" />
+<meta property="og:site_name" content="KRGV" />
+<meta property="og:title" content="City of Pharr Prevents Future Flooding with Trash Pick-Up Event" />
+<meta property="og:description" content="In June, the city of Pharr saw more than 10 inches of rain dumped on streets and neighborhoods. " />
+<meta property="og:url" content="https://www.krgv.com/news/city-of-pharr-prevents-future-flooding-with-trash-pick-up-event/" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image" content="https://dcer237tfveol.cloudfront.net/v2/AFP1JnPj2TuspAbJnDfNvw05Wwhz_p0SK95CcQFKIOCXpy8C6sm8X_mhLw_Hp5YfDQ95UyYvjyjESTwBAhQB5PfgCGymy9IVaB90sOMNJXtlCMgd67f7iDUwjXnOvVPpX7gRgf4kn6EsKr2-y0nBfM9m2xKPZH_DHQO0XZiIl_jyIKsbx8YxHKDi3m6EKlSv8" />
+<meta property="og:image:width" content="854" />
+<meta property="og:image:height" content="480" />
+<meta property="og:type" content="article" />
+<meta property="article:author" content="https://www.facebook.com/channel5news/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:site" content="@krgv" />
+<meta property="twitter:creator" content="@KRGV" />
+<meta property="twitter:title" content="City of Pharr Prevents Future Flooding with Trash Pick-Up Event" />
+<meta property="twitter:description" content="In June, the city of Pharr saw more than 10 inches of rain dumped on streets and neighborhoods. " />
+<meta property="twitter:url" content="https://www.krgv.com/news/city-of-pharr-prevents-future-flooding-with-trash-pick-up-event/" />
+<meta property="twitter:image" content="https://dcer237tfveol.cloudfront.net/v2/AFP1JnPj2TuspAbJnDfNvw05Wwhz_p0SK95CcQFKIOCXpy8C6sm8X_mhLw_Hp5YfDQ95UyYvjyjESTwBAhQB5PfgCGymy9IVaB90sOMNJXtlCMgd67f7iDUwjXnOvVPpX7gRgf4kn6EsKr2-y0nBfM9m2xKPZH_DHQO0XZiIl_jyIKsbx8YxHKDi3m6EKlSv8" />
+<meta property="twitter:image:width" content="150" />
+<meta property="twitter:image:height" content="116" />
+<meta property="al:web:url" content="https://www.krgv.com/news/city-of-pharr-prevents-future-flooding-with-trash-pick-up-event/" />
+<meta name="google-translate-customization" content="71249eca1304e7c9-ce25edf1c4bc73bb-g1a4998d3c792f5b0-c" />
+<link id="canonical" rel="canonical" href="https://www.krgv.com/news/city-of-pharr-prevents-future-flooding-with-trash-pick-up-event/" />
+<script src="/js/outdatedbrowser/outdatedbrowser.min.js"></script>
+<link type="text/css" rel="stylesheet" href="/css/combine.css?m=1770235565000&cache=bust"/>
+<link rel="stylesheet" href="/css/royalslider/royalslider.css">
+<link rel="stylesheet" href="/css/royalslider/skins/minimal-white/rs-minimal-white.css">
+<link rel="stylesheet" href="/css/royalslider/skins/universal/rs-universal.css">
+<link rel="stylesheet" href="/css/royalslider/skins/default-inverted/rs-default-inverted.css">
+<link rel="stylesheet" href="/css/widgets/forms.css?cache=false">
+<link rel="stylesheet" href="/css/style.css?cache=false">
+<link rel="stylesheet" href="/css/skeletons.css?cache=false">
+<link rel="stylesheet" href="/css/base.css?cache=false">
+<script type="text/javascript" src="/js/combine.js?m=1654099822000"></script>
+<script type="text/javascript">
+idleTimer = null;
+idleState = false;
+idleWait = 900000;
+$(document).ready(function () {
+$('*').bind('mousemove keydown scroll', function () {
+clearTimeout(idleTimer);
+if (idleState == true) { 
+// Reactivated event
+}
+idleState = false;
+idleTimer = setTimeout(function () { 
+// Idle Event
+location.reload(true);
+idleState = true; 
+}, idleWait);
+});
+$("body").trigger("mousemove");
+});
+</script>
+<!--[if lt IE 7]>
+<script type="text/javascript" src="/js/ie7.js"></script>
+<![endif]-->
+<link rel="shortcut icon" href="/images/logos/favicon.png" />
+<link href='https://fonts.googleapis.com/css?family=Roboto+Slab:400,700,300,600|Open+Sans:300italic,400italic,700italic,400,600,700|Source+Sans+Pro:400,900' rel='stylesheet' type='text/css'>
+<link href='https://fonts.googleapis.com/css?family=Roboto:400,500,700,100,300' rel='stylesheet' type='text/css'>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.2.0/animate.min.css" rel='stylesheet' type='text/css'>
+<meta name="viewport" content="width=device-width,initial-scale=1, user-scalable=no">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/velocity/1.1.0/velocity.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/velocity/1.1.0/velocity.ui.js" async></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/snap.svg/0.3.0/snap.svg-min.js"></script>
+<script>
+$(function() {
+FastClick.attach(document.querySelector('header'));
+});
+</script>
+<div id="fb-root"></div>
+<script>
+(function () {
+function loadFB() {
+var d = document, s = 'script', id = 'facebook-jssdk';
+if (d.getElementById(id)) return;
+var fjs = d.getElementsByTagName(s)[0];
+var js = d.createElement(s); js.id = id;
+js.src = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v3.2';
+fjs.parentNode.insertBefore(js, fjs);
+}
+if (window.KRGVConsent) { KRGVConsent.gateStrict(loadFB); } else { loadFB(); }
+})();
+</script>
+<script>
+(function () {
+function loadGA4() {
+window.dataLayer = window.dataLayer || [];
+window.gtag = window.gtag || function () { dataLayer.push(arguments); };
+var s = document.createElement('script'); s.async = true;
+s.src = 'https://www.googletagmanager.com/gtag/js?id=G-F2CFL1GEW1';
+(document.head || document.body).appendChild(s);
+gtag('js', new Date());
+var page_path = location.pathname.replace(/\/$/, '') || '/'; // strip trailing slash unless root
+gtag('config', 'G-F2CFL1GEW1', { page_path: page_path + location.search });
+}
+// gate(): in "block" mode runs on Accept; in "consentmode" runs now (Consent Mode keeps it cookieless).
+if (window.KRGVConsent) { KRGVConsent.gate(loadGA4); } else { loadGA4(); }
+})();
+</script>
+<script src="/js/flipclock.min.js"></script>
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<script type="text/javascript">
+if (window.addEventListener) {
+window.addEventListener("resize", browserResize);
+} else if (window.attachEvent) {
+window.attachEvent("onresize", browserResize);
+}
+var InitialResize = window.innerWidth;
+function browserResize() {
+var afterResize = window.innerWidth;
+if ((InitialResize < (970) && afterResize >= (970)) || (InitialResize >= (970) && afterResize < (970)) ||
+(InitialResize < (728) && afterResize >= (728)) || (InitialResize >= (728) && afterResize < (728))) {
+InitialResize = afterResize;
+// Ads may not be loaded yet (consent not granted) — guard so this never throws.
+if (window.googletag && window.googletag.cmd) {
+googletag.cmd.push(function () {
+googletag.pubads().refresh();
+});
+}
+}
+}
+</script>
+
+  <link rel="image_src" href='//dcer237tfveol.cloudfront.net/v2/AFP1JnPj2TuspAbJnDfNvw05Wwhz_p0SK95CcQFKIOCXpy8C6sm8X_mhLw_Hp5YfDQ95UyYvjyjESTwBAhQB5PfgCGymy9IVaB90sOMNJXtlCMgd67f7iDUwjXnOvVPpX7gRgf4kn6EsKr2-y0nBfM9m2xKPZH_DHQO0XZiIl_jyIKsbx8YxHKDi3m6EKlSv8'/>
+</head>
+<body><h1>City of Pharr Prevents Future Flooding with Trash Pick-Up Event</h1></body></html>
