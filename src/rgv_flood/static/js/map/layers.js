@@ -8,7 +8,7 @@
  * from memory with the new theme's colors, and nothing is downloaded again. */
 
 import { getJson } from "../api.js";
-import { readColors, styleLayersFor } from "./styles.js";
+import { clusterFilter, clusterOptions, clusterRadius, keptCount, readColors, styleLayersFor } from "./styles.js";
 
 const registry = new Map(); // layer id -> { info, source, visible, partsOff: Set }
 const loading = new Map(); // layer id -> Promise of its source spec
@@ -20,11 +20,15 @@ async function sourceFor(info) {
     return { type: "vector", tiles: [`${location.origin}${info.url}`], minzoom: 7, maxzoom: 14 }; // as cut by pipeline/layer_tiles.py
   }
   const path = info.url.replace(/^\/api\/v1\//, "");
-  return { type: "geojson", data: await getJson(path, {}, { cancelPrevious: false }) };
+  const data = await getJson(path, {}, { cancelPrevious: false });
+  return { type: "geojson", data, ...clusterOptions(info, data) };
 }
+
+const isGroup = (spec) => spec.id.endsWith("-cluster");
 
 /** The filter of a style layer with the layer's switched-off parts left out. */
 function withParts(spec, entry) {
+  if (isGroup(spec)) return clusterFilter(entry.info, entry.partsOff);
   const parts = entry.info.parts || [];
   if (!parts.length || !entry.partsOff.size) return spec.filter;
   const kept = parts.filter((part) => !entry.partsOff.has(part.id)).map((part) => part.filter);
@@ -52,9 +56,12 @@ function beneath(map, entry) {
 }
 
 /** A registered layer's style layers, with its parts and visibility applied. */
-const specsFor = (entry, colors) => styleLayersFor(entry.info, colors).map((spec) => (
-  { ...spec, filter: withParts(spec, entry), layout: { ...spec.layout, visibility: entry.visible ? "visible" : "none" } }
-));
+const specsFor = (entry, colors) => styleLayersFor(entry.info, colors, entry.clustered).map((spec) => ({
+  ...spec,
+  filter: withParts(spec, entry),
+  paint: isGroup(spec) ? { ...spec.paint, "circle-radius": clusterRadius(keptCount(entry.info, entry.partsOff)) } : spec.paint,
+  layout: { ...spec.layout, visibility: entry.visible ? "visible" : "none" },
+}));
 
 /** Our sources and style layers, as they should be with the current colors. */
 export function ownStyle() {
@@ -92,7 +99,7 @@ function ensureOnMap(map, id) {
 }
 
 /** The ids of a layer's style layers that are on the map (see styles.js for the naming). */
-const styleLayerIds = (map, id) => ["fill", "line", "point"].map((kind) => `lyr-${id}-${kind}`).filter((layerId) => map.getLayer(layerId));
+const styleLayerIds = (map, id) => ["fill", "line", "point", "cluster"].map((kind) => `lyr-${id}-${kind}`).filter((layerId) => map.getLayer(layerId));
 
 /** Show a layer, downloading it the first time. */
 export async function showLayer(map, info) {
@@ -110,7 +117,7 @@ export async function showLayer(map, info) {
   } finally {
     loading.delete(info.id);
   }
-  const entry = registry.get(info.id) || { info, source, visible: true, partsOff: new Set() };
+  const entry = registry.get(info.id) || { info, source, visible: true, partsOff: new Set(), clustered: Boolean(source.cluster) };
   registry.set(info.id, entry);
   ensureOnMap(map, info.id);
   for (const layerId of styleLayerIds(map, info.id)) {
@@ -131,8 +138,10 @@ export function setPartVisible(map, id, partId, on) {
   if (!entry) return;
   if (on) entry.partsOff.delete(partId);
   else entry.partsOff.add(partId);
-  for (const spec of styleLayersFor(entry.info, readColors())) {
-    if (map.getLayer(spec.id)) map.setFilter(spec.id, withParts(spec, entry));
+  for (const spec of styleLayersFor(entry.info, readColors(), entry.clustered)) {
+    if (!map.getLayer(spec.id)) continue;
+    map.setFilter(spec.id, withParts(spec, entry));
+    if (isGroup(spec)) map.setPaintProperty(spec.id, "circle-radius", clusterRadius(keptCount(entry.info, entry.partsOff)));
   }
 }
 

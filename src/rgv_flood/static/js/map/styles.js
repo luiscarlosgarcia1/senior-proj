@@ -45,8 +45,40 @@ function pointPaint(shape, color, colors) {
   }
 }
 
-/** The style layers for one layer (`info` from /api/v1/layers). */
-export function styleLayersFor(info, colors) {
+// ---- grouping dense dots ----
+// A layer made only of points, and at least this many of them, is grouped:
+// zoomed out, nearby dots collapse into one bigger dot; zooming in spreads them.
+export const CLUSTER_MIN_POINTS = 50;
+const CLUSTER_PIXELS = 40; // dots this close on screen join one
+const CLUSTER_MAX_ZOOM = 13; // from the next zoom in, every dot is drawn on its own
+
+/** The source options that make MapLibre group a layer's points, or {} if it shouldn't. Each part of the
+ * layer is counted inside a group (as `n_<part id>`), so a group can follow the layer's sub-options. */
+export function clusterOptions(info, data) {
+  const features = data?.features || [];
+  if (features.length < CLUSTER_MIN_POINTS || !features.every((f) => f.geometry?.type === "Point")) return {};
+  const clusterProperties = Object.fromEntries(
+    (info.parts || []).map((part) => [`n_${part.id}`, ["+", ["case", part.filter, 1, 0]]]),
+  );
+  return { cluster: true, clusterRadius: CLUSTER_PIXELS, clusterMaxZoom: CLUSTER_MAX_ZOOM, clusterProperties };
+}
+
+/** How many dots a group stands for, counting only the parts that are on. */
+export function keptCount(info, partsOff) {
+  const kept = (info.parts || []).filter((part) => !partsOff.has(part.id));
+  if (!(info.parts || []).length) return ["get", "point_count"];
+  // ["literal", 0], not 0: a filter comparing two plain numbers is read as the old filter syntax and refused.
+  return kept.length ? ["+", ...kept.map((part) => ["get", `n_${part.id}`])] : ["literal", 0];
+}
+
+/** A group's radius grows with the dots in it. */
+export const clusterRadius = (count) => ["step", count, 9, 10, 12, 50, 16, 250, 21, 1000, 27];
+
+/** A group is drawn only while it has dots of a part that is on. */
+export const clusterFilter = (info, partsOff) => ["all", ["has", "point_count"], [">", keptCount(info, partsOff), 0]];
+
+/** The style layers for one layer (`info` from /api/v1/layers). `clustered`: its source groups dots. */
+export function styleLayersFor(info, colors, clustered = false) {
   const { shape, color: key } = info.legend;
   const color = colors[key] || colors.nfhl;
   const source = `src-${info.id}`;
@@ -73,20 +105,26 @@ export function styleLayersFor(info, colors) {
     const ramp = ["match", ["get", "claims_class"], 1, colors.r1, 2, colors.r2, 3, colors.r3, 4, colors.r4, colors.r5];
     return [at("fill", "fill", POLYGONS, { "fill-color": ramp, "fill-opacity": 0.72 })];
   }
+  // Dots that are grouped when zoomed out leave the group's own style layer to draw the group.
+  const single = clustered ? ["all", POINTS, ["!", ["has", "point_count"]]] : POINTS;
+  const group = !clustered ? [] : [at("cluster", "circle", ["has", "point_count"], {
+    "circle-color": color, "circle-opacity": 0.85, "circle-radius": clusterRadius(["get", "point_count"]),
+    "circle-stroke-color": colors.bg, "circle-stroke-width": 2,
+  })];
   if (info.id === "hcdd1-flood-photos") {
     const openable = ["has", "photo_url"];
-    return [at("point", "circle", POINTS, {
+    return [at("point", "circle", single, {
       "circle-color": ["case", openable, color, colors.photoloc],
       "circle-radius": ["case", openable, 3.4, 2.2],
       "circle-stroke-color": colors.bg,
       "circle-stroke-width": ["case", openable, 1, 0],
       "circle-opacity": 0.9,
-    })];
+    }), ...group];
   }
 
   const layers = [];
   if (shape === "poly") layers.push(at("fill", "fill", POLYGONS, { "fill-color": color, "fill-opacity": 0.5 }));
   layers.push(at("line", "line", LINES, { "line-color": color, "line-width": shape === "line" ? 1.4 : 1 }));
-  layers.push(at("point", "circle", POINTS, pointPaint(shape, color, colors)));
+  layers.push(at("point", "circle", single, pointPaint(shape, color, colors)), ...group);
   return layers;
 }

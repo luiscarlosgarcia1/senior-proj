@@ -215,7 +215,7 @@ const interactiveLayers = (map) => map.getLayersOrder().filter((id) =>
   id.startsWith("lyr-") && id !== "lyr-selection" && !id.startsWith("lyr-county-boundaries")
   && map.getLayoutProperty(id, "visibility") !== "none");
 
-const layerIdOf = (styleLayerId) => styleLayerId.replace(/^lyr-/, "").replace(/-(fill|line|point)$/, "");
+const layerIdOf = (styleLayerId) => styleLayerId.replace(/^lyr-/, "").replace(/-(fill|line|point|cluster)$/, "");
 
 mapReady.then((map) => {
   const popup = new maplibregl.Popup({ maxWidth: "320px", focusAfterOpen: false });
@@ -226,6 +226,12 @@ mapReady.then((map) => {
     if (!layers.length) return;
     const [feature] = map.queryRenderedFeatures(event.point, { layers });
     if (!feature) return;
+    if (feature.properties.cluster) {
+      // A group of dots: zoom in until it comes apart.
+      map.getSource(feature.source).getClusterExpansionZoom(feature.properties.cluster_id)
+        .then((zoom) => map.easeTo({ center: feature.geometry.coordinates, zoom }));
+      return;
+    }
     const at = feature.geometry.type === "Point" ? feature.geometry.coordinates : event.lngLat.toArray();
     popup.setLngLat(at).setDOMContent(renderPopup(describe(feature.properties, layerIdOf(feature.layer.id)))).addTo(map);
     select(at);
