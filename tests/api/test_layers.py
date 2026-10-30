@@ -51,6 +51,21 @@ def test_virtual_layers_in_evidence(api_client):
     assert virtual["noaa-flood-events"]["legend"] == {"shape": "dot", "color": "sev-high"}
     assert virtual["live-alerts"]["url"] == "/api/v1/live-signals.geojson"
     assert virtual["live-alerts"]["legend"] == {"shape": "dia", "color": "warn"}
+    assert virtual["historic-news"]["url"] == "/api/v1/historic-news.geojson"
+    assert virtual["historic-news"]["legend"] == {"shape": "dia", "color": "historic"}
+
+
+def test_historic_news_is_a_separate_attributed_evidence_feed(api_client):
+    body = api_client.get("/api/v1/historic-news.geojson?county=cameron").json()
+
+    assert body["features"] == [{
+        "type": "Feature", "geometry": {"type": "Point", "coordinates": [-97.4975, 25.9017]},
+        "properties": {
+            "id": "the-brownsville-fixture", "county": "cameron", "headline": "Historic flooding report from Brownsville",
+            "summary": "Project-written attributed historic reporting summary.", "published_at": "2020-07-26",
+            "publisher": "The Brownsville", "source_url": "https://example.test/historic-news",
+        },
+    }]
 
 
 def test_layer_geojson_gzip_passthrough(api_client, fixture_db):

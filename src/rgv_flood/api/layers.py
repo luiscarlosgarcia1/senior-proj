@@ -20,7 +20,7 @@ LAYER_CACHE = "public, max-age=300, stale-while-revalidate=86400"
 
 def _virtual_layers() -> list[LayerInfo]:
     """Rows in the panel whose data comes from the API rather than a built layer:
-    NOAA's flood events and the live official alerts."""
+    NOAA's flood events, historic publisher evidence, and live official alerts."""
 
     def virtual(layer_id: str, key: str, url: str, shape: str, color: str) -> LayerInfo:
         title = t(f"layers.virtual.{key}.title")
@@ -32,6 +32,7 @@ def _virtual_layers() -> list[LayerInfo]:
 
     return [
         virtual("noaa-flood-events", "events", "/api/v1/events.geojson", "dot", "sev-high"),
+        virtual("historic-news", "historic_news", "/api/v1/historic-news.geojson", "dia", "historic"),
         virtual("live-alerts", "alerts", "/api/v1/live-signals.geojson", "dia", "warn"),
     ]
 

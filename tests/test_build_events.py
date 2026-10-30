@@ -105,16 +105,20 @@ def test_main_fills_the_database_and_can_be_rerun(tmp_path, monkeypatch):
     with closing(sqlite3.connect(database)) as connection:
         counts = {
             table: connection.execute(f"select count(*) from {table}").fetchone()[0]
-            for table in ("flood_events", "flood_reports", "weather_stations", "weather_observations", "layers")
+            for table in ("flood_events", "flood_reports", "historic_news", "weather_stations", "weather_observations", "layers")
         }
         points = connection.execute("select lon, source_lon from flood_events order by id").fetchall()
         sources = dict(connection.execute("select id, record_count from data_sources"))
     assert counts == {
         "flood_events": 2,
         "flood_reports": 0,
+        "historic_news": 0,
         "weather_stations": len(noaa.STATIONS_BY_COUNTY["hidalgo"]),
         "weather_observations": 1,
         "layers": 0,
     }
     assert points == [(-98.2, -98.2), (None, -90.0)]  # the second point is outside the county: kept, not plotted
-    assert sources == {"noaa-storm-events": 2, "noaa-ghcn-daily": 1, "local-public-reports": 0}
+    assert sources == {
+        "noaa-storm-events": 2, "noaa-ghcn-daily": 1, "local-public-reports": 0,
+        "historic-news:the-brownsville": 0,
+    }

@@ -107,6 +107,13 @@ REPORTS = [
     _report("hanna-recovery", "2020-07-31", duplicate_group="hanna"),  # days later, same flood
     _report("weslaco-streets", "2021-05-19"),
 ]
+HISTORIC_NEWS = [{
+    "id": "the-brownsville-fixture", "county": "cameron", "headline": "Historic flooding report from Brownsville",
+    "summary": "Project-written attributed historic reporting summary.", "published_at": "2020-07-26",
+    "publisher": "The Brownsville", "source_url": "https://example.test/historic-news",
+    "source_lon": -97.4975, "source_lat": 25.9017, "lon": -97.4975, "lat": 25.9017,
+    "retrieved_at": "2026-10-29T00:00:00Z",
+}]
 SOURCES = [
     {
         "id": "noaa-storm-events", "publisher": "NOAA NCEI", "dataset": "Storm Events Database",
@@ -227,6 +234,7 @@ def build_fixture_database(path, *, history: bool = False):
     with open_database(path) as connection:
         replace_table(connection, "flood_events", EVENTS)
         replace_table(connection, "flood_reports", REPORTS)
+        replace_table(connection, "historic_news", HISTORIC_NEWS)
         replace_table(connection, "weather_stations", STATIONS)
         replace_table(connection, "weather_observations", READINGS)
         record_sources(connection, SOURCES)

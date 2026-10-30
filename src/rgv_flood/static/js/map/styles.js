@@ -11,7 +11,7 @@ export const TOKENS = {
   hdrain: "--c-hdrain", bridge: "--c-bridge", mapped: "--c-mapped", photos: "--c-photos", photoloc: "--c-photoloc", fema: "--c-fema",
   nws: "--c-nws", proj: "--c-proj", sfp: "--c-sfp", claims: "--c-claims", county: "--county", dam: "--c-dam",
   "sev-high": "--sev-high", "sev-mod": "--sev-mod", "sev-low": "--sev-low", "sev-unc": "--sev-unc",
-  warn: "--warn", bg: "--bg",
+  warn: "--warn", historic: "--c-historic", bg: "--bg",
   r1: "--r1", r2: "--r2", r3: "--r3", r4: "--r4", r5: "--r5",
 };
 

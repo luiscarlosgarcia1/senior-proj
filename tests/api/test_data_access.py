@@ -41,6 +41,7 @@ def test_functions_tolerate_missing_database(tmp_path):
     assert data_access.flood_events(db) == []
     assert data_access.flood_event(db, "x") is None
     assert data_access.flood_reports(db) == []
+    assert data_access.historic_news_features(db) == {"type": "FeatureCollection", "features": []}
     assert data_access.rainfall_records(db) == []
     assert data_access.data_sources(db) == []
     assert data_access.active_official_signals(db) == []

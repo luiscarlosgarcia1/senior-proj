@@ -102,6 +102,16 @@ function describe(p, layerId) {
   if (layerId === "live-alerts") {
     return { title: p.summary, lines: [joined(p.source_publisher, p.expires_at && `until ${valleyTime(p.expires_at)}`)], note: "Official live signal", link: p.source_url };
   }
+  if (layerId === "historic-news") {
+    return {
+      title: "Historic news report",
+      lines: [joined(p.publisher, p.published_at, `${p.county} County`)],
+      body: p.summary,
+      note: "Historic attributed reporting, not a live alert, observation, or route instruction.",
+      link: p.source_url,
+      linkLabel: "Read original",
+    };
+  }
   if (p.infrastructure_type) return { title: p.name || "Bridge", lines: [joined("Bridge", p.county && `${p.county} County`)], note: "Source: Overture Maps Foundation (OpenStreetMap)" };
   const severity = { high: "Severe", moderate: "Moderate", low: "Light" }[p.relative_class] || "Uncategorized";
   return { title: p.source || "Flood zone", lines: [`Zone ${p.original_category || "—"}`, `Severity: ${severity}`] };
@@ -168,7 +178,10 @@ export function renderPopup(model) {
   setText(field(root, "note"), model.note);
   const link = field(root, "link");
   link.hidden = !model.link;
-  if (model.link) link.href = model.link;
+  if (model.link) {
+    link.href = model.link;
+    link.textContent = model.linkLabel || link.dataset.defaultLabel;
+  }
 
   const image = root.querySelector("[data-image]");
   if (model.image) {

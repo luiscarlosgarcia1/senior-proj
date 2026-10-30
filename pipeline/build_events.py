@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Load flood events, local reports and weather records into the central database.
+"""Load flood events, local reports, historic news and weather into the central database.
 
 Pulls NOAA's Storm Events and GHCN-Daily files (downloading only what the cache
 lacks), reads them into memory with `noaa.py`, adds the hand-curated reports
@@ -105,6 +105,28 @@ def flood_reports(counties: list[str], seed_dir: Path) -> list[dict]:
     return reports
 
 
+def historic_news(counties: list[str], seed_dir: Path) -> list[dict]:
+    """Authorized, fixture-fed historic news with publisher-supplied coordinates.
+
+    This narrow first boundary admits only records that already have a fixed
+    source coordinate. Broader location evidence belongs to later work.
+    """
+    records = []
+    for slug in counties:
+        for record in read_ndjson(seed_file(slug, "historic-news.ndjson", seed_dir)):
+            coordinates = record["source_coordinates"]
+            records.append({
+                "id": record["record_id"], "county": slug,
+                "headline": record["headline"], "summary": record["summary"],
+                "published_at": record["published_at"], "publisher": record["source_publisher"],
+                "source_url": record["canonical_url"],
+                "source_lon": coordinates[0], "source_lat": coordinates[1],
+                "lon": coordinates[0], "lat": coordinates[1],
+                "retrieved_at": record["retrieved_at"],
+            })
+    return sorted(records, key=lambda record: (record["published_at"], record["id"]))
+
+
 def _reports_source(reports: list[dict]) -> dict:
     return {
         "id": "local-public-reports",
@@ -117,6 +139,18 @@ def _reports_source(reports: list[dict]) -> dict:
             "Curated by hand (data/seed/<county>/public-reports.ndjson) from public-web searches around NOAA "
             "event dates and places; each row keeps its own source URL, source date and retrieval date."
         ),
+    }
+
+
+def _historic_news_source(records: list[dict]) -> dict:
+    return {
+        "id": "historic-news:the-brownsville",
+        "publisher": "The Brownsville",
+        "dataset": "Authorized historic-news evidence fixture",
+        "url": "https://thebrownsville.org/",
+        "retrieved_at": None,
+        "record_count": len(records),
+        "notes": "Historic attributed reporting only. It is not a live alert, observation, or route instruction.",
     }
 
 
@@ -133,18 +167,21 @@ def main(
 
     events = flood_events(counties, raw_dir, seed_dir)
     reports = flood_reports(counties, seed_dir)
+    news = historic_news(counties, seed_dir)
     stations = noaa.weather_stations(counties)
     observations = noaa.weather_observations(counties, raw_dir)
 
     with open_database(database) as connection:
         replace_table(connection, "flood_events", events)
         replace_table(connection, "flood_reports", reports)
+        replace_table(connection, "historic_news", news)
         replace_table(connection, "weather_stations", stations)
         replace_table(connection, "weather_observations", observations)
         record_sources(connection, [
             noaa.storm_events_source(len(events), raw_dir),
             noaa.weather_source(len(observations), counties, raw_dir),
             _reports_source(reports),
+            _historic_news_source(news),
         ])
 
     mapped = sum(1 for e in events if e["lat"] is not None)

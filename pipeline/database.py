@@ -114,6 +114,25 @@ TABLES: dict[str, tuple[str, ...]] = {
              retrieved_at TEXT
            )""",
     ),
+    # Authorized historic publisher reporting. It is separate from curated
+    # event reports and live official signals: this is historic evidence only.
+    "historic_news": (
+        """CREATE TABLE IF NOT EXISTS historic_news (
+             id TEXT PRIMARY KEY,
+             county TEXT NOT NULL,
+             headline TEXT NOT NULL,
+             summary TEXT NOT NULL,
+             published_at TEXT NOT NULL,
+             publisher TEXT NOT NULL,
+             source_url TEXT NOT NULL,
+             source_lon REAL NOT NULL,
+             source_lat REAL NOT NULL,
+             lon REAL NOT NULL,
+             lat REAL NOT NULL,
+             retrieved_at TEXT NOT NULL
+           )""",
+        "CREATE INDEX IF NOT EXISTS historic_news_by_county_published ON historic_news(county, published_at)",
+    ),
     "weather_stations": (
         """CREATE TABLE IF NOT EXISTS weather_stations (
              station_id TEXT PRIMARY KEY,          -- GHCN-Daily id

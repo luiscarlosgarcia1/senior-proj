@@ -134,6 +134,20 @@ def flood_reports(db: Database, county_slug: str | None = None) -> list[dict]:
     return db.app_rows(f"select * from flood_reports{where} order by event_date, rowid", parameters)
 
 
+def historic_news_features(db: Database, county_slug: str | None = None) -> dict:
+    """Authorized historic publisher reporting as map points, never live signals."""
+    where, parameters = _where({"county": county_slug})
+    rows = db.rows(
+        "select id, county, headline, summary, published_at, publisher, source_url, lon, lat "
+        f"from historic_news{where} order by published_at, id", parameters,
+    ) or []
+    features = []
+    for row in rows:
+        lon, lat = row.pop("lon"), row.pop("lat")
+        features.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": row})
+    return {"type": "FeatureCollection", "features": features}
+
+
 def _inches(tenths_of_mm: float, digits: int) -> float:
     """GHCN-Daily stores rain in tenths of a millimetre."""
     return round(tenths_of_mm / 254.0, digits)
