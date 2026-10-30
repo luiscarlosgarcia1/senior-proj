@@ -1,13 +1,22 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx2
+import pytest
 
-from rgv_flood.wayfinder import AdvisoryStatus, Coordinate, ProviderRouteResult
+from rgv_flood.wayfinder import (
+    RGV_PROVIDER_QUALIFICATION_SUITE,
+    AdvisoryStatus,
+    Coordinate,
+    ProviderRouteResult,
+)
 from rgv_flood.wayfinder_advisories import (
+    POLICY_VERSION,
     PUBLIC_LIMITATION,
     OfficialClosureGeometryValidator,
     OpenRouteServiceProvider,
+    ProviderConfiguration,
+    ProviderQualificationRecord,
     VerifiedPublicAdvisoryService,
 )
 from rgv_flood.wayfinder_closures import (
@@ -52,11 +61,30 @@ def _restriction(
 
 
 class StaticProvider:
-    def __init__(self, result: ProviderRouteResult):
+    def __init__(self, result: ProviderRouteResult, configuration: str = "fixture-v1"):
         self.result = result
+        self.configuration = configuration
 
     def advise(self, request):
         return self.result
+
+    def qualification_configuration(self):
+        return ProviderConfiguration("fixture-provider", self.configuration)
+
+
+class QualificationPassingProvider(StaticProvider):
+    """A deterministic provider fixture that satisfies every RGV case."""
+
+    def advise(self, request):
+        for case in RGV_PROVIDER_QUALIFICATION_SUITE:
+            if request == case.request:
+                reasons = ("routing provider outage",) if case.requires_outage_reason else ("qualified fixture",)
+                return _result(
+                    status=AdvisoryStatus(case.expected_status),
+                    reasons=reasons,
+                    route_segment_ids=("fixture-alternative",) if case.expected_alternative else (),
+                )
+        return super().advise(request)
 
 
 def _result(**changes) -> ProviderRouteResult:
@@ -70,6 +98,25 @@ def _result(**changes) -> ProviderRouteResult:
     }
     values.update(changes)
     return ProviderRouteResult(**values)
+
+
+def _qualified_service(
+    result: ProviderRouteResult | None = None,
+    *,
+    configuration: str = "fixture-v1",
+    qualified_at: datetime = NOW,
+    validity: timedelta = timedelta(days=30),
+) -> VerifiedPublicAdvisoryService:
+    provider = QualificationPassingProvider(result or _result(), configuration)
+    record = ProviderQualificationRecord.evaluate(
+        provider,
+        record_id="qualification-fixture-001",
+        policy_version=POLICY_VERSION,
+        qualified_at=qualified_at,
+        validity=validity,
+    )
+    assert record.failures == ()
+    return VerifiedPublicAdvisoryService(provider, qualification_record=record)
 
 
 def test_ors_adapter_keeps_key_server_side_and_extracts_complete_geojson_geometry():
@@ -119,7 +166,7 @@ def test_ors_no_candidate_response_is_a_no_route_result():
 
 def test_service_suppresses_when_official_coverage_is_not_publishable():
     assessment = ClosureEvidencePolicy().assess((_coverage()[0],), (), NOW)
-    service = VerifiedPublicAdvisoryService(StaticProvider(_result()), qualification_passed=True)
+    service = _qualified_service()
 
     result = service.advise(ORIGIN, DESTINATION, assessment, NOW)
 
@@ -129,7 +176,7 @@ def test_service_suppresses_when_official_coverage_is_not_publishable():
 
 
 def test_service_suppresses_a_route_that_intersects_a_verified_official_restriction():
-    service = VerifiedPublicAdvisoryService(StaticProvider(_result()), qualification_passed=True)
+    service = _qualified_service()
 
     result = service.advise(ORIGIN, DESTINATION, _assessment(_restriction()), NOW)
 
@@ -140,7 +187,7 @@ def test_service_suppresses_a_route_that_intersects_a_verified_official_restrict
 
 
 def test_service_publishes_only_a_validated_route_with_source_links_and_provenance():
-    service = VerifiedPublicAdvisoryService(StaticProvider(_result()), qualification_passed=True)
+    service = _qualified_service()
 
     result = service.advise(ORIGIN, DESTINATION, _assessment(), NOW)
 
@@ -150,12 +197,12 @@ def test_service_publishes_only_a_validated_route_with_source_links_and_provenan
     assert "Official conditions: https://example.test/points" in result.advisory.limitations
     assert result.provenance.validation_outcome == "complete official overlay validation passed"
     assert result.provenance.restriction_ids == ()
+    assert result.provenance.qualification_record_id == "qualification-fixture-001"
+    assert result.provenance.qualification_suite_version == "rgv-provider-qualification/v1"
 
 
 def test_service_uses_the_required_message_when_provider_has_no_eligible_candidate():
-    service = VerifiedPublicAdvisoryService(
-        StaticProvider(_result(status=AdvisoryStatus.NO_ROUTE)), qualification_passed=True
-    )
+    service = _qualified_service(_result(status=AdvisoryStatus.NO_ROUTE))
 
     result = service.advise(ORIGIN, DESTINATION, _assessment(), NOW)
 
@@ -167,7 +214,7 @@ def test_service_uses_the_required_message_when_provider_has_no_eligible_candida
 def test_geometry_validator_fails_closed_when_a_restriction_cannot_be_checked():
     restriction = _restriction(missing_geometry=True)
     assessment = _assessment(restriction)
-    service = VerifiedPublicAdvisoryService(StaticProvider(_result()), qualification_passed=True)
+    service = _qualified_service()
 
     result = service.advise(ORIGIN, DESTINATION, assessment, NOW)
 
@@ -187,4 +234,37 @@ def test_service_suppresses_until_the_required_provider_qualification_has_passed
 
     assert result.advisory.status == AdvisoryStatus.SUPPRESSED
     assert result.advisory.route_geometry is None
-    assert result.provenance.validation_outcome == "provider qualification is not recorded as passed"
+    assert result.provenance.validation_outcome == "provider qualification record is not valid for the active provider configuration"
+
+
+def test_service_cannot_be_enabled_with_an_arbitrary_qualification_boolean():
+    with pytest.raises(TypeError):
+        VerifiedPublicAdvisoryService(StaticProvider(_result()), qualification_passed=True)
+
+
+def test_service_suppresses_when_qualification_record_targets_another_provider_configuration():
+    qualified_provider = QualificationPassingProvider(_result(), "approved-configuration")
+    record = ProviderQualificationRecord.evaluate(
+        qualified_provider,
+        record_id="qualification-approved-configuration",
+        policy_version=POLICY_VERSION,
+        qualified_at=NOW,
+    )
+    other_provider = QualificationPassingProvider(_result(), "different-configuration")
+
+    result = VerifiedPublicAdvisoryService(other_provider, qualification_record=record).advise(
+        ORIGIN, DESTINATION, _assessment(), NOW
+    )
+
+    assert result.advisory.status == AdvisoryStatus.SUPPRESSED
+    assert result.advisory.route_geometry is None
+    assert result.provenance.qualification_record_id == "qualification-approved-configuration"
+
+
+def test_service_suppresses_when_the_qualification_record_has_expired():
+    service = _qualified_service(qualified_at=NOW - timedelta(days=2), validity=timedelta(days=1))
+
+    result = service.advise(ORIGIN, DESTINATION, _assessment(), NOW)
+
+    assert result.advisory.status == AdvisoryStatus.SUPPRESSED
+    assert result.advisory.route_geometry is None

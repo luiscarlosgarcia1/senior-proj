@@ -9,13 +9,14 @@ shown.  Nothing here describes a road as safe, open, or passable.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 import httpx2
 from shapely.geometry import shape
 
 from rgv_flood.wayfinder import (
+    RGV_PROVIDER_QUALIFICATION_SUITE,
     AdvisoryStatus,
     Coordinate,
     ProviderRouteRequest,
@@ -23,6 +24,7 @@ from rgv_flood.wayfinder import (
     RouteAdvisory,
     RouteAdvisoryProvider,
     WayfinderBoundary,
+    evaluate_provider_qualification,
 )
 from rgv_flood.wayfinder_closures import ClosureAssessment, EvaluatedRestriction
 
@@ -33,6 +35,8 @@ PUBLIC_LIMITATION = (
 )
 NO_ROUTE_REASON = "No advisory route available from current official closure data."
 POLICY_VERSION = "wayfinder-public-closure-avoidance/v1"
+QUALIFICATION_SUITE_VERSION = "rgv-provider-qualification/v1"
+QUALIFICATION_VALIDITY = timedelta(days=30)
 
 
 class Clock(Protocol):
@@ -46,6 +50,73 @@ class RouteGeometryValidator(Protocol):
 
 
 @dataclass(frozen=True)
+class ProviderConfiguration:
+    """Non-secret provider identity used to bind qualification to an adapter."""
+
+    provider_id: str
+    configuration: str
+
+
+class QualificationIdentifiedProvider(RouteAdvisoryProvider, Protocol):
+    def qualification_configuration(self) -> ProviderConfiguration: ...
+
+
+@dataclass(frozen=True)
+class ProviderQualificationRecord:
+    """Immutable evidence that one exact adapter configuration passed the suite."""
+
+    record_id: str
+    provider_configuration: ProviderConfiguration
+    policy_version: str
+    suite_version: str
+    qualified_at: datetime
+    expires_at: datetime
+    suite_case_ids: tuple[str, ...]
+    failures: tuple[str, ...]
+
+    @classmethod
+    def evaluate(
+        cls,
+        provider: QualificationIdentifiedProvider,
+        *,
+        record_id: str,
+        policy_version: str,
+        qualified_at: datetime,
+        validity: timedelta = QUALIFICATION_VALIDITY,
+    ) -> ProviderQualificationRecord:
+        """Run the deterministic suite and retain its exact, reviewable result."""
+        failures = evaluate_provider_qualification(provider)
+        return cls(
+            record_id=record_id,
+            provider_configuration=provider.qualification_configuration(),
+            policy_version=policy_version,
+            suite_version=QUALIFICATION_SUITE_VERSION,
+            qualified_at=qualified_at,
+            expires_at=qualified_at + validity,
+            suite_case_ids=tuple(case.id for case in RGV_PROVIDER_QUALIFICATION_SUITE),
+            failures=tuple(f"{failure.case_id}: {failure.reason}" for failure in failures),
+        )
+
+    def is_current_for(
+        self, provider: RouteAdvisoryProvider, policy_version: str, checked_at: datetime
+    ) -> bool:
+        configuration = _qualification_configuration(provider)
+        return (
+            not self.failures
+            and self.provider_configuration == configuration
+            and self.policy_version == policy_version
+            and self.suite_version == QUALIFICATION_SUITE_VERSION
+            and self.suite_case_ids == tuple(case.id for case in RGV_PROVIDER_QUALIFICATION_SUITE)
+            and self.qualified_at <= checked_at < self.expires_at
+        )
+
+
+def _qualification_configuration(provider: RouteAdvisoryProvider) -> ProviderConfiguration | None:
+    configuration = getattr(provider, "qualification_configuration", None)
+    return configuration() if callable(configuration) else None
+
+
+@dataclass(frozen=True)
 class AdvisoryProvenance:
     """Immutable facts needed to review a published or withheld decision."""
 
@@ -55,6 +126,8 @@ class AdvisoryProvenance:
     validation_outcome: str
     restriction_ids: tuple[str, ...]
     source_urls: tuple[str, ...]
+    qualification_record_id: str | None
+    qualification_suite_version: str | None
 
 
 @dataclass(frozen=True)
@@ -128,6 +201,10 @@ class OpenRouteServiceProvider(RouteAdvisoryProvider):
             route_geometry=geometry,
         )
 
+    def qualification_configuration(self) -> ProviderConfiguration:
+        """Expose the approved non-secret configuration, never its API key."""
+        return ProviderConfiguration("openrouteservice", f"driving-car|{self._url}")
+
     @staticmethod
     def _suppressed(reason: str, retrieved_at: datetime) -> ProviderRouteResult:
         return ProviderRouteResult(
@@ -174,12 +251,13 @@ class VerifiedPublicAdvisoryService:
         provider: RouteAdvisoryProvider,
         geometry_validator: RouteGeometryValidator | None = None,
         policy_version: str = POLICY_VERSION,
-        qualification_passed: bool = False,
+        qualification_record: ProviderQualificationRecord | None = None,
     ) -> None:
+        self._provider = provider
         self._boundary = WayfinderBoundary(provider)
         self._geometry_validator = geometry_validator or OfficialClosureGeometryValidator()
         self._policy_version = policy_version
-        self._qualification_passed = qualification_passed
+        self._qualification_record = qualification_record
 
     def advise(
         self,
@@ -191,14 +269,16 @@ class VerifiedPublicAdvisoryService:
         restrictions = assessment.hard_restrictions
         restriction_ids = tuple(item.native_id for item in restrictions)
         source_urls = assessment.official_condition_links
-        if not self._qualification_passed:
+        if self._qualification_record is None or not self._qualification_record.is_current_for(
+            self._provider, self._policy_version, checked_at
+        ):
             return self._withheld(
                 AdvisoryStatus.SUPPRESSED,
                 ("approved routing provider has not passed the required RGV qualification suite",),
                 source_urls,
                 restriction_ids,
                 checked_at,
-                "provider qualification is not recorded as passed",
+                "provider qualification record is not valid for the active provider configuration",
             )
         if not assessment.can_publish_route:
             return self._withheld(
@@ -301,5 +381,7 @@ class VerifiedPublicAdvisoryService:
                 validation_outcome,
                 restriction_ids,
                 source_urls,
+                self._qualification_record.record_id if self._qualification_record else None,
+                self._qualification_record.suite_version if self._qualification_record else None,
             ),
         )
