@@ -62,6 +62,7 @@ class ProviderRouteResult:
     retrieved_at: datetime
     route_segment_ids: tuple[str, ...] = ()
     provider_violations: tuple[str, ...] = ()
+    route_geometry: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,7 @@ class RouteAdvisory:
     evidence: tuple[Evidence, ...]
     retrieved_at: datetime
     route_segment_ids: tuple[str, ...]
+    route_geometry: dict | None = None
 
 
 class RouteAdvisoryProvider(Protocol):
@@ -149,6 +151,7 @@ class WayfinderBoundary:
                 evidence=result.evidence,
                 retrieved_at=result.retrieved_at,
                 route_segment_ids=(),
+                route_geometry=None,
             )
         return RouteAdvisory(
             status=result.status,
@@ -157,6 +160,7 @@ class WayfinderBoundary:
             evidence=result.evidence,
             retrieved_at=result.retrieved_at,
             route_segment_ids=result.route_segment_ids,
+            route_geometry=result.route_geometry,
         )
 
     def responder_profile_is_available(self, now: datetime) -> bool:

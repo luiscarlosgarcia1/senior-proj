@@ -8,7 +8,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     geocoder_url: str = "https://nominatim.openstreetmap.org/search"
     # Nominatim's usage policy asks every client to identify itself.
     geocoder_user_agent: str = "RGV-Flood-Impact-Visualizer/1.0 (UTRGV senior project)"
+    # Optional until the approved Wayfinder public pilot is enabled. This value
+    # is server-side secret configuration and must never be returned to clients.
+    wayfinder_ors_api_key: SecretStr | None = None
     log_level: str = "INFO"
 
     @model_validator(mode="after")
