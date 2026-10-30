@@ -282,7 +282,11 @@ def historic_news_near_event(db: Database, event: dict) -> list[dict]:
     establish that an article caused, measured, or independently confirms an
     NOAA event.  Reports without supported incident time are never linked.
     """
-    start, _, end = _days_around(event)
+    # Historic reporting is associated only when its supported incident range
+    # overlaps the event itself.  The broader context window is for rainfall
+    # and existing curated-report context, not evidence association.
+    start = date.fromisoformat(event["date"])
+    end = date.fromisoformat(event["date_end"] or event["date"])
     return db.app_rows(
         """select id, county, headline, summary, incident_start, incident_end, published_at, publisher, source_url,
                   location_text, location_precision, geometry_reason, lon, lat

@@ -1,5 +1,7 @@
 """API: flood events, one event's context, rainfall records, curated reports."""
 
+import sqlite3
+
 
 def test_events_filtered_by_county_and_year(api_client):
     everything = api_client.get("/api/v1/events").json()
@@ -56,6 +58,31 @@ def test_event_context_links_historic_news_only_by_supported_incident_time_and_c
     # The fixture's only historic item is Cameron evidence, while this NOAA
     # event is Hidalgo.  A matching publication date must not be enough.
     assert context["historic_news"] == []
+
+
+def test_event_context_links_historic_news_only_when_incident_ranges_overlap(api_client, fixture_db):
+    """Adjacent dates remain context, not a related-news association."""
+    reports = [
+        ("before", "2020-07-24"),
+        ("overlaps", "2020-07-25"),
+        ("after", "2020-07-26"),
+    ]
+    with sqlite3.connect(fixture_db) as connection:
+        connection.executemany(
+            """insert into historic_news (
+                   id, county, headline, summary, incident_start, incident_end,
+                   published_at, publisher, source_url, location_precision, retrieved_at
+               ) values (?, 'hidalgo', ?, 'test summary', ?, null, '2020-07-27',
+                         'The Brownsville', ?, 'county', '2026-10-29T00:00:00Z')""",
+            [
+                (report_id, f"Historic report {report_id}", incident_date, f"https://example.test/{report_id}")
+                for report_id, incident_date in reports
+            ],
+        )
+
+    context = api_client.get("/api/v1/events/noaa-storm-events-1/context").json()
+
+    assert [report["id"] for report in context["historic_news"]] == ["overlaps"]
 
 
 def test_event_context_unknown_404(api_client):
