@@ -9,12 +9,18 @@ by :mod:`rgv_flood.wayfinder_advisories`.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum, StrEnum
+from typing import Protocol
 
-from rgv_flood.wayfinder_advisories import VerifiedAdvisory
+from rgv_flood.wayfinder import AdvisoryStatus, Coordinate
+from rgv_flood.wayfinder_advisories import (
+    AdvisoryProvenance,
+    VerifiedAdvisory,
+    VerifiedPublicAdvisoryService,
+)
+from rgv_flood.wayfinder_closures import ClosureAssessment
 
 
 class RefreshTrigger(StrEnum):
@@ -164,11 +170,87 @@ class ReevaluationAuditEvent:
     match_reasons: tuple[str, ...]
     provider_status: str
     validation_outcome: str
+    validation_record: AdvisoryProvenance
     user_visible_result: str
+
+
+class CurrentClosureAssessmentSource(Protocol):
+    """Supplies a fresh official-closure assessment for one reevaluation."""
+
+    def assess_current(self, checked_at: datetime) -> ClosureAssessment: ...
+
+
+class ReevaluationClock(Protocol):
+    def now(self) -> datetime: ...
+
+
+@dataclass(frozen=True)
+class ReevaluationResult:
+    """A result produced by the provider-bound, current-overlay path only."""
+
+    advisory: VerifiedAdvisory
+    verified: bool
+    reason: str
+
+
+class VerifiedAdvisoryReevaluation:
+    """Own complete route reevaluation for one active advisory request.
+
+    This is deliberately a concrete integration seam, rather than an arbitrary
+    callback.  It couples the active route coordinates, the current official
+    closure assessment, and the already provider/configuration-bound advisory
+    service.  A caller cannot hand :class:`RouteUpdateProposer` a fabricated
+    ``VerifiedAdvisory`` and have it appear as a route update.
+    """
+
+    def __init__(
+        self,
+        advisory_service: VerifiedPublicAdvisoryService,
+        closure_assessments: CurrentClosureAssessmentSource,
+        origin: Coordinate,
+        destination: Coordinate,
+        clock: ReevaluationClock,
+    ) -> None:
+        self._advisory_service = advisory_service
+        self._closure_assessments = closure_assessments
+        self._origin = origin
+        self._destination = destination
+        self._clock = clock
+
+    def reevaluate(self) -> ReevaluationResult:
+        checked_at = self._clock.now()
+        if checked_at.tzinfo is None or checked_at.utcoffset() is None:
+            raise ValueError("reevaluation clock must return an aware timestamp")
+        assessment = self._closure_assessments.assess_current(checked_at)
+        advisory = self._advisory_service.advise(
+            self._origin, self._destination, assessment, checked_at
+        )
+        provenance = advisory.provenance
+        if provenance.checked_at != checked_at:
+            return ReevaluationResult(advisory, False, "reevaluation validation record is stale")
+        if provenance.provider_status != advisory.advisory.status:
+            return ReevaluationResult(advisory, False, "reevaluation provider status is inconsistent")
+        if (
+            advisory.advisory.status is not AdvisoryStatus.ADVISORY
+            or provenance.validation_outcome != "complete official overlay validation passed"
+            or provenance.qualification_record_id is None
+            or provenance.qualification_suite_version is None
+        ):
+            return ReevaluationResult(
+                advisory,
+                False,
+                "current provider and official-overlay validation did not produce an eligible advisory",
+            )
+        return ReevaluationResult(advisory, True, "complete current reevaluation passed")
 
 
 class RouteUpdateProposer:
     """Requests a complete reevaluation and exposes only a proposed update."""
+
+    def __init__(self, reevaluation: VerifiedAdvisoryReevaluation) -> None:
+        if type(reevaluation) is not VerifiedAdvisoryReevaluation:
+            raise TypeError("route updates require a provider-bound verified reevaluation")
+        self._reevaluation = reevaluation
 
     def propose(
         self,
@@ -176,18 +258,24 @@ class RouteUpdateProposer:
         active_advisory_id: str,
         trigger: RefreshTrigger,
         risk_evaluation: SoftRiskEvaluation,
-        reevaluate: Callable[[], VerifiedAdvisory],
-    ) -> tuple[ProposedRouteUpdate, ReevaluationAuditEvent]:
-        """Run a caller-supplied current-overlay reevaluation exactly once.
-
-        The callable is the integration seam for the existing verified advisory
-        service; it must obtain fresh official coverage and geometry validation.
-        Its returned provenance is preserved in both the proposal and health
-        event so operators can review the actual validation result.
-        """
-        reevaluated = reevaluate()
+    ) -> tuple[ProposedRouteUpdate | None, ReevaluationAuditEvent]:
+        """Propose only a current, provider-bound, overlay-validated advisory."""
+        reevaluation = self._reevaluation.reevaluate()
+        reevaluated = reevaluation.advisory
         penalties = risk_evaluation.penalties
         reasons = tuple(item.reason for item in penalties) + risk_evaluation.cautions
+        if not reevaluation.verified:
+            event = ReevaluationAuditEvent(
+                trigger,
+                tuple(sorted({item.policy_version for item in penalties})),
+                tuple(item.evidence_id for item in penalties),
+                (*reasons, reevaluation.reason),
+                str(reevaluated.provenance.provider_status),
+                reevaluated.provenance.validation_outcome,
+                reevaluated.provenance,
+                "No route update is proposed because current reevaluation could not be verified.",
+            )
+            return None, event
         limitations = (
             *reevaluated.advisory.limitations,
             "Soft-risk context does not establish that a road is safe, open, or passable.",
@@ -207,6 +295,7 @@ class RouteUpdateProposer:
             reasons,
             str(reevaluated.provenance.provider_status),
             reevaluated.provenance.validation_outcome,
+            reevaluated.provenance,
             proposal.public_message,
         )
         return proposal, event
