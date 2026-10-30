@@ -55,6 +55,11 @@ _MAXIMUM_LENGTHS = {
     "retrieved_at": 40,
 }
 
+# A source still needs a local identity for stable caching and de-duplication.
+# The remaining fields are useful evidence when a publisher exposes them, but a
+# missing (or unusable) value should not discard an otherwise authorized item.
+_REQUIRED_TEXT_FIELDS = {"record_id"}
+
 
 def _checked(record: dict, source: HistoricNewsSource) -> dict:
     """Keep only bounded, non-article metadata from one authorized record."""
@@ -62,13 +67,17 @@ def _checked(record: dict, source: HistoricNewsSource) -> dict:
         raise HistoricNewsSourceError(
             f"{source.id}: record publisher is not the enabled publisher {source.publisher!r}"
         )
-    normalized = {key: record.get(key) for key in _MAXIMUM_LENGTHS}
+    normalized = {}
     for key, maximum in _MAXIMUM_LENGTHS.items():
-        value = normalized[key]
-        if key == "location_text" and value is None:
-            continue
-        if not isinstance(value, str) or not value.strip() or len(value) > maximum:
-            raise HistoricNewsSourceError(f"{source.id}: {key} must be a non-empty string of at most {maximum} characters")
+        value = record.get(key)
+        if isinstance(value, str) and value.strip() and len(value) <= maximum:
+            normalized[key] = value
+        elif key in _REQUIRED_TEXT_FIELDS:
+            raise HistoricNewsSourceError(
+                f"{source.id}: {key} must be a non-empty string of at most {maximum} characters"
+            )
+        else:
+            normalized[key] = None
     # These are the only fields the downstream map builder can retain.  In
     # particular, article text and any unrecognized response fields never leave
     # this boundary.
@@ -134,12 +143,20 @@ def records(
             cached.write_text("".join(_ndjson_line(record) for record in checked), encoding="utf-8")
         collected.extend(checked)
 
-    # Publisher URL is the durable story identity.  Pick a stable representative
-    # before the map builder sees anything, independent of input ordering.
-    chosen: dict[tuple[str, str], dict] = {}
-    for record in sorted(collected, key=lambda item: (item["source_publisher"], item["canonical_url"], item["record_id"])):
-        chosen.setdefault((record["source_publisher"], record["canonical_url"]), record)
-    return sorted(chosen.values(), key=lambda item: (item["published_at"], item["record_id"]))
+    # A publisher URL is the durable story identity when available.  If it is
+    # unavailable, retain the entry under its required source record identity
+    # instead of treating every URL-less item as a duplicate.
+    chosen: dict[tuple[str, str, str], dict] = {}
+    for record in sorted(
+        collected,
+        key=lambda item: (item["source_publisher"], item["canonical_url"] or "", item["record_id"]),
+    ):
+        if record["canonical_url"]:
+            identity = (record["source_publisher"], "url", record["canonical_url"])
+        else:
+            identity = (record["source_publisher"], "record", record["record_id"])
+        chosen.setdefault(identity, record)
+    return sorted(chosen.values(), key=lambda item: (item["published_at"] or "", item["record_id"]))
 
 
 def _ndjson_line(record: dict) -> str:
