@@ -107,13 +107,25 @@ REPORTS = [
     _report("hanna-recovery", "2020-07-31", duplicate_group="hanna"),  # days later, same flood
     _report("weslaco-streets", "2021-05-19"),
 ]
-HISTORIC_NEWS = [{
-    "id": "the-brownsville-fixture", "county": "cameron", "headline": "Historic flooding report from Brownsville",
-    "summary": "Project-written attributed historic reporting summary.", "published_at": "2020-07-26",
-    "publisher": "The Brownsville", "source_url": "https://example.test/historic-news",
-    "source_lon": -97.4975, "source_lat": 25.9017, "lon": -97.4975, "lat": 25.9017,
-    "retrieved_at": "2026-10-29T00:00:00Z",
-}]
+HISTORIC_NEWS = [
+    {
+        "id": "the-brownsville-fixture", "county": "cameron", "headline": "Historic flooding report from Brownsville",
+        "summary": "Project-written attributed historic reporting summary.", "published_at": "2020-07-26",
+        "publisher": "The Brownsville", "source_url": "https://example.test/historic-news",
+        "location_text": None, "location_precision": "source_coordinate", "geometry_reason": None,
+        "source_lon": -97.4975, "source_lat": 25.9017, "lon": -97.4975, "lat": 25.9017,
+        "retrieved_at": "2026-10-29T00:00:00Z",
+    },
+    {
+        "id": "countywide-fixture", "county": "cameron", "headline": "Countywide historic flooding report",
+        "summary": "Project-written summary of countywide reporting.", "published_at": "2020-07-27",
+        "publisher": "The Brownsville", "source_url": "https://example.test/countywide",
+        "location_text": "Cameron County, Texas", "location_precision": "county",
+        "geometry_reason": "The report is countywide, not a point.",
+        "source_lon": None, "source_lat": None, "lon": None, "lat": None,
+        "retrieved_at": "2026-10-29T00:00:00Z",
+    },
+]
 SOURCES = [
     {
         "id": "noaa-storm-events", "publisher": "NOAA NCEI", "dataset": "Storm Events Database",

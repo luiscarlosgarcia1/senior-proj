@@ -105,24 +105,57 @@ def flood_reports(counties: list[str], seed_dir: Path) -> list[dict]:
     return reports
 
 
-def historic_news(counties: list[str], seed_dir: Path) -> list[dict]:
-    """Authorized, fixture-fed historic news with publisher-supplied coordinates.
+def _historic_news_location(record: dict, county: str, boundary) -> dict:
+    """Turn one record's location evidence into a point only when it warrants one.
 
-    This narrow first boundary admits only records that already have a fixed
-    source coordinate. Broader location evidence belongs to later work.
+    The seed is the reproducible location authority.  We never call a live
+    geocoder here and never substitute a municipal or county centroid for an
+    article's uncertain location.
     """
+    coordinates = record.get("source_coordinates") or record.get("fixed_place_coordinates")
+    precision = "source_coordinate" if record.get("source_coordinates") else record.get("location_precision", "unresolved")
+    location_text = record.get("location_text")
+    reason = record.get("geometry_absence_reason")
+    source_lon = source_lat = lon = lat = None
+
+    if coordinates is not None:
+        if not isinstance(coordinates, list) or len(coordinates) != 2:
+            raise ValueError(f"{record['record_id']}: coordinates must be [longitude, latitude]")
+        source_lon, source_lat = coordinates
+        if not all(isinstance(value, (int, float)) for value in coordinates):
+            raise ValueError(f"{record['record_id']}: coordinates must be numeric")
+        if _near_county(source_lon, source_lat, boundary):
+            lon, lat = source_lon, source_lat
+            precision = "source_coordinate" if record.get("source_coordinates") else "fixed_place"
+        else:
+            reason = (
+                f"The supplied location falls outside {SHORT_NAMES[county]} County, so this historic report is retained "
+                "without a map point."
+            )
+    elif precision not in {"municipality", "county", "regional", "unresolved", "ambiguous"}:
+        raise ValueError(f"{record['record_id']}: non-mappable evidence needs a recognized location_precision")
+
+    if lon is None and not reason:
+        reason = "The report does not provide a fixed, unambiguous in-county location, so it is retained without a map point."
+    return {
+        "location_text": location_text, "location_precision": precision, "geometry_reason": reason,
+        "source_lon": source_lon, "source_lat": source_lat, "lon": lon, "lat": lat,
+    }
+
+
+def historic_news(counties: list[str], seed_dir: Path) -> list[dict]:
+    """Authorized historic-news evidence, including valid non-mappable records."""
     records = []
     for slug in counties:
+        boundary = shape(county_boundary(slug, seed_dir))
         for record in read_ndjson(seed_file(slug, "historic-news.ndjson", seed_dir)):
-            coordinates = record["source_coordinates"]
             records.append({
                 "id": record["record_id"], "county": slug,
                 "headline": record["headline"], "summary": record["summary"],
                 "published_at": record["published_at"], "publisher": record["source_publisher"],
                 "source_url": record["canonical_url"],
-                "source_lon": coordinates[0], "source_lat": coordinates[1],
-                "lon": coordinates[0], "lat": coordinates[1],
                 "retrieved_at": record["retrieved_at"],
+                **_historic_news_location(record, slug, boundary),
             })
     return sorted(records, key=lambda record: (record["published_at"], record["id"]))
 

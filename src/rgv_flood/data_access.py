@@ -134,16 +134,24 @@ def flood_reports(db: Database, county_slug: str | None = None) -> list[dict]:
     return db.app_rows(f"select * from flood_reports{where} order by event_date, rowid", parameters)
 
 
-def historic_news_features(db: Database, county_slug: str | None = None) -> dict:
-    """Authorized historic publisher reporting as map points, never live signals."""
+def historic_news(db: Database, county_slug: str | None = None) -> list[dict]:
+    """All authorized historic-news evidence, including records deliberately not mapped."""
     where, parameters = _where({"county": county_slug})
-    rows = db.rows(
-        "select id, county, headline, summary, published_at, publisher, source_url, lon, lat "
+    return db.app_rows(
+        "select id, county, headline, summary, published_at, publisher, source_url, location_text, location_precision, "
+        "geometry_reason, lon, lat "
         f"from historic_news{where} order by published_at, id", parameters,
-    ) or []
+    )
+
+
+def historic_news_features(db: Database, county_slug: str | None = None) -> dict:
+    """Only historic-news evidence with a verified in-county point becomes GeoJSON."""
+    rows = historic_news(db, county_slug)
     features = []
     for row in rows:
         lon, lat = row.pop("lon"), row.pop("lat")
+        if lon is None or lat is None:
+            continue
         features.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": row})
     return {"type": "FeatureCollection", "features": features}
 

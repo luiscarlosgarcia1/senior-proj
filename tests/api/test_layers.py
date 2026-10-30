@@ -64,6 +64,7 @@ def test_historic_news_is_a_separate_attributed_evidence_feed(api_client):
             "id": "the-brownsville-fixture", "county": "cameron", "headline": "Historic flooding report from Brownsville",
             "summary": "Project-written attributed historic reporting summary.", "published_at": "2020-07-26",
             "publisher": "The Brownsville", "source_url": "https://example.test/historic-news",
+            "location_text": None, "location_precision": "source_coordinate", "geometry_reason": None,
         },
     }]
 

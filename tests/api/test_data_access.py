@@ -34,6 +34,19 @@ def test_event_context_queries(fixture_db):
     assert [r["id"] for r in data_access.reports_near_event(db, event)] == ["hanna-landfall", "hanna-recovery"]
 
 
+def test_historic_news_retains_non_mappable_evidence_but_geojson_does_not(fixture_db):
+    db = Database(fixture_db)
+
+    records = data_access.historic_news(db, "cameron")
+    assert [(record["id"], record["geometry_reason"]) for record in records] == [
+        ("the-brownsville-fixture", None),
+        ("countywide-fixture", "The report is countywide, not a point."),
+    ]
+    assert [feature["properties"]["id"] for feature in data_access.historic_news_features(db, "cameron")["features"]] == [
+        "the-brownsville-fixture"
+    ]
+
+
 def test_functions_tolerate_missing_database(tmp_path):
     db = Database(tmp_path / "not-built.sqlite3")
 

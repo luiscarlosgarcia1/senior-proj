@@ -125,10 +125,13 @@ TABLES: dict[str, tuple[str, ...]] = {
              published_at TEXT NOT NULL,
              publisher TEXT NOT NULL,
              source_url TEXT NOT NULL,
-             source_lon REAL NOT NULL,
-             source_lat REAL NOT NULL,
-             lon REAL NOT NULL,
-             lat REAL NOT NULL,
+             location_text TEXT,
+             location_precision TEXT NOT NULL,    -- source_coordinate, fixed_place, municipality, county, regional, unresolved
+             geometry_reason TEXT,                 -- why valid evidence deliberately has no map point
+             source_lon REAL,
+             source_lat REAL,
+             lon REAL,
+             lat REAL,
              retrieved_at TEXT NOT NULL
            )""",
         "CREATE INDEX IF NOT EXISTS historic_news_by_county_published ON historic_news(county, published_at)",

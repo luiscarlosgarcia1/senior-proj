@@ -103,11 +103,14 @@ function describe(p, layerId) {
     return { title: p.summary, lines: [joined(p.source_publisher, p.expires_at && `until ${valleyTime(p.expires_at)}`)], note: "Official live signal", link: p.source_url };
   }
   if (layerId === "historic-news") {
+    const locationNote = p.location_precision === "fixed_place"
+      ? " Location is a fixed-place reference and is less precise than a publisher-supplied coordinate."
+      : "";
     return {
       title: "Historic news report",
       lines: [joined(p.publisher, p.published_at, `${p.county} County`)],
       body: p.summary,
-      note: "Historic attributed reporting, not a live alert, observation, or route instruction.",
+      note: "Historic attributed reporting, not a live alert, observation, or route instruction." + locationNote,
       link: p.source_url,
       linkLabel: "Read original",
     };
