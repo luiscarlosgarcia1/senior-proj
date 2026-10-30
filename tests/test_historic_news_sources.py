@@ -35,6 +35,22 @@ def test_enabled_source_fails_clearly_without_authorized_response_cache_or_fixtu
         records(["cameron"], tmp_path / "empty-seed", cache_dir=tmp_path / "cache")
 
 
+def test_enabled_source_rejects_non_authorized_county_in_a_multi_county_build(tmp_path):
+    response = [_record("cameron", "https://example.test/cameron"), _record("hidalgo", "https://example.test/hidalgo")]
+    response[1]["county"] = "hidalgo"
+    cache = tmp_path / "cache"
+
+    with pytest.raises(HistoricNewsSourceError, match="the-brownsville: response contains a record outside the source's authorized counties"):
+        records(
+            ["cameron", "hidalgo"],
+            tmp_path / "empty-seed",
+            cache_dir=cache,
+            authorized_responses={"the-brownsville": response},
+        )
+
+    assert not (cache / "the-brownsville.ndjson").exists()
+
+
 def test_disabled_myrgv_source_is_registry_only_and_never_enabled():
     (myrgv,) = [source for source in SOURCES if source.id == "myrgv-valley-morning-star"]
     assert not myrgv.enabled

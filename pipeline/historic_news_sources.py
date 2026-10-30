@@ -111,7 +111,8 @@ def records(
     """
     collected: list[dict] = []
     for source in SOURCES:
-        if not source.enabled or not set(counties).intersection(source.counties):
+        source_counties = set(counties).intersection(source.counties)
+        if not source.enabled or not source_counties:
             continue
         supplied = (authorized_responses or {}).get(source.id)
         cached = _cache_file(cache_dir, source) if cache_dir else None
@@ -120,14 +121,14 @@ def records(
         elif cached and cached.exists():
             raw_records = read_ndjson(cached)
         else:
-            raw_records = _records_from_fixture(counties, seed_dir)
+            raw_records = _records_from_fixture(sorted(source_counties), seed_dir)
             if not raw_records:
                 raise HistoricNewsSourceError(
                     f"{source.id}: no authorized response or valid cache is available; no historic-news data was produced"
                 )
         checked = [_checked(record, source) for record in raw_records]
-        if any(record["county"] not in counties for record in checked):
-            raise HistoricNewsSourceError(f"{source.id}: response contains a record outside the requested counties")
+        if any(record["county"] not in source_counties for record in checked):
+            raise HistoricNewsSourceError(f"{source.id}: response contains a record outside the source's authorized counties")
         if supplied is not None and cached:
             cached.parent.mkdir(parents=True, exist_ok=True)
             cached.write_text("".join(_ndjson_line(record) for record in checked), encoding="utf-8")
