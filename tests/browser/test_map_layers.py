@@ -137,6 +137,33 @@ def test_theme_switch_during_layer_load(map_page, console_errors):
     assert console_errors == []
 
 
+def test_county_change_refreshes_enabled_historic_news_layer(map_page):
+    page = map_page("#county=cameron")
+    requests = []
+
+    def historic_news(route):
+        requests.append(route.request.url)
+        county = "hidalgo" if "county=hidalgo" in route.request.url else "cameron"
+        route.fulfill(json={
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [-98.2, 26.2]},
+                "properties": {"county": county},
+            }],
+        })
+
+    page.route("**/api/v1/historic-news.geojson?*", historic_news)
+    _row(page, "historic-news").check()
+    wait_js(page, "window.__rgvMap.getSource('src-historic-news')")
+
+    page.locator("#county-header").select_option("hidalgo")
+    wait_js(page, "window.__rgvMap.getSource('src-historic-news')._data.features[0].properties.county === 'hidalgo'")
+
+    assert any("county=cameron" in request for request in requests)
+    assert any("county=hidalgo" in request for request in requests)
+
+
 def test_map_fills_its_area(map_page):
     page = map_page()
 

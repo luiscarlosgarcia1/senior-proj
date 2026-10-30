@@ -28,7 +28,7 @@ async function sourceFor(info) {
  * The registry remains intact, so a theme rebuild and share-link state retain
  * the same enabled layer while its evidence is correctly county-filtered. */
 export async function refreshCountyData(map, county) {
-  await Promise.all([...registry.values()].filter((entry) => entry.info.delivery === "geojson").map(async (entry) => {
+  await Promise.all([...registry.values()].filter((entry) => entry.info.delivery === "api").map(async (entry) => {
     const path = entry.info.url.replace(/^\/api\/v1\//, "");
     const data = await getJson(path, { county: county || null }, { cancelPrevious: false });
     entry.source.data = data;
