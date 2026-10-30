@@ -50,6 +50,11 @@ def _near_county(lon: float, lat: float, boundary) -> bool:
     return boundary.distance(Point(lon, lat)) <= BOUNDARY_TOLERANCE_DEG  # 0 when inside
 
 
+def _inside_county(lon: float, lat: float, boundary) -> bool:
+    """Whether a historic-news point has evidence for an in-county location."""
+    return boundary.covers(Point(lon, lat))
+
+
 def _plot(event: dict, boundary) -> dict:
     """The event with the point the map should show for it (lon/lat), which is
     NOAA's own coordinate unless that falls outside the event's county."""
@@ -124,7 +129,7 @@ def _historic_news_location(record: dict, county: str, boundary) -> dict:
         source_lon, source_lat = coordinates
         if not all(isinstance(value, (int, float)) for value in coordinates):
             raise ValueError(f"{record['record_id']}: coordinates must be numeric")
-        if _near_county(source_lon, source_lat, boundary):
+        if _inside_county(source_lon, source_lat, boundary):
             lon, lat = source_lon, source_lat
             precision = "source_coordinate" if record.get("source_coordinates") else "fixed_place"
         else:
