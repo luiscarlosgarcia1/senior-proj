@@ -26,6 +26,7 @@ from pathlib import Path
 
 import noaa
 from database import open_database, record_sources, replace_table
+from historic_news_sources import records as historic_news_records
 from jsonio import read_ndjson
 from paths import DATABASE, SEED_DIR, county_boundary, seed_file
 from shapely.geometry import Point, shape
@@ -151,17 +152,17 @@ def _historic_news_location(record: dict, county: str, boundary) -> dict:
 def historic_news(counties: list[str], seed_dir: Path) -> list[dict]:
     """Authorized historic-news evidence, including valid non-mappable records."""
     records = []
-    for slug in counties:
+    for record in historic_news_records(counties, seed_dir):
+        slug = record["county"]
         boundary = shape(county_boundary(slug, seed_dir))
-        for record in read_ndjson(seed_file(slug, "historic-news.ndjson", seed_dir)):
-            records.append({
-                "id": record["record_id"], "county": slug,
-                "headline": record["headline"], "summary": record["summary"],
-                "published_at": record["published_at"], "publisher": record["source_publisher"],
-                "source_url": record["canonical_url"],
-                "retrieved_at": record["retrieved_at"],
-                **_historic_news_location(record, slug, boundary),
-            })
+        records.append({
+            "id": record["record_id"], "county": slug,
+            "headline": record["headline"], "summary": record["summary"],
+            "published_at": record["published_at"], "publisher": record["source_publisher"],
+            "source_url": record["canonical_url"],
+            "retrieved_at": record["retrieved_at"],
+            **_historic_news_location(record, slug, boundary),
+        })
     return sorted(records, key=lambda record: (record["published_at"], record["id"]))
 
 
