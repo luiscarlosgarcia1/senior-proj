@@ -138,11 +138,29 @@ class NwsReport(BaseModel):
     lat: float | None = None
 
 
+class HistoricNews(BaseModel):
+    id: str
+    county: str
+    headline: str
+    summary: str
+    incident_start: str | None = None
+    incident_end: str | None = None
+    published_at: str
+    publisher: str
+    source_url: str
+    location_text: str | None = None
+    location_precision: str
+    geometry_reason: str | None = None
+    lon: float | None = None
+    lat: float | None = None
+
+
 class EventContext(BaseModel):
     event: Event
     rain: RainNearEvent
     reports: list[Report]
     nws_reports: list[NwsReport]
+    historic_news: list[HistoricNews]
 
 
 class RainfallRecord(BaseModel):

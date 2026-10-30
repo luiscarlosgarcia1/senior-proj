@@ -58,6 +58,16 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  Alpine.data("historicNewsPanel", countyList("historic-news", {
+    // Incident time is separate because publication time must never imply it.
+    meta() {
+      const incident = this.record.incident_start
+        ? `Incident ${day(this.record.incident_start)}${this.record.incident_end ? `–${day(this.record.incident_end)}` : ""}`
+        : "Incident time not established";
+      return [incident, `Published ${day(this.record.published_at)}`, this.record.publisher].filter(Boolean).join(" · ");
+    },
+  }));
+
   Alpine.data("sourcesPanel", () => ({
     sources: [],
     builtAt: null,

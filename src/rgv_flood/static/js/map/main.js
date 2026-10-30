@@ -7,7 +7,7 @@
 import * as maplibregl from "../../vendor/maplibre/maplibre-gl.mjs";
 import { getJson } from "../api.js";
 import { hideForeignLabels, usSideMask } from "./labels.js";
-import { beginStyleSwitch, loadedData, ownStyle } from "./layers.js";
+import { beginStyleSwitch, loadedData, ownStyle, refreshCountyData } from "./layers.js";
 
 const VALLEY = [[-99.2, 25.8], [-97.1, 26.8]]; // west-south, east-north of the four counties
 const container = document.getElementById("map");
@@ -94,7 +94,10 @@ function showCounty(map, slug) {
 if (container) {
   const map = createMap();
   window.addEventListener("rgv:theme", (event) => applyTheme(map, event.detail));
-  window.addEventListener("rgv:county", (event) => showCounty(map, event.detail));
+  window.addEventListener("rgv:county", (event) => {
+    showCounty(map, event.detail);
+    refreshCountyData(map, event.detail).catch((error) => console.warn("county layer refresh unavailable", error));
+  });
   window.addEventListener("rgv:map-shown", () => requestAnimationFrame(() => map.resize())); // phones: map view again
 }
 

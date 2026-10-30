@@ -52,6 +52,15 @@
         </template>
         <li class="text-muted" x-show="!context.reports.length && !context.nws_reports.length">{{ t("events.no_related") }}</li>
       </ul>
+      <div class="mt-3 border-t border-line pt-2.5 text-xs text-muted">Related historic news</div>
+      <p class="mt-1 text-xs text-muted">Shown only for the same county and overlapping supported incident time; this is context, not proof of causation.</p>
+      <ul class="mt-1.5 flex flex-col gap-1.5 text-sm leading-snug">
+        <template x-for="news in context.historic_news" x-bind:key="news.id">
+          <li class="flex gap-2"><span class="text-layer-historic" aria-hidden="true">◇</span>
+            <span><a x-bind:href="news.source_url" target="_blank" rel="noopener" x-text="news.headline"></a> <span class="text-muted" x-text="historicNewsMeta()"></span></span></li>
+        </template>
+        <li class="text-muted" x-show="!context.historic_news.length">No historic news has supported incident-time overlap.</li>
+      </ul>
     </div>
   </template>
 </div>

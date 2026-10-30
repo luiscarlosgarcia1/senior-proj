@@ -22,7 +22,7 @@ def test_authorized_historic_news_fixture_flows_to_map_rows(tmp_path):
     )
 
     assert build_events.historic_news(["cameron"], Path(seed)) == [{
-        "id": "one", "county": "cameron", "headline": "A", "summary": "Project summary",
+        "id": "one", "county": "cameron", "headline": "A", "summary": "Project summary", "incident_start": None, "incident_end": None,
         "published_at": "2020-07-26", "publisher": "The Brownsville", "source_url": "https://example.test/original",
         "location_text": None, "location_precision": "source_coordinate", "geometry_reason": None,
         "source_lon": -97.5, "source_lat": 25.9, "lon": -97.5, "lat": 25.9,

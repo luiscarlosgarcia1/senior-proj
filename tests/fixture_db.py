@@ -110,7 +110,7 @@ REPORTS = [
 HISTORIC_NEWS = [
     {
         "id": "the-brownsville-fixture", "county": "cameron", "headline": "Historic flooding report from Brownsville",
-        "summary": "Project-written attributed historic reporting summary.", "published_at": "2020-07-26",
+        "summary": "Project-written attributed historic reporting summary.", "incident_start": "2020-07-25", "incident_end": None, "published_at": "2020-07-26",
         "publisher": "The Brownsville", "source_url": "https://example.test/historic-news",
         "location_text": None, "location_precision": "source_coordinate", "geometry_reason": None,
         "source_lon": -97.4975, "source_lat": 25.9017, "lon": -97.4975, "lat": 25.9017,
@@ -118,7 +118,7 @@ HISTORIC_NEWS = [
     },
     {
         "id": "countywide-fixture", "county": "cameron", "headline": "Countywide historic flooding report",
-        "summary": "Project-written summary of countywide reporting.", "published_at": "2020-07-27",
+        "summary": "Project-written summary of countywide reporting.", "incident_start": None, "incident_end": None, "published_at": "2020-07-27",
         "publisher": "The Brownsville", "source_url": "https://example.test/countywide",
         "location_text": "Cameron County, Texas", "location_precision": "county",
         "geometry_reason": "The report is countywide, not a point.",

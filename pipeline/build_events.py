@@ -22,6 +22,7 @@ Safe to re-run (replaces only its own tables).
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import noaa
@@ -155,15 +156,38 @@ def historic_news(counties: list[str], seed_dir: Path) -> list[dict]:
     for record in historic_news_records(counties, seed_dir):
         slug = record["county"]
         boundary = shape(county_boundary(slug, seed_dir))
+        incident_start = _incident_date(record, "incident_start")
+        incident_end = _incident_date(record, "incident_end")
+        if incident_end and (not incident_start or incident_end < incident_start):
+            raise ValueError(f"{record['record_id']}: incident_end requires and cannot precede incident_start")
         records.append({
             "id": record["record_id"], "county": slug,
             "headline": record["headline"], "summary": record["summary"],
+            "incident_start": incident_start, "incident_end": incident_end,
             "published_at": record["published_at"], "publisher": record["source_publisher"],
             "source_url": record["canonical_url"],
             "retrieved_at": record["retrieved_at"],
             **_historic_news_location(record, slug, boundary),
         })
     return sorted(records, key=lambda record: (record["published_at"], record["id"]))
+
+
+def _incident_date(record: dict, field: str) -> str | None:
+    """Validate an optional supported incident calendar date without deriving it.
+
+    A publisher's publication date is evidence about publication only.  It is
+    deliberately never used to populate these fields.
+    """
+    value = record.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{record['record_id']}: {field} must be a date-only string")
+    try:
+        date.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError(f"{record['record_id']}: {field} must be YYYY-MM-DD") from error
+    return value
 
 
 def _reports_source(reports: list[dict]) -> dict:

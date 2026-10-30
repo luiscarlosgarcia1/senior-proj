@@ -49,6 +49,15 @@ def test_event_context_includes_nws_reports(api_client):
     assert [r["id"] for r in context["nws_reports"]] == ["nws-1"]  # same county, same days; not Cameron's
 
 
+def test_event_context_links_historic_news_only_by_supported_incident_time_and_county(api_client):
+    """Publication time alone never associates historic reporting to an event."""
+    context = api_client.get("/api/v1/events/noaa-storm-events-1/context").json()
+
+    # The fixture's only historic item is Cameron evidence, while this NOAA
+    # event is Hidalgo.  A matching publication date must not be enough.
+    assert context["historic_news"] == []
+
+
 def test_event_context_unknown_404(api_client):
     assert api_client.get("/api/v1/events/nope/context").status_code == 404
 

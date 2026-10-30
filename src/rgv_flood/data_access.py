@@ -138,7 +138,7 @@ def historic_news(db: Database, county_slug: str | None = None) -> list[dict]:
     """All authorized historic-news evidence, including records deliberately not mapped."""
     where, parameters = _where({"county": county_slug})
     return db.app_rows(
-        "select id, county, headline, summary, published_at, publisher, source_url, location_text, location_precision, "
+        "select id, county, headline, summary, incident_start, incident_end, published_at, publisher, source_url, location_text, location_precision, "
         "geometry_reason, lon, lat "
         f"from historic_news{where} order by published_at, id", parameters,
     )
@@ -272,6 +272,27 @@ def nws_reports_near_event(db: Database, event: dict) -> list[dict]:
            where county = ? and substr(reported_at, 1, 10) between ? and ?
            order by reported_at, id""",
         (event["county"], first.isoformat(), last.isoformat()),
+    )
+
+
+def historic_news_near_event(db: Database, event: dict) -> list[dict]:
+    """Historic reporting with a supported incident-time overlap in this county.
+
+    This is contextual association only: matching dates and county do not
+    establish that an article caused, measured, or independently confirms an
+    NOAA event.  Reports without supported incident time are never linked.
+    """
+    start, _, end = _days_around(event)
+    return db.app_rows(
+        """select id, county, headline, summary, incident_start, incident_end, published_at, publisher, source_url,
+                  location_text, location_precision, geometry_reason, lon, lat
+           from historic_news
+           where county = :county
+             and incident_start is not null
+             and incident_start <= :end
+             and coalesce(incident_end, incident_start) >= :start
+           order by incident_start, id""",
+        {"county": event["county"], "start": start.isoformat(), "end": end.isoformat()},
     )
 
 

@@ -20,7 +20,20 @@ async function sourceFor(info) {
     return { type: "vector", tiles: [`${location.origin}${info.url}`], minzoom: 7, maxzoom: 14 }; // as cut by pipeline/layer_tiles.py
   }
   const path = info.url.replace(/^\/api\/v1\//, "");
-  return { type: "geojson", data: await getJson(path, {}, { cancelPrevious: false }) };
+  const county = window.Alpine?.store("app")?.county;
+  return { type: "geojson", data: await getJson(path, { county: county || null }, { cancelPrevious: false }) };
+}
+
+/** Refresh already-enabled API GeoJSON layers when a county is selected.
+ * The registry remains intact, so a theme rebuild and share-link state retain
+ * the same enabled layer while its evidence is correctly county-filtered. */
+export async function refreshCountyData(map, county) {
+  await Promise.all([...registry.values()].filter((entry) => entry.info.delivery === "geojson").map(async (entry) => {
+    const path = entry.info.url.replace(/^\/api\/v1\//, "");
+    const data = await getJson(path, { county: county || null }, { cancelPrevious: false });
+    entry.source.data = data;
+    map.getSource(`src-${entry.info.id}`)?.setData(data);
+  }));
 }
 
 /** The filter of a style layer with the layer's switched-off parts left out. */

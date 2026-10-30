@@ -156,5 +156,9 @@ document.addEventListener("alpine:init", () => {
       const when = new Date(this.nws.reported_at).toLocaleTimeString("en-US", { timeZone: "America/Chicago", timeStyle: "short" });
       return ["NWS", this.nws.city, when].filter(Boolean).join(" · ");
     },
+    historicNewsMeta() {
+      const end = this.news.incident_end ? `–${day(this.news.incident_end)}` : "";
+      return [this.news.publisher, `Incident ${day(this.news.incident_start)}${end}`, `Published ${day(this.news.published_at)}`].filter(Boolean).join(" · ");
+    },
   }));
 });

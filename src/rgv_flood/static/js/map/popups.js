@@ -108,7 +108,7 @@ function describe(p, layerId) {
       : "";
     return {
       title: "Historic news report",
-      lines: [joined(p.publisher, p.published_at, `${p.county} County`)],
+      lines: [joined(p.publisher, p.incident_start ? `Incident ${p.incident_start}${p.incident_end ? `–${p.incident_end}` : ""}` : "Incident time not established", `Published ${p.published_at}`, `${p.county} County`)],
       body: p.summary,
       note: "Historic attributed reporting, not a live alert, observation, or route instruction." + locationNote,
       link: p.source_url,

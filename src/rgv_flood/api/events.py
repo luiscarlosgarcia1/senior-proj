@@ -7,7 +7,13 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from rgv_flood import data_access
-from rgv_flood.api.models import County, Event, EventContext, EventsResponse
+from rgv_flood.api.models import (
+    County,
+    Event,
+    EventContext,
+    EventsResponse,
+    HistoricNews,
+)
 from rgv_flood.caching import conditional_json
 from rgv_flood.db import Db
 
@@ -54,5 +60,6 @@ def event_context(event_id: str, request: Request, db: Db):
         rain=data_access.rainfall_near_event(db, event),
         reports=data_access.reports_near_event(db, event),
         nws_reports=data_access.nws_reports_near_event(db, event),
+        historic_news=[HistoricNews(**row) for row in data_access.historic_news_near_event(db, event)],
     )
     return conditional_json(request, body, MAX_AGE)

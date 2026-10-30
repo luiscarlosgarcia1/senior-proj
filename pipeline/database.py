@@ -122,6 +122,8 @@ TABLES: dict[str, tuple[str, ...]] = {
              county TEXT NOT NULL,
              headline TEXT NOT NULL,
              summary TEXT NOT NULL,
+             incident_start TEXT,                 -- supported calendar date, never inferred from publication
+             incident_end TEXT,                   -- supported calendar date, inclusive
              published_at TEXT NOT NULL,
              publisher TEXT NOT NULL,
              source_url TEXT NOT NULL,
