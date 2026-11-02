@@ -55,10 +55,17 @@ _MAXIMUM_LENGTHS = {
     "retrieved_at": 40,
 }
 
-# A source still needs a local identity for stable caching and de-duplication.
-# The remaining fields are useful evidence when a publisher exposes them, but a
-# missing (or unusable) value should not discard an otherwise authorized item.
-_REQUIRED_TEXT_FIELDS = {"record_id"}
+# A record cannot become published evidence without the fields required by the
+# build, database, API, and rendered "Read original" link.  Keep that contract
+# at this boundary so malformed source data fails before a partial row exists.
+_REQUIRED_TEXT_FIELDS = {
+    "record_id",
+    "headline",
+    "summary",
+    "published_at",
+    "canonical_url",
+    "retrieved_at",
+}
 
 
 def _checked(record: dict, source: HistoricNewsSource) -> dict:

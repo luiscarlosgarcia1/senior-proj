@@ -3,6 +3,8 @@
 from pathlib import Path
 
 import build_events
+import pytest
+from historic_news_sources import HistoricNewsSourceError
 
 
 def test_authorized_historic_news_fixture_flows_to_map_rows(tmp_path):
@@ -28,6 +30,31 @@ def test_authorized_historic_news_fixture_flows_to_map_rows(tmp_path):
         "source_lon": -97.5, "source_lat": 25.9, "lon": -97.5, "lat": 25.9,
         "retrieved_at": "2026-10-29T00:00:00Z",
     }]
+
+
+@pytest.mark.parametrize("field, value", [
+    ("headline", None),
+    ("summary", ""),
+    ("published_at", None),
+    ("canonical_url", None),
+    ("retrieved_at", None),
+])
+def test_historic_news_build_rejects_records_missing_required_published_metadata(tmp_path, field, value):
+    """A record must be publishable before the build can retain it as evidence."""
+    seed = tmp_path / "seed"
+    (seed / "cameron").mkdir(parents=True)
+    record = {
+        "record_id": "incomplete", "headline": "A", "summary": "Project summary",
+        "published_at": "2020-07-26", "source_publisher": "The Brownsville",
+        "canonical_url": "https://example.test/original", "retrieved_at": "2026-10-29T00:00:00Z",
+    }
+    record[field] = value
+    import json
+
+    (seed / "cameron" / "historic-news.ndjson").write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    with pytest.raises(HistoricNewsSourceError, match=f"{field} must be a non-empty string"):
+        build_events.historic_news(["cameron"], seed)
 
 
 def test_historic_news_retains_uncertain_locations_without_centroid(tmp_path):

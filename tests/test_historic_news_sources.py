@@ -51,46 +51,23 @@ def test_enabled_source_rejects_non_authorized_county_in_a_multi_county_build(tm
     assert not (cache / "the-brownsville.ndjson").exists()
 
 
-def test_authorized_response_retains_entries_with_unavailable_optional_metadata(tmp_path):
+@pytest.mark.parametrize("field, value", [
+    ("headline", None),
+    ("summary", ""),
+    ("published_at", None),
+    ("canonical_url", None),
+    ("retrieved_at", "x" * 41),
+])
+def test_authorized_response_rejects_missing_required_published_metadata(tmp_path, field, value):
     response = _record("minimal", "https://example.test/minimal")
-    response.update({
-        "headline": None,
-        "summary": "",
-        "published_at": None,
-        "canonical_url": None,
-        "location_text": 42,
-        "retrieved_at": "x" * 41,
-    })
+    response[field] = value
 
-    (result,) = records(
-        ["cameron"],
-        tmp_path / "empty-seed",
-        authorized_responses={"the-brownsville": [response]},
-    )
-
-    assert result["record_id"] == "minimal"
-    assert {field: result[field] for field in (
-        "headline", "summary", "published_at", "canonical_url", "location_text", "retrieved_at",
-    )} == {
-        "headline": None,
-        "summary": None,
-        "published_at": None,
-        "canonical_url": None,
-        "location_text": None,
-        "retrieved_at": None,
-    }
-
-
-def test_url_less_entries_remain_distinct_and_sort_deterministically(tmp_path):
-    response = [_record("later", ""), _record("first", "")]
-
-    result = records(
-        ["cameron"],
-        tmp_path / "empty-seed",
-        authorized_responses={"the-brownsville": response},
-    )
-
-    assert [row["record_id"] for row in result] == ["first", "later"]
+    with pytest.raises(HistoricNewsSourceError, match=f"{field} must be a non-empty string"):
+        records(
+            ["cameron"],
+            tmp_path / "empty-seed",
+            authorized_responses={"the-brownsville": [response]},
+        )
 
 
 def test_disabled_myrgv_source_is_registry_only_and_never_enabled():
