@@ -5,6 +5,12 @@
  * `lyr-<id>-point`. Colors come from the design tokens (the CSS variables in
  * input.css), so a theme switch only needs `readColors()` again. */
 
+import {
+  FLOOD_PHOTO_LAYER, FLOOD_PHOTO_LOCATION_CLUSTER_LAYER, FLOOD_PHOTO_LOCATION_POINT_LAYER,
+  FLOOD_PHOTO_LOCATION_SOURCE, FLOOD_PHOTO_OPENABLE_CLUSTER_LAYER, FLOOD_PHOTO_OPENABLE_POINT_LAYER,
+  FLOOD_PHOTO_OPENABLE_SOURCE,
+} from "./flood-photo-layer.js";
+
 /** Color key (a layer's legend color, or one the styles below use) -> its CSS variable. */
 export const TOKENS = {
   nfhl: "--c-nfhl", firm: "--c-firm", drain: "--c-drain", infra: "--c-infra", city: "--c-city",
@@ -73,15 +79,57 @@ export function styleLayersFor(info, colors) {
     const ramp = ["match", ["get", "claims_class"], 1, colors.r1, 2, colors.r2, 3, colors.r3, 4, colors.r4, colors.r5];
     return [at("fill", "fill", POLYGONS, { "fill-color": ramp, "fill-opacity": 0.72 })];
   }
-  if (info.id === "hcdd1-flood-photos") {
-    const openable = ["has", "photo_url"];
-    return [at("point", "circle", POINTS, {
-      "circle-color": ["case", openable, color, colors.photoloc],
-      "circle-radius": ["case", openable, 3.4, 2.2],
-      "circle-stroke-color": colors.bg,
-      "circle-stroke-width": ["case", openable, 1, 0],
-      "circle-opacity": 0.9,
-    })];
+  if (info.id === FLOOD_PHOTO_LAYER) {
+    const cluster = ["has", "point_count"];
+    const individual = ["all", POINTS, ["!", cluster]];
+    // The painted circle is the MapLibre hit geometry. Growing that visible
+    // target with zoom is more predictable than adding a larger invisible
+    // target that could overlap a neighboring photo. Dense points stay in the
+    // source's clusters until readers zoom into a location.
+    const clusterRadius = [
+      "interpolate", ["linear"], ["zoom"],
+      4, ["step", ["get", "point_count"], 5, 10, 6, 50, 8, 200, 9],
+      14, ["step", ["get", "point_count"], 6, 10, 8, 50, 9, 200, 11],
+    ];
+    const pointRadius = [
+      "interpolate", ["linear"], ["zoom"],
+      8, 3.4,
+      14, 5.5,
+      18, 8,
+    ];
+    const photoAt = (id, sourceId, type, filter, paint) => ({ id, type, source: sourceId, filter, paint });
+    return [
+      photoAt(FLOOD_PHOTO_OPENABLE_CLUSTER_LAYER, FLOOD_PHOTO_OPENABLE_SOURCE, "circle", cluster, {
+        "circle-color": color,
+        // Counts affect the aggregate bubble, but it remains deliberately
+        // bounded: density is discovered by drilling in, not a giant target.
+        "circle-radius": clusterRadius,
+        "circle-stroke-color": colors.bg,
+        "circle-stroke-width": 1.5,
+        "circle-opacity": 0.92,
+      }),
+      photoAt(FLOOD_PHOTO_LOCATION_CLUSTER_LAYER, FLOOD_PHOTO_LOCATION_SOURCE, "circle", cluster, {
+        "circle-color": colors.photoloc,
+        "circle-radius": clusterRadius,
+        "circle-stroke-color": colors.bg,
+        "circle-stroke-width": 1.5,
+        "circle-opacity": 0.92,
+      }),
+      photoAt(FLOOD_PHOTO_OPENABLE_POINT_LAYER, FLOOD_PHOTO_OPENABLE_SOURCE, "circle", individual, {
+        "circle-color": color,
+        "circle-radius": pointRadius,
+        "circle-stroke-color": colors.bg,
+        "circle-stroke-width": 1,
+        "circle-opacity": 0.9,
+      }),
+      photoAt(FLOOD_PHOTO_LOCATION_POINT_LAYER, FLOOD_PHOTO_LOCATION_SOURCE, "circle", individual, {
+        "circle-color": colors.photoloc,
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 2.6, 14, 4, 18, 6],
+        "circle-stroke-color": colors.bg,
+        "circle-stroke-width": 0,
+        "circle-opacity": 0.9,
+      }),
+    ];
   }
 
   const layers = [];

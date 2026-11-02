@@ -38,7 +38,26 @@ def test_photo_popup_shows_image(map_page):
     page = map_page()
     _turn_on(page, "hcdd1-flood-photos")
 
-    click_lnglat(page, -98.2, 26.2)
+    # At a distant zoom the compact symbol does not reach six pixels from its
+    # center; at a close zoom its visible radius grows past that point.
+    page.evaluate("window.__rgvMap.jumpTo({center: [-98.2, 26.2], zoom: 8})")
+    wait_js(page, "!window.__rgvMap.isMoving()")
+    assert page.evaluate("""() => {
+      const map = window.__rgvMap;
+      const point = map.project([-98.2, 26.2]);
+      return map.queryRenderedFeatures([point.x + 6, point.y], {layers: ['lyr-hcdd1-flood-photos-point-openable']}).length;
+    }""") == 0
+    page.evaluate("window.__rgvMap.jumpTo({center: [-98.2, 26.2], zoom: 18})")
+    wait_js(page, "!window.__rgvMap.isMoving()")
+    assert page.evaluate("""() => {
+      const map = window.__rgvMap;
+      const point = map.project([-98.2, 26.2]);
+      return map.queryRenderedFeatures([point.x + 6, point.y], {layers: ['lyr-hcdd1-flood-photos-point-openable']}).length;
+    }""") == 1
+
+    # A 32px nearest-marker target makes an offset click forgiving. Ties do
+    # not pick a photo, so adjacent markers are never selected ambiguously.
+    click_lnglat(page, -98.2, 26.2, dx=14)
 
     popup = page.locator(".maplibregl-popup-content")
     expect(popup).to_contain_text("Flood photo")
@@ -48,6 +67,8 @@ def test_photo_popup_shows_image(map_page):
 def test_location_only_popup_says_not_published(map_page):
     page = map_page()
     _turn_on(page, "hcdd1-flood-photos")
+    page.evaluate("window.__rgvMap.jumpTo({center: [-98.1, 26.3], zoom: 18})")
+    wait_js(page, "!window.__rgvMap.isMoving()")
 
     click_lnglat(page, -98.1, 26.3)
 
