@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from shapely.geometry import MultiPoint, shape
 from shapely.ops import unary_union
 
+from rgv_flood.api.geocode import allow_client_geocoding
 from rgv_flood.api.wayfinder_addresses import resolve_public_address
 from rgv_flood.db import Database, Db
 from rgv_flood.wayfinder import AdvisoryStatus, Coordinate, RouteAdvisory
@@ -344,6 +345,18 @@ def public_advisory(payload: AdvisoryRequest, request: Request, db: Db):
     """Return an advisory or an explanatory safe failure, never a raw provider result."""
     checked_at = datetime.now(UTC)
     assessments = DatabaseClosureAssessments(db)
+    # An advisory may resolve two addresses, but it consumes one bounded public
+    # geocoding operation.  Reserve it before either lookup, even while the
+    # advisory provider is unconfigured, so this endpoint cannot bypass the
+    # provider-use policy or start an upstream lookup after the limit is hit.
+    if not allow_client_geocoding(request):
+        assessment = assessments.assess(checked_at, None)
+        result = _withheld(
+            assessment,
+            checked_at,
+            "Wayfinder address resolution is temporarily limited. Try again in a minute.",
+        )
+        return _response(result, assessment)
     origin = resolve_public_address(getattr(request.app.state, "geocoder", None), payload.origin, "Origin")
     destination = resolve_public_address(getattr(request.app.state, "geocoder", None), payload.destination, "Destination")
     if origin.coordinate is None or destination.coordinate is None:
