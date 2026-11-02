@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import UTC, datetime
 
 from rgv_flood.wayfinder import AdvisoryStatus, RouteAdvisory
@@ -22,7 +23,31 @@ class _Service:
         ))
 
 
+class _LeavingAreaService(_Service):
+    def advise(self, origin, destination, assessment, checked_at):
+        result = super().advise(origin, destination, assessment, checked_at)
+        route = RouteAdvisory(
+            result.advisory.status, result.advisory.reasons, result.advisory.limitations,
+            result.advisory.evidence, result.advisory.retrieved_at, result.advisory.route_segment_ids,
+            {"type": "LineString", "coordinates": [[-98.2, 26.2], [-100.0, 26.3]]},
+        )
+        return VerifiedAdvisory(route, result.provenance)
+
+
+def _record_current_official_coverage(api_client):
+    """Give the fixture a fresh completed DriveTexas run for each required feed."""
+    now = datetime.now(UTC).isoformat()
+    with sqlite3.connect(api_client.app.state.settings.database) as connection:
+        connection.executemany(
+            """insert into live_signal_runs
+               (source, retrieved_at, completed_at, is_complete, received_count, error_message)
+               values (?, ?, ?, 1, 0, null)""",
+            [("drivetexas:points", now, now), ("drivetexas:lines", now, now)],
+        )
+
+
 def test_wayfinder_returns_only_a_validated_public_route_shape(api_client):
+    _record_current_official_coverage(api_client)
     api_client.app.state.wayfinder_advisory_service = _Service()
 
     response = api_client.post("/api/v1/wayfinder/advisories", json=PAYLOAD)
@@ -51,3 +76,30 @@ def test_wayfinder_rejects_provider_and_profile_fields_from_public_requests(api_
     response = api_client.post("/api/v1/wayfinder/advisories", json={**PAYLOAD, "profile": "responder", "api_key": "leak"})
 
     assert response.status_code == 422
+
+
+def test_wayfinder_suppresses_an_out_of_area_endpoint_even_with_fresh_feeds(api_client):
+    _record_current_official_coverage(api_client)
+    api_client.app.state.wayfinder_advisory_service = _Service()
+
+    response = api_client.post("/api/v1/wayfinder/advisories", json={
+        "origin": {"latitude": 26.2, "longitude": -98.2},
+        "destination": {"latitude": 29.8, "longitude": -95.4},
+    })
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "suppressed"
+    assert response.json()["geometry"] is None
+    assert "cannot validate the requested route corridor" in response.json()["reasons"][0]
+
+
+def test_wayfinder_suppresses_a_returned_route_that_leaves_official_coverage(api_client):
+    _record_current_official_coverage(api_client)
+    api_client.app.state.wayfinder_advisory_service = _LeavingAreaService()
+
+    response = api_client.post("/api/v1/wayfinder/advisories", json=PAYLOAD)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "suppressed"
+    assert response.json()["geometry"] is None
+    assert "cannot validate the returned route corridor" in response.json()["reasons"][0]

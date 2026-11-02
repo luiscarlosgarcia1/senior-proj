@@ -10,11 +10,14 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from gzip import decompress
 from math import isfinite
 from typing import Protocol
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from shapely.geometry import MultiPoint, shape
+from shapely.ops import unary_union
 
 from rgv_flood.db import Database, Db
 from rgv_flood.wayfinder import AdvisoryStatus, Coordinate, RouteAdvisory
@@ -108,12 +111,13 @@ class DatabaseClosureAssessments:
 
     db: Database
 
-    def assess(self, checked_at: datetime) -> ClosureAssessment:
-        coverage = tuple(self._coverage(source) for source in DRIVE_TEXAS_SOURCES)
+    def assess(self, checked_at: datetime, corridor_geometry: dict | None) -> ClosureAssessment:
+        corridor_covered = self._corridor_is_covered(corridor_geometry)
+        coverage = tuple(self._coverage(source, corridor_covered) for source in DRIVE_TEXAS_SOURCES)
         records = tuple(self._records())
         return ClosureEvidencePolicy().assess(coverage, records, checked_at)
 
-    def _coverage(self, source: str) -> FeedCoverage:
+    def _coverage(self, source: str, corridor_covered: bool) -> FeedCoverage:
         row = self.db.rows(
             """select completed_at, is_complete, error_message from live_signal_runs
                where source = ? order by run_id desc limit 1""",
@@ -127,7 +131,35 @@ class DatabaseClosureAssessments:
             completed_at=_parse_time(latest["completed_at"]) if latest else None,
             is_complete=bool(latest and latest["is_complete"]),
             retrieval_failure=latest["error_message"] if latest else "required official feed has no snapshot",
+            corridor_covered=corridor_covered,
         )
+
+    def _corridor_is_covered(self, corridor_geometry: dict | None) -> bool:
+        """Require every displayed route coordinate to stay in the official area.
+
+        DriveTexas ingestion is intentionally limited to the four RGV counties.
+        Missing or malformed county geometry is therefore uncertainty, never a
+        reason to publish a route based on a broader feed-wide freshness claim.
+        """
+        if corridor_geometry is None:
+            return False
+        try:
+            corridor = shape(corridor_geometry)
+            if corridor.is_empty:
+                return False
+            row = self.db.rows("select geojson_gzip from layers where id = ?", ("county-boundaries",))
+            if not row or not row[0]["geojson_gzip"]:
+                return False
+            collection = json.loads(decompress(row[0]["geojson_gzip"]).decode("utf-8"))
+            boundaries = [
+                shape(feature["geometry"])
+                for feature in collection.get("features", ())
+                if feature.get("geometry")
+            ]
+            area = unary_union(boundaries)
+            return not area.is_empty and area.covers(corridor)
+        except (TypeError, ValueError, KeyError, UnicodeDecodeError, OSError, json.JSONDecodeError):
+            return False
 
     def _records(self):
         rows = self.db.rows(
@@ -200,10 +232,20 @@ def _response(result: VerifiedAdvisory, assessment: ClosureAssessment) -> dict:
 def public_advisory(payload: AdvisoryRequest, request: Request, db: Db):
     """Return an advisory or an explanatory safe failure, never a raw provider result."""
     checked_at = datetime.now(UTC)
-    assessment = DatabaseClosureAssessments(db).assess(checked_at)
+    assessments = DatabaseClosureAssessments(db)
+    endpoint_corridor = MultiPoint(
+        [(payload.origin.longitude, payload.origin.latitude), (payload.destination.longitude, payload.destination.latitude)]
+    )
+    assessment = assessments.assess(checked_at, endpoint_corridor.__geo_interface__)
     service = getattr(request.app.state, "wayfinder_advisory_service", None)
     if service is None:
         result = _withheld(assessment, checked_at, "Wayfinder advisory is not currently configured for public use.")
+    elif not assessment.can_publish_route:
+        result = _withheld(assessment, checked_at, "Official closure coverage cannot validate the requested route corridor.")
     else:
         result = service.advise(payload.origin.coordinate(), payload.destination.coordinate(), assessment, checked_at)
+        if result.advisory.status is AdvisoryStatus.ADVISORY:
+            assessment = assessments.assess(checked_at, result.advisory.route_geometry)
+            if not assessment.can_publish_route:
+                result = _withheld(assessment, checked_at, "Official closure coverage cannot validate the returned route corridor.")
     return _response(result, assessment)
