@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from rgv_flood.api.geocode import ClientLimiter
 from rgv_flood.api.models import Place
 from rgv_flood.wayfinder import AdvisoryStatus, RouteAdvisory
 from rgv_flood.wayfinder_advisories import (
@@ -28,6 +29,16 @@ class _AddressGeocoder:
 
     def search(self, query):
         return self.places.get(query, [])
+
+
+class _CountingAddressGeocoder(_AddressGeocoder):
+    def __init__(self, places=None):
+        super().__init__(places)
+        self.queries: list[str] = []
+
+    def search(self, query):
+        self.queries.append(query)
+        return super().search(query)
 
 
 @pytest.fixture(autouse=True)
@@ -117,6 +128,22 @@ def test_wayfinder_is_suppressed_without_server_only_approved_configuration(api_
     assert response.json()["status"] == "suppressed"
     assert response.json()["geometry"] is None
     assert "not currently configured" in response.json()["reasons"][0]
+
+
+def test_wayfinder_advisories_cannot_bypass_the_client_geocoding_limit(api_client):
+    """The limit applies before either address lookup, even when unconfigured."""
+    geocoder = _CountingAddressGeocoder()
+    api_client.app.state.geocoder = geocoder
+    api_client.app.state.geocode_limiter = ClientLimiter(limit=1)
+
+    first = api_client.post("/api/v1/wayfinder/advisories", json=PAYLOAD)
+    second = api_client.post("/api/v1/wayfinder/advisories", json=PAYLOAD)
+
+    assert first.status_code == second.status_code == 200
+    assert geocoder.queries == [PAYLOAD["origin"], PAYLOAD["destination"]]
+    assert second.json()["status"] == "suppressed"
+    assert second.json()["geometry"] is None
+    assert "temporarily limited" in second.json()["reasons"][0]
 
 
 def test_wayfinder_rejects_provider_and_profile_fields_from_public_requests(api_client):

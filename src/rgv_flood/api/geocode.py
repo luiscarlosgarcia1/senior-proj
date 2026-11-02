@@ -91,10 +91,22 @@ def install(app) -> None:
     app.state.geocode_limiter = ClientLimiter()
 
 
+def allow_client_geocoding(request: Request) -> bool:
+    """Reserve one server-held geocoding operation for this public request.
+
+    Both the standalone search endpoint and Wayfinder call this before asking
+    the shared geocoder for any address.  Keeping the limiter at this boundary
+    makes the provider-use rule independent of the public feature that needs a
+    lookup.
+    """
+    limiter = getattr(request.app.state, "geocode_limiter", None)
+    client = request.client.host if request.client else "unknown"
+    return bool(limiter and limiter.allow(client))
+
+
 @router.get("/geocode", response_model=list[Place])
 def geocode(request: Request, q: Annotated[str, Query(min_length=3, max_length=120)]):
-    client = request.client.host if request.client else "unknown"
-    if not request.app.state.geocode_limiter.allow(client):
+    if not allow_client_geocoding(request):
         raise HTTPException(429, "Too many searches; try again in a minute")
     try:
         return request.app.state.geocoder.search(q)
