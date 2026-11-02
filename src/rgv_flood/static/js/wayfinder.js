@@ -80,11 +80,7 @@ if (root) {
       details(update, "Proposed update", "Revalidating current official conditions…");
       try {
         const response = await postJson("wayfinder/advisories/updates", {
-          ...current.request,
           active_advisory_id: current.id,
-          // This is an explicit traveler-initiated refresh. The server still
-          // refuses publication unless the full current validation succeeds.
-          trigger: "traffic_eta_expired",
         });
         if (!response.proposal) {
           details(update, "No proposed update", response.outcome, response.cautions || []);
@@ -131,7 +127,7 @@ if (root) {
       show(result, message, advisory.official_condition_links);
       update.classList.add("hidden"); update.replaceChildren();
       if (advisory.status === "advisory") {
-        current = { id: crypto.randomUUID(), request, advisory };
+        current = { id: advisory.advisory_id, request, advisory };
         details(active, "Active advisory", advisoryText(advisory), advisory.official_condition_links);
         updateControls();
       } else {

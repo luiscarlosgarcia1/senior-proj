@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from gzip import decompress
 from math import isfinite
 from typing import Protocol
+from uuid import uuid4
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -105,11 +106,25 @@ class AdvisoryRequest(BaseModel):
     destination: Waypoint
 
 
-class RouteUpdateRequest(AdvisoryRequest):
-    """Public input for a *proposed* replacement, never an automatic one."""
+class RouteUpdateRequest(BaseModel):
+    """An opaque active-advisory reference, not client-provided route state."""
+
+    model_config = ConfigDict(extra="forbid")
 
     active_advisory_id: str = Field(min_length=1, max_length=128)
-    trigger: RefreshTrigger
+
+
+@dataclass(frozen=True)
+class ActivePublicAdvisory:
+    """Server-held context needed to justify a later route-update proposal."""
+
+    origin: Coordinate
+    destination: Coordinate
+    restriction_ids: frozenset[str]
+    checked_at: datetime
+
+
+ACTIVE_ADVISORY_MAX_AGE = timedelta(minutes=5)
 
 
 class AdvisoryService(Protocol):
@@ -264,7 +279,57 @@ def _endpoint_corridor(payload: AdvisoryRequest) -> dict:
     ).__geo_interface__
 
 
-def _proposal_response(proposal, event, assessment: ClosureAssessment) -> dict:
+def _active_advisories(request: Request) -> dict[str, ActivePublicAdvisory]:
+    """Return process-held advisory context; clients never supply this evidence."""
+    registry = getattr(request.app.state, "wayfinder_active_advisories", None)
+    if registry is None:
+        registry = {}
+        request.app.state.wayfinder_active_advisories = registry
+    return registry
+
+
+def _restriction_ids(assessment: ClosureAssessment) -> frozenset[str]:
+    return frozenset(item.native_id for item in assessment.hard_restrictions)
+
+
+def _verified_trigger(
+    active: ActivePublicAdvisory, assessment: ClosureAssessment, checked_at: datetime
+) -> tuple[RefreshTrigger, tuple[str, ...]] | None:
+    """Derive an update reason only from the active record and official state.
+
+    The service currently holds official restriction snapshots and advisory
+    timestamps, but not a traveler location or a traffic/soft-risk feed.  Those
+    unavailable sources deliberately cannot manufacture departure or risk
+    triggers.  A future server-side source can extend this one owner.
+    """
+    current_restrictions = _restriction_ids(assessment)
+    if current_restrictions != active.restriction_ids:
+        expired = active.restriction_ids - current_restrictions
+        added = current_restrictions - active.restriction_ids
+        if expired and not added:
+            return (
+                RefreshTrigger.RESTRICTION_EXPIRED,
+                (
+                    "official restriction set expired since the active advisory",
+                    *tuple(sorted(expired)),
+                ),
+            )
+        return (
+            RefreshTrigger.RESTRICTION_CHANGED,
+            (
+                "official restriction set changed since the active advisory",
+                *tuple(sorted(added | expired)),
+            ),
+        )
+    if checked_at - active.checked_at >= ACTIVE_ADVISORY_MAX_AGE:
+        return (
+            RefreshTrigger.TRAFFIC_ETA_EXPIRED,
+            ("active advisory traffic and ETA evidence exceeded its freshness window",),
+        )
+    return None
+
+
+def _proposal_response(proposal, event, assessment: ClosureAssessment, trigger_evidence: tuple[str, ...] = ()) -> dict:
     """Keep the candidate separate so clients cannot mistake it for an active route."""
     if proposal is None:
         return {
@@ -282,6 +347,7 @@ def _proposal_response(proposal, event, assessment: ClosureAssessment) -> dict:
             "limitations": list(proposal.limitations),
             "policy_versions": list(event.policy_versions),
             "evidence_ids": list(event.evidence_ids),
+            "trigger_evidence": list(trigger_evidence),
             "advisory": result,
         },
         "outcome": event.user_visible_result,
@@ -306,7 +372,14 @@ def public_advisory(payload: AdvisoryRequest, request: Request, db: Db):
             assessment = assessments.assess(checked_at, result.advisory.route_geometry)
             if not assessment.can_publish_route:
                 result = _withheld(assessment, checked_at, "Official closure coverage cannot validate the returned route corridor.")
-    return _response(result, assessment)
+    body = _response(result, assessment)
+    if result.advisory.status is AdvisoryStatus.ADVISORY:
+        advisory_id = str(uuid4())
+        _active_advisories(request)[advisory_id] = ActivePublicAdvisory(
+            payload.origin.coordinate(), payload.destination.coordinate(), _restriction_ids(assessment), checked_at
+        )
+        body["advisory_id"] = advisory_id
+    return body
 
 
 @router.post("/wayfinder/advisories/updates")
@@ -318,8 +391,17 @@ def propose_public_advisory_update(payload: RouteUpdateRequest, request: Request
     whether to draw it.
     """
     assessments = DatabaseClosureAssessments(db)
-    endpoint_corridor = _endpoint_corridor(payload)
     checked_at = datetime.now(UTC)
+    active = _active_advisories(request).get(payload.active_advisory_id)
+    if active is None:
+        return {
+            "proposal": None,
+            "outcome": "No route update is proposed because the active advisory is not held by this server.",
+            "cautions": [],
+        }
+    endpoint_corridor = MultiPoint(
+        [(active.origin.longitude, active.origin.latitude), (active.destination.longitude, active.destination.latitude)]
+    ).__geo_interface__
     assessment = assessments.assess(checked_at, endpoint_corridor)
     service = getattr(request.app.state, "wayfinder_advisory_service", None)
     if not isinstance(service, VerifiedPublicAdvisoryService) or not assessment.can_publish_route:
@@ -333,14 +415,23 @@ def propose_public_advisory_update(payload: RouteUpdateRequest, request: Request
             "validation_outcome": withheld.provenance.validation_outcome,
         }
 
+    trigger = _verified_trigger(active, assessment, checked_at)
+    if trigger is None:
+        return {
+            "proposal": None,
+            "outcome": "No route update is proposed because no server-verified reevaluation trigger is current.",
+            "cautions": [item.limitation or item.native_id for item in assessment.cautions],
+        }
+    verified_trigger, trigger_evidence = trigger
+
     reevaluation = VerifiedAdvisoryReevaluation(
         service,
         CurrentDatabaseClosureAssessments(assessments, endpoint_corridor),
-        payload.origin.coordinate(), payload.destination.coordinate(), _UtcClock(),
+        active.origin, active.destination, _UtcClock(),
     )
     proposal, event = RouteUpdateProposer(reevaluation).propose(
         active_advisory_id=payload.active_advisory_id,
-        trigger=payload.trigger,
+        trigger=verified_trigger,
         risk_evaluation=SoftRiskEvaluation((), (), False),
     )
     # A provider can return a geometry that does not match the endpoint chord.
@@ -356,4 +447,4 @@ def propose_public_advisory_update(payload: RouteUpdateRequest, request: Request
                 event.validation_record,
                 "No route update is proposed because current reevaluation could not be verified.",
             )
-    return _proposal_response(proposal, event, assessment)
+    return _proposal_response(proposal, event, assessment, trigger_evidence)
