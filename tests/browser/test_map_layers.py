@@ -70,16 +70,124 @@ def test_sub_option_turns_one_layer_off(map_page):
     assert page.evaluate("window.__rgvMap.getLayoutProperty('lyr-twdb-cursory-1in100-fill', 'visibility')") == "visible"
 
 
-def test_photo_part_filters(map_page):
+def test_hiding_photo_locations_keeps_photo_clusters_visible(map_page):
     page = map_page()
     _row(page, "hcdd1-flood-photos").check()
-    wait_js(page, LAYER.format("lyr-hcdd1-flood-photos-point"))
+    cluster_layer = "lyr-hcdd1-flood-photos-cluster-openable"
+    wait_js(page, LAYER.format(cluster_layer))
 
     page.locator('[data-row="hcdd1-flood-photos"] [data-sub="locations"] input').uncheck()
+    assert page.evaluate(
+        "window.__rgvMap.getSource('src-hcdd1-flood-photos-locations').serialize().data.features.length"
+    ) == 0
 
-    wait_js(page, 
-        "JSON.stringify(window.__rgvMap.getFilter('lyr-hcdd1-flood-photos-point')).includes('photo_url')"
-    )
+    # A photo-backed cluster has aggregate properties (not photo_url). The
+    # locations toggle must not add a source-record predicate to this layer.
+    page.evaluate("""() => {
+      const source = window.__rgvMap.getSource('src-hcdd1-flood-photos-openable');
+      source.setData({type: 'FeatureCollection', features: Array.from({length: 2}, (_, i) => ({
+        type: 'Feature', properties: {overlay_type: 'flood_photo', photo_url: 'https://example.test/photo'},
+        geometry: {type: 'Point', coordinates: [-98.2 + i * 0.00001, 26.2]},
+      }))});
+      window.__rgvMap.jumpTo({center: [-98.2, 26.2], zoom: 8});
+    }""")
+    wait_js(page, f"window.__rgvMap.queryRenderedFeatures({{layers: ['{cluster_layer}']}}).length === 1")
+
+
+def test_flood_photo_clusters_drill_into_their_members(map_page, console_errors):
+    page = map_page()
+    _row(page, "hcdd1-flood-photos").check()
+    wait_js(page, LAYER.format("lyr-hcdd1-flood-photos-cluster-openable"))
+
+    # Feed one tight group through the real clustered GeoJSON source. This
+    # exercises MapLibre's worker clustering rather than a fixture-only mock.
+    cluster = page.evaluate("""() => {
+      const map = window.__rgvMap;
+      const source = map.getSource('src-hcdd1-flood-photos-openable');
+      source.setData({type: 'FeatureCollection', features: Array.from({length: 24}, (_, i) => ({
+        type: 'Feature', properties: {overlay_type: 'flood_photo', photo_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'},
+        geometry: {type: 'Point', coordinates: [-98.2 + (i % 6) * 0.00005, 26.2 + Math.floor(i / 6) * 0.00005]},
+      }))});
+      map.jumpTo({center: [-98.2, 26.2], zoom: 8});
+      return source.serialize();
+    }""")
+    assert cluster["cluster"] is True
+    # A tighter worker radius keeps nearby creek and road runs discoverable as
+    # several local groups instead of consuming them into one broad bubble.
+    assert cluster["clusterRadius"] == 24
+    assert cluster["clusterMaxZoom"] == 14
+    assert page.evaluate("window.__rgvMap.getPaintProperty('lyr-hcdd1-flood-photos-cluster-openable', 'circle-radius')") == [
+        "interpolate", ["linear"], ["zoom"],
+        4, ["step", ["get", "point_count"], 5, 10, 6, 50, 8, 200, 9],
+        14, ["step", ["get", "point_count"], 6, 10, 8, 50, 9, 200, 11],
+    ]
+
+    wait_js(page, "window.__rgvMap.queryRenderedFeatures({layers: ['lyr-hcdd1-flood-photos-cluster-openable']}).length === 1")
+    expect(page.locator(".photo-cluster-count")).to_have_count(0)
+    control = page.get_by_role("button", name="Zoom in to explore grouped flood-photo locations")
+    expect(control).to_have_count(1)
+    before = page.evaluate("window.__rgvMap.getZoom()")
+    control.focus()
+    page.keyboard.press("Enter")
+    wait_js(page, f"window.__rgvMap.getZoom() > {before}")
+
+    page.evaluate("window.__rgvMap.jumpTo({center: [-98.2, 26.2], zoom: 8})")
+    wait_js(page, "window.__rgvMap.queryRenderedFeatures({layers: ['lyr-hcdd1-flood-photos-cluster-openable']}).length === 1")
+    expect(control).to_have_count(1)
+    before = page.evaluate("window.__rgvMap.getZoom()")
+    point = page.evaluate("""() => {
+      const cluster = window.__rgvMap.queryRenderedFeatures({layers: ['lyr-hcdd1-flood-photos-cluster-openable']})[0];
+      return window.__rgvMap.project(cluster.geometry.coordinates);
+    }""")
+    box = page.locator("#map").bounding_box()
+    page.mouse.click(box["x"] + point["x"], box["y"] + point["y"])
+
+    wait_js(page, f"window.__rgvMap.getZoom() > {before}")
+    expect(page.locator(".maplibregl-popup-content")).to_have_count(0)
+    assert console_errors == []
+
+
+def test_photo_and_location_records_form_separate_clusters(map_page):
+    page = map_page()
+    _row(page, "hcdd1-flood-photos").check()
+    wait_js(page, LAYER.format("lyr-hcdd1-flood-photos-cluster-openable"))
+    page.evaluate("""() => {
+      const map = window.__rgvMap;
+      const point = [-98.2, 26.2];
+      const photo = {type: 'Feature', properties: {overlay_type: 'flood_photo', photo_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}, geometry: {type: 'Point', coordinates: point}};
+      const location = {type: 'Feature', properties: {overlay_type: 'flood_photo'}, geometry: {type: 'Point', coordinates: point}};
+      const pair = (feature) => [feature, {...feature, geometry: {type: 'Point', coordinates: [-98.20001, 26.2]}}];
+      map.getSource('src-hcdd1-flood-photos-openable').setData({type: 'FeatureCollection', features: pair(photo)});
+      map.getSource('src-hcdd1-flood-photos-locations').setData({type: 'FeatureCollection', features: pair(location)});
+    }""")
+    wait_js(page, "window.__rgvMap.queryRenderedFeatures({layers: ['lyr-hcdd1-flood-photos-cluster-openable']}).length === 1")
+    wait_js(page, "window.__rgvMap.queryRenderedFeatures({layers: ['lyr-hcdd1-flood-photos-cluster-locations']}).length === 1")
+
+
+def test_flood_photo_cluster_radius_keeps_nearby_groups_local(map_page):
+    page = map_page()
+    _row(page, "hcdd1-flood-photos").check()
+    wait_js(page, LAYER.format("lyr-hcdd1-flood-photos-cluster-openable"))
+    page.evaluate("""() => {
+      const map = window.__rgvMap;
+      map.jumpTo({center: [-98.2, 26.2], zoom: 8});
+      const center = map.project([-98.2, 26.2]);
+      // 30px is outside the new 24px radius but inside the former 36px radius.
+      const other = map.unproject([center.x + 30, center.y]).toArray();
+      const group = (properties, coordinates) => Array.from({length: 2}, (_, i) => ({
+        type: 'Feature', properties,
+        geometry: {type: 'Point', coordinates: [coordinates[0] + i * 0.00001, coordinates[1]]},
+      }));
+      const photo = {overlay_type: 'flood_photo', photo_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'};
+      const location = {overlay_type: 'flood_photo'};
+      const setGroups = (source, properties) => source.setData({type: 'FeatureCollection', features: [
+        ...group(properties, [-98.2, 26.2]), ...group(properties, other),
+      ]});
+      setGroups(map.getSource('src-hcdd1-flood-photos-openable'), photo);
+      setGroups(map.getSource('src-hcdd1-flood-photos-locations'), location);
+    }""")
+    wait_js(page, "window.__rgvMap.queryRenderedFeatures({layers: ['lyr-hcdd1-flood-photos-cluster-openable']}).length === 2")
+    wait_js(page, "window.__rgvMap.queryRenderedFeatures({layers: ['lyr-hcdd1-flood-photos-cluster-locations']}).length === 2")
 
 
 def test_legend_follows_active_layers(map_page):
@@ -275,12 +383,13 @@ def _tokens(page, *names):
 def test_photos_you_can_open_and_photo_locations_have_different_colors(map_page):
     page = map_page()
     _row(page, "hcdd1-flood-photos").check()
-    wait_js(page, LAYER.format("lyr-hcdd1-flood-photos-point"))
+    wait_js(page, LAYER.format("lyr-hcdd1-flood-photos-point-openable"))
 
-    color = page.evaluate("window.__rgvMap.getPaintProperty('lyr-hcdd1-flood-photos-point', 'circle-color')")
+    color = page.evaluate("window.__rgvMap.getPaintProperty('lyr-hcdd1-flood-photos-point-openable', 'circle-color')")
     photos, locations = _tokens(page, "--c-photos", "--c-photoloc")
 
-    assert color == ["case", ["has", "photo_url"], photos, locations]
+    assert color == photos
+    assert page.evaluate("window.__rgvMap.getPaintProperty('lyr-hcdd1-flood-photos-point-locations', 'circle-color')") == locations
     assert photos and locations and photos != locations
     swatches = page.locator('[data-row="hcdd1-flood-photos"] [data-sub] i.sw')
     expect(swatches).to_have_count(2)

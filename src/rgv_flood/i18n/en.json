@@ -19,6 +19,8 @@
   "county.all": "All four counties",
   "county.all_short": "All four",
   "alerts.pill": "{n} active alerts",
+  "alerts.show_panel": "Show live alerts",
+  "alerts.hide_panel": "Hide live alerts",
   "footer.built": "Data built {date}",
   "nodata.message": "No data yet: run the build (uv run --group pipeline python pipeline/build_all.py), then reload.",
   "mobile.map": "Map",

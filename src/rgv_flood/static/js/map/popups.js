@@ -7,6 +7,10 @@
  * orange ring, the one place the map shows the UTRGV color. */
 
 import { mapReady, maplibregl } from "./main.js";
+import {
+  FLOOD_PHOTO_LOCATION_CLUSTER_LAYER, FLOOD_PHOTO_LOCATION_POINT_LAYER, FLOOD_PHOTO_LOCATION_SOURCE,
+  FLOOD_PHOTO_OPENABLE_CLUSTER_LAYER, FLOOD_PHOTO_OPENABLE_POINT_LAYER, FLOOD_PHOTO_OPENABLE_SOURCE,
+} from "./flood-photo-layer.js";
 
 const HCDD1 = "Hidalgo County Drainage District No. 1";
 const TWDB = "Texas Water Development Board, 2024 State Flood Plan";
@@ -233,6 +237,76 @@ const interactiveLayers = (map) => map.getLayersOrder().filter((id) =>
 
 const layerIdOf = (styleLayerId) => styleLayerId.replace(/^lyr-/, "").replace(/-(fill|line|point)$/, "");
 
+function isPhotoCluster(feature) {
+  return [FLOOD_PHOTO_OPENABLE_CLUSTER_LAYER, FLOOD_PHOTO_LOCATION_CLUSTER_LAYER].includes(feature.layer.id) && feature.properties.cluster;
+}
+
+async function expandPhotoCluster(map, feature) {
+  const source = map.getSource(feature.layer.id === FLOOD_PHOTO_OPENABLE_CLUSTER_LAYER ? FLOOD_PHOTO_OPENABLE_SOURCE : FLOOD_PHOTO_LOCATION_SOURCE);
+  const zoom = await source.getClusterExpansionZoom(feature.properties.cluster_id);
+  map.easeTo({ center: feature.geometry.coordinates, zoom });
+}
+
+const clusterControls = new Map();
+const PHOTO_PICK_RADIUS = 16;
+
+/**
+ * Return the nearest visible photo point within a 32px target. The selected
+ * point is unique: near-ties deliberately return nothing rather than guessing
+ * between adjacent photos. This creates one deterministic target region per
+ * marker without adding an invisible, overlapping style layer.
+ */
+function nearbyPhotoPoint(map, point) {
+  const layers = [FLOOD_PHOTO_OPENABLE_POINT_LAYER, FLOOD_PHOTO_LOCATION_POINT_LAYER].filter((id) => map.getLayer(id));
+  if (!layers.length) return null;
+  const box = [
+    [point.x - PHOTO_PICK_RADIUS, point.y - PHOTO_PICK_RADIUS],
+    [point.x + PHOTO_PICK_RADIUS, point.y + PHOTO_PICK_RADIUS],
+  ];
+  const nearby = map.queryRenderedFeatures(box, { layers })
+    .map((feature) => {
+      const projected = map.project(feature.geometry.coordinates);
+      return { feature, distance: Math.hypot(projected.x - point.x, projected.y - point.y) };
+    })
+    .filter(({ distance }) => distance <= PHOTO_PICK_RADIUS)
+    .sort((a, b) => a.distance - b.distance);
+  if (!nearby.length || (nearby[1] && nearby[1].distance - nearby[0].distance < 2)) return null;
+  return nearby[0].feature;
+}
+
+/** Keep the visible cluster circle keyboard-operable without showing its count. */
+function syncPhotoClusterControls(map) {
+  const layers = [FLOOD_PHOTO_OPENABLE_CLUSTER_LAYER, FLOOD_PHOTO_LOCATION_CLUSTER_LAYER].filter((id) => map.getLayer(id));
+  const features = layers.length ? map.queryRenderedFeatures({ layers }) : [];
+  const present = new Set();
+  for (const feature of features) {
+    const key = `${feature.layer.id}:${feature.properties.cluster_id}`;
+    present.add(key);
+    let marker = clusterControls.get(key);
+    if (!marker) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "photo-cluster-control";
+      button.setAttribute("aria-label", "Zoom in to explore grouped flood-photo locations");
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        expandPhotoCluster(map, marker.feature);
+      });
+      marker = new maplibregl.Marker({ element: button, anchor: "center" })
+        .setLngLat(feature.geometry.coordinates).addTo(map);
+      clusterControls.set(key, marker);
+    }
+    marker.feature = feature;
+    marker.setLngLat(feature.geometry.coordinates);
+  }
+  for (const [key, marker] of clusterControls) {
+    if (!present.has(key)) {
+      marker.remove();
+      clusterControls.delete(key);
+    }
+  }
+}
+
 mapReady.then((map) => {
   const popup = new maplibregl.Popup({ maxWidth: "320px", focusAfterOpen: false });
   popup.on("close", () => select(null));
@@ -240,8 +314,13 @@ mapReady.then((map) => {
   map.on("click", (event) => {
     const layers = interactiveLayers(map);
     if (!layers.length) return;
-    const [feature] = map.queryRenderedFeatures(event.point, { layers });
+    const [direct] = map.queryRenderedFeatures(event.point, { layers });
+    const feature = direct || nearbyPhotoPoint(map, event.point);
     if (!feature) return;
+    if (isPhotoCluster(feature)) {
+      expandPhotoCluster(map, feature);
+      return;
+    }
     const at = feature.geometry.type === "Point" ? feature.geometry.coordinates : event.lngLat.toArray();
     popup.setLngLat(at).setDOMContent(renderPopup(describe(feature.properties, layerIdOf(feature.layer.id)))).addTo(map);
     select(at);
@@ -251,5 +330,6 @@ mapReady.then((map) => {
     const hit = layers.length && map.queryRenderedFeatures(event.point, { layers }).length;
     map.getCanvas().style.cursor = hit ? "pointer" : "";
   });
+  map.on("idle", () => syncPhotoClusterControls(map));
   map.on("style.load", () => drawSelection(map)); // keep the ring across theme switches
 });

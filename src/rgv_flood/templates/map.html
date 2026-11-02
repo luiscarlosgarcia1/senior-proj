@@ -22,8 +22,8 @@
       {% include "components/source_details.html" %}
       {% include "components/popup.html" %}
     </main>
-    <aside class="block min-h-0 w-full shrink-0 overflow-auto border-l border-line bg-panel lg:w-[344px]" data-view="events"
-           x-data x-bind:data-active="$store.app.view === 'events'">
+    <aside id="live-alert-panel" class="block min-h-0 w-full shrink-0 overflow-auto border-l border-line bg-panel lg:w-[344px]" data-view="events"
+           x-data x-bind:data-active="$store.app.view === 'events'" x-bind:class="{ 'lg:hidden': !$store.app.alertsPanelOpen }">
       {% include "components/side_panel.html" %}
     </aside>
   </div>

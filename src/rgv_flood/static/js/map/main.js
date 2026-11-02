@@ -50,6 +50,8 @@ function createMap() {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
   map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-right");
   map.once("load", () => {
+    // Use the same all-counties preset as the county selector on first load.
+    showCounty(map, "", 0);
     resolveReady(map);
     hideLabelsInMexico(map);
   });
@@ -73,7 +75,7 @@ function applyTheme(map, theme) {
 const titleCase = (slug) => slug.charAt(0).toUpperCase() + slug.slice(1);
 
 /** Fit the map to a county (or the whole valley) and emphasize its outline. */
-function showCounty(map, slug) {
+function showCounty(map, slug, duration = 600) {
   const name = slug ? titleCase(slug) : null;
   const outline = "lyr-county-boundaries-line";
   if (map.getLayer(outline)) {
@@ -81,14 +83,14 @@ function showCounty(map, slug) {
   }
   const feature = name && loadedData("county-boundaries")?.features.find((f) => f.properties.county === name);
   if (!feature) {
-    map.fitBounds(VALLEY, { padding: 20, duration: 600 });
+    map.fitBounds(VALLEY, { padding: 20, duration });
     return;
   }
   const bounds = new maplibregl.LngLatBounds();
   for (const ring of feature.geometry.type === "Polygon" ? feature.geometry.coordinates : feature.geometry.coordinates.flat()) {
     for (const point of ring) bounds.extend(point);
   }
-  map.fitBounds(bounds, { padding: 30, duration: 600 });
+  map.fitBounds(bounds, { padding: 30, duration });
 }
 
 if (container) {
@@ -99,6 +101,7 @@ if (container) {
     refreshCountyData(map, event.detail).catch((error) => console.warn("county layer refresh unavailable", error));
   });
   window.addEventListener("rgv:map-shown", () => requestAnimationFrame(() => map.resize())); // phones: map view again
+  window.addEventListener("rgv:alerts-panel-toggled", () => requestAnimationFrame(() => map.resize()));
 }
 
 export { maplibregl };
