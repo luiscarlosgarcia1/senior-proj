@@ -9,3 +9,4 @@ import "../panels/events.js";
 import "../panels/records.js";
 import "../panels/search.js";
 import "../share-link.js";
+import "../wayfinder.js";

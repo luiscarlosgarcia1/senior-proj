@@ -19,3 +19,14 @@ export async function getJson(path, params = {}, { cancelPrevious = true } = {})
 }
 
 export const isAbort = (error) => error?.name === "AbortError";
+
+/** POST a JSON body to the public API.  Unlike map data, advisory requests are
+ * never put in a URL, where a browser, proxy, or access log could retain them. */
+export async function postJson(path, body) {
+  const response = await fetch(`/api/v1/${path}`, {
+    method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw Object.assign(new Error(`${path}: ${response.status}`), { status: response.status });
+  return response.json();
+}

@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Optional until the approved Wayfinder public pilot is enabled. This value
     # is server-side secret configuration and must never be returned to clients.
     wayfinder_ors_api_key: SecretStr | None = None
+    # JSON record produced by the approved qualification workflow.  It contains
+    # no key, but binds public routing to the exact approved adapter config.
+    wayfinder_qualification_record: str | None = None
     log_level: str = "INFO"
 
     @model_validator(mode="after")

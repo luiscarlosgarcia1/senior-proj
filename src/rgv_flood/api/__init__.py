@@ -4,8 +4,17 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from rgv_flood.api import events, geocode, history, layers, live_signals, panels, tiles
+from rgv_flood.api import (
+    events,
+    geocode,
+    history,
+    layers,
+    live_signals,
+    panels,
+    tiles,
+    wayfinder,
+)
 
 api_router = APIRouter(prefix="/api/v1")
-for module in (layers, tiles, events, panels, live_signals, history, geocode):
+for module in (layers, tiles, events, panels, live_signals, history, geocode, wayfinder):
     api_router.include_router(module.router)

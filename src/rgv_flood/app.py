@@ -19,7 +19,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from rgv_flood import pages
-from rgv_flood.api import api_router, geocode
+from rgv_flood.api import api_router, geocode, wayfinder
 from rgv_flood.api import health as health_api
 from rgv_flood.assets import STATIC_ROOT, VersionedStaticFiles
 from rgv_flood.db import Database
@@ -120,6 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.db = Database(settings.database)
     geocode.install(app)
+    wayfinder.install(app)
 
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(GZipMiddleware, minimum_size=1024)
