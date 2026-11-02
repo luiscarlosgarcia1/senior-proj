@@ -22,10 +22,19 @@
       </a>
     </nav>
     {% include "components/theme_toggle.html" %}
+    {% if nav_active == "map" %}
+    <button type="button" x-data="alertPill" class="hidden h-7 items-center gap-2 rounded-full border border-line2 bg-panel2 px-3 text-sm font-medium hover:border-warn lg:flex"
+            aria-controls="live-alert-panel" x-on:click="toggle()" x-bind:aria-expanded="expanded"
+            x-bind:aria-label="expanded ? '{{ t('alerts.hide_panel') }}' : '{{ t('alerts.show_panel') }}'">
+      <span class="h-[7px] w-[7px] rounded-full bg-warn" aria-hidden="true"></span>
+      <span x-text="label">{{ t("alerts.pill", n=0) }}</span>
+    </button>
+    {% else %}
     <div x-data="alertPill" class="hidden h-7 items-center gap-2 rounded-full border border-line2 bg-panel2 px-3 text-sm font-medium sm:flex">
       <span class="h-[7px] w-[7px] rounded-full bg-warn" aria-hidden="true"></span>
       <span x-text="label">{{ t("alerts.pill", n=0) }}</span>
     </div>
+    {% endif %}
   </div>
   {% if nav_active == "map" %}{% include "components/phone_search_row.html" %}{% endif %}
   <div x-data x-show="$store.app.loading" x-cloak class="loadbar" aria-hidden="true"></div>
