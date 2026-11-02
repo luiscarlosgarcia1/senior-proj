@@ -2,9 +2,9 @@
 
 This module deliberately has no general-purpose news scraper.  A publisher is
 eligible only after its authorization is recorded in ``SOURCES``; an enabled
-source is rebuilt from an explicitly supplied authorized response, a valid
-cache, or the checked-in authorized fixture.  The latter keeps local builds
-and tests reproducible without silently reaching out to a publisher.
+source is rebuilt from an explicitly supplied approved response or a valid
+download cache.  The production build never falls back to a checked-in story
+fixture, because fixtures are not publisher evidence.
 """
 
 from __future__ import annotations
@@ -103,17 +103,8 @@ def _cache_file(cache_dir: Path, source: HistoricNewsSource) -> Path:
     return cache_dir / f"{source.id}.ndjson"
 
 
-def _records_from_fixture(counties: list[str], seed_dir: Path) -> list[dict]:
-    return [
-        {**record, "county": county}
-        for county in counties
-        for record in read_ndjson(seed_dir / county / "historic-news.ndjson")
-    ]
-
-
 def records(
     counties: list[str],
-    seed_dir: Path,
     *,
     cache_dir: Path | None = None,
     authorized_responses: dict[str, list[dict]] | None = None,
@@ -121,9 +112,10 @@ def records(
     """Return deterministic, de-duplicated records from enabled sources only.
 
     ``authorized_responses`` is an explicit handoff from an approved retrieval
-    step.  A response refreshes the on-disk cache only after every record has
-    passed validation.  Without one, a valid cache is preferred; the committed
-    fixture is the reproducible authorized response used by normal local builds.
+    step. A response refreshes the on-disk cache only after every record has
+    passed validation. Without one, a valid cache is required. Test fixtures
+    can exercise this boundary by being supplied as an approved response; they
+    are never discovered by a normal build.
     """
     collected: list[dict] = []
     for source in SOURCES:
@@ -137,11 +129,9 @@ def records(
         elif cached and cached.exists():
             raw_records = read_ndjson(cached)
         else:
-            raw_records = _records_from_fixture(sorted(source_counties), seed_dir)
-            if not raw_records:
-                raise HistoricNewsSourceError(
-                    f"{source.id}: no authorized response or valid cache is available; no historic-news data was produced"
-                )
+            raise HistoricNewsSourceError(
+                f"{source.id}: no authorized response or valid cache is available; no historic-news data was produced"
+            )
         checked = [_checked(record, source) for record in raw_records]
         if any(record["county"] not in source_counties for record in checked):
             raise HistoricNewsSourceError(f"{source.id}: response contains a record outside the source's authorized counties")

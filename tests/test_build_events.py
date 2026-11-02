@@ -6,6 +6,8 @@ from contextlib import closing
 
 import build_events
 import noaa
+import pytest
+from historic_news_sources import HistoricNewsSourceError
 from shapely.geometry import shape
 from test_noaa import storm_row, write_station_file, write_storm_file
 
@@ -122,3 +124,43 @@ def test_main_fills_the_database_and_can_be_rerun(tmp_path, monkeypatch):
         "noaa-storm-events": 2, "noaa-ghcn-daily": 1, "local-public-reports": 0,
         "historic-news:the-brownsville": 0,
     }
+
+
+def test_main_uses_an_approved_historic_news_response_then_its_cache(tmp_path, monkeypatch):
+    seed, raw, database = tmp_path / "seed", tmp_path / "raw", tmp_path / "generated" / "db.sqlite3"
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(build_events, "SHORT_NAMES", {"cameron": "Cameron"})
+    _write_boundary(seed, "cameron", (-97.9, 25.8, -97.1, 26.4))
+    write_storm_file(raw, [storm_row(EVENT_ID="1", CZ_NAME="CAMERON", BEGIN_LON="-97.5")])
+    station = next(iter(noaa.STATIONS_BY_COUNTY["cameron"]))
+    write_station_file(raw, "cameron", station, [f"{station},20180621,PRCP,1234,,,7,"])
+    response = [{
+        "record_id": "brownsville-hanna", "county": "cameron", "headline": "Historic flood report",
+        "summary": "Project-written summary.", "published_at": "2020-07-26",
+        "source_publisher": "The Brownsville", "canonical_url": "https://example.test/hanna",
+        "source_coordinates": [-97.5, 25.9], "retrieved_at": "2026-10-29T00:00:00Z",
+    }]
+
+    build_events.main(
+        database, raw, seed, download=False, historic_news_cache_dir=cache,
+        authorized_historic_news_responses={"the-brownsville": response},
+    )
+    build_events.main(database, raw, seed, download=False, historic_news_cache_dir=cache)
+
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("select id from historic_news").fetchall() == [("brownsville-hanna",)]
+    assert (cache / "the-brownsville.ndjson").exists()
+
+
+def test_main_fails_when_an_enabled_historic_news_source_has_no_response_or_cache(tmp_path, monkeypatch):
+    seed, raw, database = tmp_path / "seed", tmp_path / "raw", tmp_path / "generated" / "db.sqlite3"
+    monkeypatch.setattr(build_events, "SHORT_NAMES", {"cameron": "Cameron"})
+    _write_boundary(seed, "cameron", (-97.9, 25.8, -97.1, 26.4))
+    # A checked-in-style fixture must not become production evidence implicitly.
+    (seed / "cameron" / "historic-news.ndjson").write_text(
+        '{"record_id":"fixture","source_publisher":"The Brownsville"}\n', encoding="utf-8",
+    )
+    write_storm_file(raw, [storm_row(EVENT_ID="1", CZ_NAME="CAMERON", BEGIN_LON="-97.5")])
+
+    with pytest.raises(HistoricNewsSourceError, match="no authorized response or valid cache"):
+        build_events.main(database, raw, seed, download=False, historic_news_cache_dir=tmp_path / "empty-cache")

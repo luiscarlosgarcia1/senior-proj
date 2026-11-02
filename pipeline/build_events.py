@@ -29,7 +29,7 @@ import noaa
 from database import open_database, record_sources, replace_table
 from historic_news_sources import records as historic_news_records
 from jsonio import read_ndjson
-from paths import DATABASE, SEED_DIR, county_boundary, seed_file
+from paths import DATABASE, DOWNLOAD_CACHE, SEED_DIR, county_boundary, seed_file
 from shapely.geometry import Point, shape
 
 from rgv_flood.counties import SHORT_NAMES
@@ -150,10 +150,18 @@ def _historic_news_location(record: dict, county: str, boundary) -> dict:
     }
 
 
-def historic_news(counties: list[str], seed_dir: Path) -> list[dict]:
+def historic_news(
+    counties: list[str],
+    seed_dir: Path,
+    *,
+    cache_dir: Path,
+    authorized_responses: dict[str, list[dict]] | None = None,
+) -> list[dict]:
     """Authorized historic-news evidence, including valid non-mappable records."""
     records = []
-    for record in historic_news_records(counties, seed_dir):
+    for record in historic_news_records(
+        counties, cache_dir=cache_dir, authorized_responses=authorized_responses,
+    ):
         slug = record["county"]
         boundary = shape(county_boundary(slug, seed_dir))
         incident_start = _incident_date(record, "incident_start")
@@ -209,11 +217,11 @@ def _historic_news_source(records: list[dict]) -> dict:
     return {
         "id": "historic-news:the-brownsville",
         "publisher": "The Brownsville",
-        "dataset": "Authorized historic-news evidence fixture",
+        "dataset": "Approved historic-news evidence cache",
         "url": "https://thebrownsville.org/",
         "retrieved_at": None,
         "record_count": len(records),
-        "notes": "Historic attributed reporting only. It is not a live alert, observation, or route instruction.",
+        "notes": "Approved cached historic reporting only. It is not a live alert, observation, or route instruction.",
     }
 
 
@@ -223,6 +231,8 @@ def main(
     seed_dir: Path = SEED_DIR,
     *,
     download: bool = True,
+    historic_news_cache_dir: Path = DOWNLOAD_CACHE / "historic-news",
+    authorized_historic_news_responses: dict[str, list[dict]] | None = None,
 ) -> None:
     counties = list(SHORT_NAMES)
     if download:
@@ -230,7 +240,12 @@ def main(
 
     events = flood_events(counties, raw_dir, seed_dir)
     reports = flood_reports(counties, seed_dir)
-    news = historic_news(counties, seed_dir)
+    news = historic_news(
+        counties,
+        seed_dir,
+        cache_dir=historic_news_cache_dir,
+        authorized_responses=authorized_historic_news_responses,
+    )
     stations = noaa.weather_stations(counties)
     observations = noaa.weather_observations(counties, raw_dir)
 

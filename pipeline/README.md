@@ -25,6 +25,7 @@ Every table is defined in `database.py`. Every query the app runs is in
 | `layer_tiles` | vector tile (gzipped MVT, XYZ numbering) of a layer over 1 MB compressed | `build_layers.py` |
 | `flood_events` | flood-type event in NOAA's Storm Events Database, 1996–2025, with NOAA's coordinate and the point the map plots | `build_events.py` |
 | `flood_reports` | hand-curated local-news or government report tied to a flood | `build_events.py` |
+| `historic_news` | approved, bounded publisher metadata retained as historic reporting evidence | `build_events.py` |
 | `weather_stations` | GHCN-Daily station used for a county | `build_events.py` |
 | `weather_observations` | daily rain reading at a station, 1978–2025 | `build_events.py` |
 | `rainfall_station_years` | station and year: days with a rain reading, total, wettest day, days over 2 inches | `build_history.py` |
@@ -51,6 +52,7 @@ sqlite3 data/generated/rgv-flood.sqlite3 "select id, publisher, retrieved_at, re
 | Hidalgo drainage district layers, FEMA NFIP claims, Census tracts, water lines and places, TWDB State Flood Plan, Harlingen and Brownsville drainage, NWS storm reports, FEMA flood photos on Wikimedia Commons | downloaded (`public_sources.py`) |
 | FEMA NFHL, TWDB floodplain, Hidalgo 1981 FIRM, county boundaries | seed files in `data/seed/<county>/` |
 | Curated local flood reports | seed file `data/seed/hidalgo/public-reports.ndjson` |
+| Historic news | an explicitly approved response or `tmp/historic-news/` cache; no seed fallback or build-time scraping |
 | NFIP policies per county and year | seed file `data/seed/nfip-policies-by-year.csv` (FEMA retired the source) |
 
 **Download cache.** Downloads are kept in the gitignored `tmp/` folder exactly
@@ -63,7 +65,7 @@ written there.
 scripted download. They are the only data files in the repository; see
 [data/seed/README.md](../data/seed/README.md) for what each one is.
 
-## `build_events.py` — events, reports, weather
+## `build_events.py` — events, reports, historic news, weather
 
 ```bash
 uv run python pipeline/build_events.py                       # ~12 s
@@ -71,7 +73,10 @@ uv run python pipeline/build_events.py                       # ~12 s
 
 Reads NOAA's yearly Storm Events files once for all four counties and keeps the
 flood-type events (`noaa.py`), loads each county's GHCN-Daily stations and
-readings, and adds the curated reports from the seed folder.
+readings, and adds the curated reports from the seed folder. Historic-news
+evidence comes only from an explicitly approved response passed to the build
+or from `tmp/historic-news/`; it deliberately fails when an enabled source has
+neither. A checked-in fixture must never become map evidence.
 
 An event whose NOAA coordinate falls outside its own county's boundary is kept
 but not plotted: `source_lon`/`source_lat` hold what NOAA published, `lon`/`lat`

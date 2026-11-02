@@ -22,8 +22,8 @@ def test_authorized_response_refreshes_cache_and_deduplicates_deterministically(
     cache = tmp_path / "cache"
     response = [_record("later", "https://example.test/story"), _record("first", "https://example.test/story")]
 
-    first = records(["cameron"], tmp_path / "empty-seed", cache_dir=cache, authorized_responses={"the-brownsville": response})
-    cached = records(["cameron"], tmp_path / "empty-seed", cache_dir=cache)
+    first = records(["cameron"], cache_dir=cache, authorized_responses={"the-brownsville": response})
+    cached = records(["cameron"], cache_dir=cache)
 
     assert first == cached
     assert [row["record_id"] for row in cached] == ["first"]
@@ -32,7 +32,7 @@ def test_authorized_response_refreshes_cache_and_deduplicates_deterministically(
 
 def test_enabled_source_fails_clearly_without_authorized_response_cache_or_fixture(tmp_path):
     with pytest.raises(HistoricNewsSourceError, match="the-brownsville: no authorized response or valid cache"):
-        records(["cameron"], tmp_path / "empty-seed", cache_dir=tmp_path / "cache")
+        records(["cameron"], cache_dir=tmp_path / "cache")
 
 
 def test_enabled_source_rejects_non_authorized_county_in_a_multi_county_build(tmp_path):
@@ -43,7 +43,6 @@ def test_enabled_source_rejects_non_authorized_county_in_a_multi_county_build(tm
     with pytest.raises(HistoricNewsSourceError, match="the-brownsville: response contains a record outside the source's authorized counties"):
         records(
             ["cameron", "hidalgo"],
-            tmp_path / "empty-seed",
             cache_dir=cache,
             authorized_responses={"the-brownsville": response},
         )
@@ -65,7 +64,6 @@ def test_authorized_response_rejects_missing_required_published_metadata(tmp_pat
     with pytest.raises(HistoricNewsSourceError, match=f"{field} must be a non-empty string"):
         records(
             ["cameron"],
-            tmp_path / "empty-seed",
             authorized_responses={"the-brownsville": [response]},
         )
 
