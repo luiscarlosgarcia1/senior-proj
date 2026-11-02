@@ -3,12 +3,6 @@ import { mapReady } from "./map/main.js";
 
 const root = document.querySelector("[data-wayfinder]");
 
-function point(value) {
-  const [latitude, longitude, ...extra] = value.split(",").map(Number);
-  if (extra.length || !Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error("Use coordinates as latitude, longitude.");
-  return { latitude, longitude };
-}
-
 function show(result, text, links = []) {
   result.replaceChildren();
   const message = document.createElement("p");
@@ -117,7 +111,7 @@ if (root) {
       const fields = new FormData(form);
       show(result, "Checking current official closure evidence…");
       const request = {
-        origin: point(fields.get("origin")), destination: point(fields.get("destination")),
+        origin: fields.get("origin"), destination: fields.get("destination"),
       };
       const advisory = await postJson("wayfinder/advisories", request);
       await draw(advisory.geometry);

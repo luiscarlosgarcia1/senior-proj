@@ -11,15 +11,15 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from gzip import decompress
-from math import isfinite
 from typing import Protocol
 from uuid import uuid4
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 from shapely.geometry import MultiPoint, shape
 from shapely.ops import unary_union
 
+from rgv_flood.api.wayfinder_addresses import resolve_public_address
 from rgv_flood.db import Database, Db
 from rgv_flood.wayfinder import AdvisoryStatus, Coordinate, RouteAdvisory
 from rgv_flood.wayfinder_advisories import (
@@ -81,29 +81,13 @@ def install(app) -> None:
         return
 
 
-class Waypoint(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    latitude: float = Field(ge=-90, le=90)
-    longitude: float = Field(ge=-180, le=180)
-
-    @model_validator(mode="after")
-    def finite(self) -> Waypoint:
-        if not isfinite(self.latitude) or not isfinite(self.longitude):
-            raise ValueError("coordinates must be finite")
-        return self
-
-    def coordinate(self) -> Coordinate:
-        return Coordinate(self.latitude, self.longitude)
-
-
 class AdvisoryRequest(BaseModel):
-    """The entire public input contract; provider fields are rejected."""
+    """The entire public input contract; coordinates and provider fields are rejected."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    origin: Waypoint
-    destination: Waypoint
+    origin: str = Field(max_length=160)
+    destination: str = Field(max_length=160)
 
 
 class RouteUpdateRequest(BaseModel):
@@ -273,9 +257,9 @@ def _response(result: VerifiedAdvisory, assessment: ClosureAssessment) -> dict:
     return body
 
 
-def _endpoint_corridor(payload: AdvisoryRequest) -> dict:
+def _endpoint_corridor(origin: Coordinate, destination: Coordinate) -> dict:
     return MultiPoint(
-        [(payload.origin.longitude, payload.origin.latitude), (payload.destination.longitude, payload.destination.latitude)]
+        [(origin.longitude, origin.latitude), (destination.longitude, destination.latitude)]
     ).__geo_interface__
 
 
@@ -360,14 +344,22 @@ def public_advisory(payload: AdvisoryRequest, request: Request, db: Db):
     """Return an advisory or an explanatory safe failure, never a raw provider result."""
     checked_at = datetime.now(UTC)
     assessments = DatabaseClosureAssessments(db)
-    assessment = assessments.assess(checked_at, _endpoint_corridor(payload))
+    origin = resolve_public_address(getattr(request.app.state, "geocoder", None), payload.origin, "Origin")
+    destination = resolve_public_address(getattr(request.app.state, "geocoder", None), payload.destination, "Destination")
+    if origin.coordinate is None or destination.coordinate is None:
+        assessment = assessments.assess(checked_at, None)
+        reason = origin.reason if origin.coordinate is None else destination.reason
+        result = _withheld(assessment, checked_at, reason or "Wayfinder address resolution could not be verified.")
+        return _response(result, assessment)
+
+    assessment = assessments.assess(checked_at, _endpoint_corridor(origin.coordinate, destination.coordinate))
     service = getattr(request.app.state, "wayfinder_advisory_service", None)
     if service is None:
         result = _withheld(assessment, checked_at, "Wayfinder advisory is not currently configured for public use.")
     elif not assessment.can_publish_route:
         result = _withheld(assessment, checked_at, "Official closure coverage cannot validate the requested route corridor.")
     else:
-        result = service.advise(payload.origin.coordinate(), payload.destination.coordinate(), assessment, checked_at)
+        result = service.advise(origin.coordinate, destination.coordinate, assessment, checked_at)
         if result.advisory.status is AdvisoryStatus.ADVISORY:
             assessment = assessments.assess(checked_at, result.advisory.route_geometry)
             if not assessment.can_publish_route:
@@ -376,7 +368,7 @@ def public_advisory(payload: AdvisoryRequest, request: Request, db: Db):
     if result.advisory.status is AdvisoryStatus.ADVISORY:
         advisory_id = str(uuid4())
         _active_advisories(request)[advisory_id] = ActivePublicAdvisory(
-            payload.origin.coordinate(), payload.destination.coordinate(), _restriction_ids(assessment), checked_at
+            origin.coordinate, destination.coordinate, _restriction_ids(assessment), checked_at
         )
         body["advisory_id"] = advisory_id
     return body
