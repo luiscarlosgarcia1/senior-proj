@@ -1,8 +1,12 @@
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from rgv_flood.wayfinder import AdvisoryStatus, RouteAdvisory
-from rgv_flood.wayfinder_advisories import AdvisoryProvenance, VerifiedAdvisory
+from rgv_flood.wayfinder_advisories import (
+    AdvisoryProvenance,
+    VerifiedAdvisory,
+    VerifiedPublicAdvisoryService,
+)
 
 NOW = datetime(2026, 11, 2, 18, tzinfo=UTC)
 ROUTE = {"type": "LineString", "coordinates": [[-98.2, 26.2], [-98.1, 26.3]]}
@@ -32,6 +36,25 @@ class _LeavingAreaService(_Service):
             {"type": "LineString", "coordinates": [[-98.2, 26.2], [-100.0, 26.3]]},
         )
         return VerifiedAdvisory(route, result.provenance)
+
+
+class _VerifiedService(_Service, VerifiedPublicAdvisoryService):
+    """An API fixture that still satisfies the concrete reevaluation boundary."""
+
+
+class _StaleVerifiedService(_VerifiedService):
+    def advise(self, origin, destination, assessment, checked_at):
+        result = super().advise(origin, destination, assessment, checked_at)
+        stale = RouteAdvisory(
+            result.advisory.status, result.advisory.reasons, result.advisory.limitations,
+            result.advisory.evidence, checked_at - timedelta(minutes=1), result.advisory.route_segment_ids,
+            result.advisory.route_geometry,
+        )
+        return VerifiedAdvisory(stale, AdvisoryProvenance(
+            result.provenance.policy_version, checked_at - timedelta(minutes=1), result.provenance.provider_status,
+            result.provenance.validation_outcome, result.provenance.restriction_ids, result.provenance.source_urls,
+            result.provenance.qualification_record_id, result.provenance.qualification_suite_version,
+        ))
 
 
 def _record_current_official_coverage(api_client):
@@ -103,3 +126,32 @@ def test_wayfinder_suppresses_a_returned_route_that_leaves_official_coverage(api
     assert response.json()["status"] == "suppressed"
     assert response.json()["geometry"] is None
     assert "cannot validate the returned route corridor" in response.json()["reasons"][0]
+
+
+def test_wayfinder_returns_a_separate_verified_update_proposal(api_client):
+    _record_current_official_coverage(api_client)
+    api_client.app.state.wayfinder_advisory_service = _VerifiedService.__new__(_VerifiedService)
+
+    response = api_client.post("/api/v1/wayfinder/advisories/updates", json={
+        **PAYLOAD, "active_advisory_id": "active-1", "trigger": "traffic_eta_expired",
+    })
+
+    assert response.status_code == 200
+    proposal = response.json()["proposal"]
+    assert proposal["active_advisory_id"] == "active-1"
+    assert proposal["trigger"] == "traffic_eta_expired"
+    assert proposal["advisory"]["geometry"] == ROUTE
+    assert "not replaced" in proposal["message"]
+
+
+def test_wayfinder_stale_reevaluation_cannot_produce_a_proposal(api_client):
+    _record_current_official_coverage(api_client)
+    api_client.app.state.wayfinder_advisory_service = _StaleVerifiedService.__new__(_StaleVerifiedService)
+
+    response = api_client.post("/api/v1/wayfinder/advisories/updates", json={
+        **PAYLOAD, "active_advisory_id": "active-1", "trigger": "restriction_changed",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["proposal"] is None
+    assert "could not be verified" in response.json()["outcome"]

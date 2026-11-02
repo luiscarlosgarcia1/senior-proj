@@ -38,6 +38,12 @@ from rgv_flood.wayfinder_closures import (
     FeedCoverage,
     MatchBasis,
 )
+from rgv_flood.wayfinder_updates import (
+    RefreshTrigger,
+    RouteUpdateProposer,
+    SoftRiskEvaluation,
+    VerifiedAdvisoryReevaluation,
+)
 
 router = APIRouter()
 
@@ -99,6 +105,13 @@ class AdvisoryRequest(BaseModel):
     destination: Waypoint
 
 
+class RouteUpdateRequest(AdvisoryRequest):
+    """Public input for a *proposed* replacement, never an automatic one."""
+
+    active_advisory_id: str = Field(min_length=1, max_length=128)
+    trigger: RefreshTrigger
+
+
 class AdvisoryService(Protocol):
     def advise(
         self, origin: Coordinate, destination: Coordinate, assessment: ClosureAssessment, checked_at: datetime
@@ -116,6 +129,7 @@ class DatabaseClosureAssessments:
         coverage = tuple(self._coverage(source, corridor_covered) for source in DRIVE_TEXAS_SOURCES)
         records = tuple(self._records())
         return ClosureEvidencePolicy().assess(coverage, records, checked_at)
+
 
     def _coverage(self, source: str, corridor_covered: bool) -> FeedCoverage:
         row = self.db.rows(
@@ -188,6 +202,22 @@ class DatabaseClosureAssessments:
             )
 
 
+@dataclass(frozen=True)
+class CurrentDatabaseClosureAssessments:
+    """Provider-bound reevaluation source for one requested advisory corridor."""
+
+    assessments: DatabaseClosureAssessments
+    endpoint_corridor: dict
+
+    def assess_current(self, checked_at: datetime) -> ClosureAssessment:
+        return self.assessments.assess(checked_at, self.endpoint_corridor)
+
+
+class _UtcClock:
+    def now(self) -> datetime:
+        return datetime.now(UTC)
+
+
 def _parse_time(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -228,15 +258,43 @@ def _response(result: VerifiedAdvisory, assessment: ClosureAssessment) -> dict:
     return body
 
 
+def _endpoint_corridor(payload: AdvisoryRequest) -> dict:
+    return MultiPoint(
+        [(payload.origin.longitude, payload.origin.latitude), (payload.destination.longitude, payload.destination.latitude)]
+    ).__geo_interface__
+
+
+def _proposal_response(proposal, event, assessment: ClosureAssessment) -> dict:
+    """Keep the candidate separate so clients cannot mistake it for an active route."""
+    if proposal is None:
+        return {
+            "proposal": None,
+            "outcome": event.user_visible_result,
+            "cautions": [item.limitation or item.native_id for item in assessment.cautions],
+        }
+    result = _response(proposal.advisory, assessment)
+    return {
+        "proposal": {
+            "active_advisory_id": proposal.active_advisory_id,
+            "trigger": proposal.trigger,
+            "message": proposal.public_message,
+            "reasons": list(proposal.reasons),
+            "limitations": list(proposal.limitations),
+            "policy_versions": list(event.policy_versions),
+            "evidence_ids": list(event.evidence_ids),
+            "advisory": result,
+        },
+        "outcome": event.user_visible_result,
+        "cautions": [item.limitation or item.native_id for item in assessment.cautions],
+    }
+
+
 @router.post("/wayfinder/advisories")
 def public_advisory(payload: AdvisoryRequest, request: Request, db: Db):
     """Return an advisory or an explanatory safe failure, never a raw provider result."""
     checked_at = datetime.now(UTC)
     assessments = DatabaseClosureAssessments(db)
-    endpoint_corridor = MultiPoint(
-        [(payload.origin.longitude, payload.origin.latitude), (payload.destination.longitude, payload.destination.latitude)]
-    )
-    assessment = assessments.assess(checked_at, endpoint_corridor.__geo_interface__)
+    assessment = assessments.assess(checked_at, _endpoint_corridor(payload))
     service = getattr(request.app.state, "wayfinder_advisory_service", None)
     if service is None:
         result = _withheld(assessment, checked_at, "Wayfinder advisory is not currently configured for public use.")
@@ -249,3 +307,53 @@ def public_advisory(payload: AdvisoryRequest, request: Request, db: Db):
             if not assessment.can_publish_route:
                 result = _withheld(assessment, checked_at, "Official closure coverage cannot validate the returned route corridor.")
     return _response(result, assessment)
+
+
+@router.post("/wayfinder/advisories/updates")
+def propose_public_advisory_update(payload: RouteUpdateRequest, request: Request, db: Db):
+    """Return a reviewable route update only after a complete fresh reevaluation.
+
+    This endpoint deliberately has no accept/activate operation.  A proposal is
+    rendered beside the active advisory and the browser must explicitly decide
+    whether to draw it.
+    """
+    assessments = DatabaseClosureAssessments(db)
+    endpoint_corridor = _endpoint_corridor(payload)
+    checked_at = datetime.now(UTC)
+    assessment = assessments.assess(checked_at, endpoint_corridor)
+    service = getattr(request.app.state, "wayfinder_advisory_service", None)
+    if not isinstance(service, VerifiedPublicAdvisoryService) or not assessment.can_publish_route:
+        # The standard public endpoint produces the canonical explanatory
+        # suppression response.  Route updates add no alternate success path.
+        withheld = _withheld(assessment, checked_at, "Current conditions cannot produce a verified route update.")
+        return {
+            "proposal": None,
+            "outcome": "No route update is proposed because current reevaluation could not be verified.",
+            "cautions": [item.limitation or item.native_id for item in assessment.cautions],
+            "validation_outcome": withheld.provenance.validation_outcome,
+        }
+
+    reevaluation = VerifiedAdvisoryReevaluation(
+        service,
+        CurrentDatabaseClosureAssessments(assessments, endpoint_corridor),
+        payload.origin.coordinate(), payload.destination.coordinate(), _UtcClock(),
+    )
+    proposal, event = RouteUpdateProposer(reevaluation).propose(
+        active_advisory_id=payload.active_advisory_id,
+        trigger=payload.trigger,
+        risk_evaluation=SoftRiskEvaluation((), (), False),
+    )
+    # A provider can return a geometry that does not match the endpoint chord.
+    # Re-check its entire shape before allowing even a visible candidate.
+    if proposal is not None:
+        assessment = assessments.assess(checked_at, proposal.advisory.advisory.route_geometry)
+        if not assessment.can_publish_route:
+            proposal = None
+            event = event.__class__(
+                event.trigger, event.policy_versions, event.evidence_ids,
+                (*event.match_reasons, "returned route corridor lacks complete official coverage"),
+                event.provider_status, "returned route corridor lacks complete official coverage",
+                event.validation_record,
+                "No route update is proposed because current reevaluation could not be verified.",
+            )
+    return _proposal_response(proposal, event, assessment)
