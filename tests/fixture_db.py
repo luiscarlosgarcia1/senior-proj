@@ -187,8 +187,15 @@ PHOTOS_GEOJSON = (
     '{"type":"Feature","geometry":{"type":"Point","coordinates":[-98.1,26.3]},'
     '"properties":{"overlay_type":"flood_photo","event":"June 2018"}}]}'
 )
+COUNTY_BOUNDARIES_GEOJSON = (
+    '{"type":"FeatureCollection","features":['
+    '{"type":"Feature","properties":{"county_slug":"starr"},"geometry":{"type":"Polygon","coordinates":[[[-99.5,26.0],[-98.45,26.0],[-98.45,26.7],[-99.5,26.7],[-99.5,26.0]]]}},'
+    '{"type":"Feature","properties":{"county_slug":"hidalgo"},"geometry":{"type":"Polygon","coordinates":[[[-98.5,25.9],[-97.75,25.9],[-97.75,26.7],[-98.5,26.7],[-98.5,25.9]]]}},'
+    '{"type":"Feature","properties":{"county_slug":"cameron"},"geometry":{"type":"Polygon","coordinates":[[[-98.0,25.7],[-97.1,25.7],[-97.1,26.45],[-98.0,26.45],[-98.0,25.7]]]}},'
+    '{"type":"Feature","properties":{"county_slug":"willacy"},"geometry":{"type":"Polygon","coordinates":[[[-97.9,26.35],[-97.1,26.35],[-97.1,27.0],[-97.9,27.0],[-97.9,26.35]]]}}]}'
+)
 LAYERS = [
-    _layer("county-boundaries", position=0, layer_group="base", short_label="County boundaries",
+    _layer("county-boundaries", COUNTY_BOUNDARIES_GEOJSON, position=0, layer_group="base", short_label="County boundaries",
            legend_json='{"shape": "line", "color": "county"}'),
     _layer("fema-nfhl", position=1, title="FEMA effective flood hazard (NFHL)", feature_count=20,
            row_label="FEMA effective flood hazard (NFHL)", short_label="FEMA effective flood hazard (NFHL)"),
