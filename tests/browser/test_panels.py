@@ -37,11 +37,13 @@ def test_header_alert_pill_toggles_desktop_panel(map_page):
     expect(panel).not_to_be_visible()
 
     toggle.click(timeout=5_000)
-    expect(toggle).to_have_attribute("aria-expanded", "true")
+    expanded_toggle = page.get_by_role("button", name="Hide live alerts")
+    expect(expanded_toggle).to_have_attribute("aria-expanded", "true")
     expect(panel).to_be_visible()
 
-    toggle.click()
-    expect(toggle).to_have_attribute("aria-expanded", "false")
+    expanded_toggle.click(timeout=5_000)
+    collapsed_toggle = page.get_by_role("button", name="Show live alerts")
+    expect(collapsed_toggle).to_have_attribute("aria-expanded", "false")
     expect(panel).not_to_be_visible()
 
 
