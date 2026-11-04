@@ -1,5 +1,7 @@
 """Map page: the MapLibre map, the layer panel, legends, source details, themes."""
 
+from urllib.parse import parse_qs, urlparse
+
 from browser_support import wait_js
 from playwright.sync_api import expect
 
@@ -261,15 +263,17 @@ def test_county_change_refreshes_enabled_historic_news_layer(map_page):
             }],
         })
 
-    page.route("**/api/v1/historic-news.geojson?*", historic_news)
+    page.route("**/api/v1/historic-news.geojson*", historic_news)
     _row(page, "historic-news").check()
-    wait_js(page, "window.__rgvMap.getSource('src-historic-news')")
+    wait_js(page, "window.__rgvMap.getSource('src-historic-news')?.serialize().data?.features?.[0]?.properties?.county === 'cameron'")
 
     page.locator("#county-header").select_option("hidalgo")
-    wait_js(page, "window.__rgvMap.getSource('src-historic-news')._data.features[0].properties.county === 'hidalgo'")
+    wait_js(page, "window.__rgvMap.getSource('src-historic-news')?.serialize().data?.features?.[0]?.properties?.county === 'hidalgo'")
 
-    assert any("county=cameron" in request for request in requests)
-    assert any("county=hidalgo" in request for request in requests)
+    assert [(urlparse(request).path, parse_qs(urlparse(request).query)) for request in requests] == [
+        ("/api/v1/historic-news.geojson", {"county": ["cameron"]}),
+        ("/api/v1/historic-news.geojson", {"county": ["hidalgo"]}),
+    ]
 
 
 def test_map_fills_its_area(map_page):
