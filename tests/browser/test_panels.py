@@ -31,10 +31,12 @@ def test_header_alert_pill_toggles_desktop_panel(map_page):
     toggle = page.get_by_role("button", name="Show live alerts")
     panel = page.locator("#live-alert-panel")
 
+    expect(toggle).to_be_visible(timeout=5_000)
+    expect(toggle).to_be_enabled(timeout=5_000)
     expect(toggle).to_have_attribute("aria-expanded", "false")
     expect(panel).not_to_be_visible()
 
-    toggle.click()
+    toggle.click(timeout=5_000)
     expect(toggle).to_have_attribute("aria-expanded", "true")
     expect(panel).to_be_visible()
 
