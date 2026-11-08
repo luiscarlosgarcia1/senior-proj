@@ -26,6 +26,23 @@ def test_alert_panel_empty_state(map_page):
     expect(page.locator("header")).to_contain_text("0 active alerts")
 
 
+def test_header_alert_pill_toggles_desktop_panel(map_page):
+    page = map_page()
+    toggle = page.get_by_role("button", name="Show live alerts")
+    panel = page.locator("#live-alert-panel")
+
+    expect(toggle).to_have_attribute("aria-expanded", "false")
+    expect(panel).not_to_be_visible()
+
+    toggle.click()
+    expect(toggle).to_have_attribute("aria-expanded", "true")
+    expect(panel).to_be_visible()
+
+    toggle.click()
+    expect(toggle).to_have_attribute("aria-expanded", "false")
+    expect(panel).not_to_be_visible()
+
+
 def test_alert_panel_lists_signals(page, live_server):
     page.route("**/api/v1/live-signals?**", lambda route: route.fulfill(json=SIGNALS))
     page.route("**/api/v1/live-signals", lambda route: route.fulfill(json=SIGNALS))

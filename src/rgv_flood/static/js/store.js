@@ -18,6 +18,7 @@ document.addEventListener("alpine:init", () => {
     theme: document.documentElement.dataset.theme || "light",
     loading: false,
     view: "map", // phones show one view at a time: map, layers or events
+    alertsPanelOpen: false, // desktop starts map-first; phones use the Events tab
     setCounty(slug) {
       if (slug === this.county) return;
       this.county = slug;
@@ -32,6 +33,10 @@ document.addEventListener("alpine:init", () => {
         /* private mode: the choice lasts for this page only */
       }
       emit("theme", theme);
+    },
+    toggleAlertsPanel() {
+      this.alertsPanelOpen = !this.alertsPanelOpen;
+      emit("alerts-panel-toggled", { open: this.alertsPanelOpen });
     },
   });
 
@@ -99,6 +104,12 @@ document.addEventListener("alpine:init", () => {
     },
     init() {
       Alpine.store("alerts").start();
+    },
+    get expanded() {
+      return Alpine.store("app").alertsPanelOpen;
+    },
+    toggle() {
+      Alpine.store("app").toggleAlertsPanel();
     },
   }));
 });
