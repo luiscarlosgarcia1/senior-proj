@@ -31,6 +31,69 @@ single gauge:
 Each chart can be viewed as a table. Flood insurance claims and policies stay
 on `/claims`, which `/trends` links to.
 
+## Ask the data (the chat box)
+
+An optional **Ask the data** button sits at the bottom right of every page. It opens a chat where a
+visitor asks questions in plain language, such as "which three years had the most flood claims?" or
+"what trends are there in San Benito?". An Azure OpenAI model answers by running read-only queries
+against this project's own database, as many as it needs, and writes a plain-text answer.
+
+- **Read-only.** The model has two tools: describe the database, and run one `SELECT`. Each query
+  gets its own read-only connection that can do nothing but read, is stopped after 5 seconds, and
+  returns at most 200 rows with long text and binary data cut short. It cannot change anything.
+- **Honest about gaps.** Every number in an answer must come from a query it ran, and it names the
+  tables, counties and years it used. When the data cannot answer a question (for example, how good a
+  town's water system is) it says so and offers the related data that exists. It declines emergency
+  questions ("is my house safe?") and points to NWS Brownsville and the county.
+- **No web search, no charts.** Text only, from this project's data.
+- **Limits.** Anyone can send 5 messages a day (counted per browser and, at 25 a day, per network
+  address). Signing in with a UTRGV Microsoft account (`@utrgv.edu`) removes the limit, with a safety
+  ceiling of 200 a day. Counts reset at midnight Valley time and live in their own small file,
+  `data/generated/chat-usage.sqlite3`, as salted hashes: no messages and no email addresses are stored.
+  A message the assistant could not answer (Azure down) is not counted. Each message runs at most 8 queries.
+- **Conversations are not stored.** The transcript lives in the open page; reloading clears it.
+- **It costs money.** Every answer uses the owner's Azure OpenAI quota, which is why the limits exist.
+
+The chat box is **off** until its settings are present; without them the button is not shown and
+`/api/v1/chat` answers 503, so the rest of the site is unaffected.
+
+### Setting it up
+
+Set these environment variables on the server (or in a local `.env` file, which is gitignored, as is the
+`keys/` folder; never put a key in a tracked file):
+
+| Variable | What it is | Secret? |
+| --- | --- | --- |
+| `RGV_AZURE_OPENAI_ENDPOINT` | The Azure OpenAI resource's address, like `https://<name>.openai.azure.com` | no |
+| `RGV_AZURE_OPENAI_DEPLOYMENT` | The name of the deployed chat model (for example a gpt-4o-mini deployment) | no |
+| `RGV_AZURE_OPENAI_API_VERSION` | Optional; defaults to `2024-10-21` | no |
+| `RGV_AZURE_OPENAI_API_KEY` | The resource's key | **yes** |
+| `RGV_SESSION_SECRET` | Any random text of at least 32 characters; signs the chat cookies | **yes** |
+| `RGV_PUBLIC_URL` | The site's public `https://` address (needed only for sign-in) | no |
+| `RGV_MS_CLIENT_ID` | The Microsoft app registration's Application (client) ID | no |
+| `RGV_MS_CLIENT_SECRET` | The registration's client secret value | **yes** |
+| `RGV_MS_TENANT_ID` | UTRGV's tenant id (below) | no |
+
+Chat turns on when the first four and the session secret are set. Sign-in turns on when the rest are set too.
+Secrets stay on the server: they are never sent to the browser, never logged and never shown in an error.
+
+**Microsoft sign-in, step by step** (done once in your own Azure account; nothing is changed in UTRGV's):
+
+1. In the Azure portal open **Microsoft Entra ID**, then **App registrations**, then **New registration**.
+2. Name it, and under **Supported account types** choose **Accounts in any organizational directory (Multitenant)**.
+3. Under **Redirect URI** choose **Web** and enter `https://<your site>/auth/callback`. For trying it locally, add
+   `http://127.0.0.1:8000/auth/callback` as a second redirect URI.
+4. Open the new registration. Copy the **Application (client) ID** into `RGV_MS_CLIENT_ID`.
+5. Open **Certificates & secrets**, then **New client secret**. Copy the secret's **Value** once, straight into the
+   server's `RGV_MS_CLIENT_SECRET`.
+6. UTRGV's tenant id is public: open `https://login.microsoftonline.com/utrgv.edu/v2.0/.well-known/openid-configuration`
+   in a browser and copy the id that appears in the `issuer` address into `RGV_MS_TENANT_ID`.
+
+The site asks only for the `openid`, `profile` and `email` permissions, and accepts a sign-in only when the account
+belongs to UTRGV's tenant and ends in `@utrgv.edu`. **One thing to expect:** a university may require an
+administrator to approve new apps; the first real sign-in shows whether UTRGV does. If it does, ask UTRGV IT to
+approve the app, or use a different sign-in method (an emailed one-time code is not built).
+
 ## Stack
 
 | Part | What it uses |
@@ -154,6 +217,8 @@ responses at `/docs`:
 | `GET /api/v1/live-signals`, `/api/v1/live-signals.geojson` | Current official alerts and when they were last refreshed |
 | `GET /api/v1/history` | Claims, payments, policies, rain and events, year by year |
 | `GET /api/v1/trends` | Rain by year and month, flood events, NWS reports and news stories per year; filter by county and gauge |
+| `POST /api/v1/chat`, `GET /api/v1/chat/status` | The data assistant: ask a question (read-only, limited per day) and see the messages left |
+| `/auth/login`, `/auth/callback`, `/auth/logout` | Sign in with a UTRGV Microsoft account (browser redirects, not JSON) |
 | `GET /api/v1/sources` | Every dataset's publisher, link, download date and size; the build date |
 | `GET /api/v1/geocode?q=` | Address search, proxied to Nominatim (cached, one request a second upstream, 30 a minute per visitor) |
 | `GET /health` | Status for Docker and Caddy; 503 when the database is missing |
@@ -204,6 +269,7 @@ Settings are environment variables, all optional:
 | `RGV_BASEMAP_LIGHT_STYLE`, `RGV_BASEMAP_DARK_STYLE` | OpenFreeMap Positron and Dark |
 | `RGV_GEOCODER_URL`, `RGV_GEOCODER_USER_AGENT` | Nominatim, with the project's name |
 | `RGV_LOG_LEVEL` | `INFO` (one JSON log line per request) |
+| `RGV_AZURE_OPENAI_*`, `RGV_MS_*`, `RGV_SESSION_SECRET`, `RGV_PUBLIC_URL`, `RGV_CHAT_USAGE_DATABASE` | The chat box and its sign-in; off unless set (see "Ask the data") |
 
 ## Deployment
 
