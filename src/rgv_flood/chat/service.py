@@ -7,10 +7,10 @@ request arrives and a real `AzureModelClient` is asked for an answer.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from rgv_flood.chat.agent import AzureModelClient, ModelClient
 from rgv_flood.chat.limits import UsageStore
+from rgv_flood.chat.microsoft import MicrosoftLogin
 from rgv_flood.db import Database
 from rgv_flood.settings import Settings
 
@@ -21,7 +21,7 @@ class ChatService:
     db: Database
     model: ModelClient
     usage: UsageStore
-    login: Any = None  # a MicrosoftLogin when sign-in is configured
+    login: MicrosoftLogin | None = None  # set when sign-in is configured
 
     @classmethod
     def from_settings(cls, settings: Settings, db: Database) -> ChatService:
@@ -32,4 +32,5 @@ class ChatService:
             settings.azure_openai_api_version,
         )
         usage = UsageStore(settings.chat_usage_database, pepper=settings.session_secret.get_secret_value())
-        return cls(settings=settings, db=db, model=model, usage=usage)
+        login = MicrosoftLogin(settings) if settings.login_enabled else None
+        return cls(settings=settings, db=db, model=model, usage=usage, login=login)
