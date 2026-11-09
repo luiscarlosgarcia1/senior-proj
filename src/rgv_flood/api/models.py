@@ -3,9 +3,9 @@ the tests check the responses against."""
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints
 
 
 class HealthResponse(BaseModel):
@@ -311,3 +311,32 @@ class Place(BaseModel):
     label: str
     lon: float
     lat: float
+
+
+# ---- chat ----
+
+
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: Annotated[str, StringConstraints(min_length=1, max_length=4000)]
+
+
+class ChatRequest(BaseModel):
+    message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+    history: Annotated[list[ChatTurn], Field(max_length=10)] = []
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    remaining: int | None
+    limit: int | None
+    signed_in: bool
+
+
+class ChatStatus(BaseModel):
+    enabled: bool
+    login_enabled: bool
+    signed_in: bool
+    email: str | None = None
+    remaining: int | None = None
+    limit: int | None = None
