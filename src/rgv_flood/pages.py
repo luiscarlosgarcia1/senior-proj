@@ -1,4 +1,4 @@
-"""The three pages: the map explorer ("/"), claims & rainfall by year ("/claims") and trends ("/trends").
+"""The pages: the landing page ("/"), the map explorer ("/map"), claims & rainfall by year ("/claims") and trends ("/trends").
 
 Templates hold structure only; every piece of data on a page comes from the
 JSON API, fetched by the page's scripts. Pages are revalidated on every load
@@ -60,6 +60,11 @@ def _render(request: Request, template: str, db, nav_active: str, **context):
 
 
 @router.get("/", include_in_schema=False)
+def landing_page(request: Request, db: Db):
+    return _render(request, "landing.html", db, "home")
+
+
+@router.get("/map", include_in_schema=False)
 def map_page(request: Request, db: Db):
     return _render(request, "map.html", db, "map")
 

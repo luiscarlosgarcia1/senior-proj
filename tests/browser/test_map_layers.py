@@ -268,7 +268,7 @@ def test_tiled_layer_draws_features(map_page, console_errors):
 
 def test_opens_in_light_mode_even_when_the_system_is_dark(page, live_server):
     page.emulate_media(color_scheme="dark")
-    page.goto(f"{live_server}/?test=1")
+    page.goto(f"{live_server}/map?test=1")
 
     assert page.evaluate("document.documentElement.dataset.theme") == "light"
     expect(page.locator("header label:has-text('Dark') input")).not_to_be_checked()

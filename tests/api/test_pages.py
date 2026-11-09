@@ -1,4 +1,4 @@
-"""Pages: the map explorer and the claims page, their shell and their policies."""
+"""Pages: the landing page, the map explorer and the claims page, their shell and their policies."""
 
 import base64
 import hashlib
@@ -7,8 +7,31 @@ import re
 from rgv_flood import pages
 
 
-def test_map_page_renders(api_client):
+def test_landing_page_is_the_front_door(api_client):
     response = api_client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+    html = response.text
+    assert 'href="/map"' in html and 'href="/claims"' in html
+    for county in ("Cameron", "Hidalgo", "Starr", "Willacy"):
+        assert county in html
+    assert 'href="https://www.weather.gov/bro/"' in html  # where to go in a real flood
+    assert "maplibre" not in html  # the heavy map code belongs to /map
+    assert "/static/js/pages/landing.js?v=" in html
+    assert len([line for line in html.splitlines() if 'type="module"' in line]) == 2  # store.js and the page entry
+
+
+def test_landing_page_needs_no_database(make_client, tmp_path):
+    response = make_client(tmp_path / "not-built.sqlite3").get("/")
+
+    assert response.status_code == 200
+    assert 'role="status"' not in response.text  # no "No data yet" banner: it is shown before there is any data
+    assert 'href="/map"' in response.text
+
+
+def test_map_page_renders(api_client):
+    response = api_client.get("/map")
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-cache"
@@ -29,14 +52,14 @@ def test_claims_page_renders(api_client):
 
 
 def test_county_selector_lists_the_four_counties(api_client):
-    html = api_client.get("/").text
+    html = api_client.get("/map").text
 
     for slug in ("cameron", "hidalgo", "starr", "willacy"):
         assert f'value="{slug}"' in html
 
 
 def test_no_inline_event_handlers(api_client):
-    for path in ("/", "/claims"):
+    for path in ("/", "/map", "/claims"):
         assert not re.search(r"\son[a-z]+\s*=", api_client.get(path).text), path
 
 
@@ -59,14 +82,14 @@ def test_build_date_in_claims_footer(api_client):
 def test_pages_render_before_build(make_client, tmp_path):
     client = make_client(tmp_path / "not-built.sqlite3")
 
-    for path in ("/", "/claims"):
+    for path in ("/map", "/claims"):
         response = client.get(path)
         assert response.status_code == 200
         assert "No data yet" in response.text
 
 
 def test_favicon_is_the_wave_logo(api_client):
-    html = api_client.get("/").text
+    html = api_client.get("/map").text
 
     assert '<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=' in html
     icon = api_client.get("/static/favicon.svg")
@@ -75,16 +98,18 @@ def test_favicon_is_the_wave_logo(api_client):
 
 
 def test_no_logo_mark_in_the_header(api_client):
-    header = api_client.get("/").text.split("<header", 1)[1].split("</header>", 1)[0]
+    header = api_client.get("/map").text.split("<header", 1)[1].split("</header>", 1)[0]
 
     assert "bg-brand" not in header  # the old droplet mark
     assert "RGV Flood Impact Visualizer" in header
+    assert '<a href="/" class="flex items-center no-underline' in header  # the title leads back to the landing page
+    assert 'href="/map"' in header and 'aria-current="page"' in header
 
 
 def test_map_page_loads_one_entry_module(api_client):
     """Modules imported by other modules must not also get their own (versioned) script
     tag: the browser would run them twice, e.g. registering two click handlers."""
-    html = api_client.get("/").text
+    html = api_client.get("/map").text
 
     modules = [line for line in html.splitlines() if 'type="module"' in line]
     assert len(modules) == 2  # store.js and the page entry

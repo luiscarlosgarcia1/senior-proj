@@ -153,7 +153,7 @@ def map_page(page, live_server, console_errors):
     """The map page, loaded, with the map ready (window.__rgvMap exposed by ?test=1)."""
 
     def open_(hash_: str = ""):
-        page.goto(f"{live_server}/?test=1{hash_}")
+        page.goto(f"{live_server}/map?test=1{hash_}")
         wait_js(page, "window.__rgvMap && window.__rgvMap.isStyleLoaded()")
         return page
 

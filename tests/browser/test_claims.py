@@ -86,7 +86,7 @@ def test_map_page_does_not_load_plotly(page, live_server):
     requested = []
     page.on("request", lambda request: requested.append(request.url))
 
-    page.goto(f"{live_server}/?test=1")
+    page.goto(f"{live_server}/map?test=1")
     wait_js(page, "window.__rgvMap && window.__rgvMap.isStyleLoaded()")
 
     assert not [url for url in requested if "plotly" in url]

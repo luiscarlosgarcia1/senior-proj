@@ -29,7 +29,7 @@ def _modules(entry, seen):
 
 
 def test_map_page_first_load_budget(api_client):
-    html = api_client.get("/").text
+    html = api_client.get("/map").text
     files = set()
     for url in re.findall(r'(?:href|src)="(/static/[^"]+)"', html):
         path = _static_path(url)

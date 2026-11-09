@@ -59,7 +59,7 @@ uv run --group pipeline python pipeline/build_all.py
 uv run dev
 ```
 
-Open <http://127.0.0.1:8000>.
+Open <http://127.0.0.1:8000> for the landing page; the map is at `/map`.
 
 - `build_all.py` builds the database. It downloads about 400 MB into the `tmp/`
   cache the first time; later runs reuse it. It is safe to run while the app is up.
@@ -70,6 +70,8 @@ Open <http://127.0.0.1:8000>.
   (`RGV_WORKERS`, default 4).
 
 ## Using the map
+
+The front page, `/`, is a short landing page: what the project compares, which counties it covers, a notice about its limits and links in. It needs no database. The map itself is at `/map`; an older shared link, the front page plus a `#county=...` address, is sent on to `/map` with its view intact.
 
 - **Layers.** The left panel groups the layers: flood hazard, drainage and flood
   works, evidence of flooding, projects. Tick a layer to draw it; a group's own
@@ -237,7 +239,7 @@ handoff kept in `docs/design/handoff/`.
 | `src/rgv_flood/app.py` | The FastAPI app: settings, database, middleware, routers, the live-alert refresher | yes |
 | `src/rgv_flood/api/` | One module per group of endpoints, and the response models | yes |
 | `src/rgv_flood/data_access.py` | Every database query | yes |
-| `src/rgv_flood/templates/` | `base.html`, `map.html`, `claims.html` and their `components/` | yes |
+| `src/rgv_flood/templates/` | `base.html`, `landing.html`, `map.html`, `claims.html`, `trends.html` and their `components/` | yes |
 | `src/rgv_flood/static/` | `css/input.css` (tokens and components), `js/` (`map/`, `panels/`, one entry per page in `pages/`), `basemap/offline.json`, `favicon.svg` | yes |
 | `src/rgv_flood/static/css/site.css`, `static/vendor/`, `static/fonts/` | Built stylesheet and fetched third-party files | no |
 | `pipeline/` | The build scripts and the live-alert pollers; see [pipeline/README.md](pipeline/README.md) | yes |

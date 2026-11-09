@@ -46,7 +46,7 @@ def test_header_alert_pill_toggles_desktop_panel(map_page):
 def test_alert_panel_lists_signals(page, live_server):
     page.route("**/api/v1/live-signals?**", lambda route: route.fulfill(json=SIGNALS))
     page.route("**/api/v1/live-signals", lambda route: route.fulfill(json=SIGNALS))
-    page.goto(f"{live_server}/?test=1")
+    page.goto(f"{live_server}/map?test=1")
 
     alerts = page.locator("[data-panel=alerts]")
     expect(alerts).to_contain_text("Flash Flood Warning")
@@ -60,7 +60,7 @@ def test_alert_badges_name_the_agency(page, live_server):
         {**SIGNALS["signals"][0], "native_id": "b", "source": "drivetexas:points", "source_publisher": "TxDOT"},
     ]}
     page.route("**/api/v1/live-signals", lambda route: route.fulfill(json=signals))
-    page.goto(f"{live_server}/?test=1")
+    page.goto(f"{live_server}/map?test=1")
 
     badges = page.locator("[data-panel=alerts] [data-badge]")
     expect(badges).to_have_text(["NWS", "TxDOT"])

@@ -89,7 +89,7 @@ def test_events_flag_link_works(map_page):
 
 def test_phone_layout_bottom_nav(page, live_server):
     page.set_viewport_size({"width": 375, "height": 812})
-    page.goto(f"{live_server}/?test=1")
+    page.goto(f"{live_server}/map?test=1")
     wait_js(page, "window.__rgvMap && window.__rgvMap.isStyleLoaded()")
     nav = page.locator("nav[data-bottom-nav]")
 
