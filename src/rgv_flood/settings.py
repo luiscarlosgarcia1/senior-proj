@@ -8,10 +8,11 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SESSION_SECRET_MIN = 32
 
 
 class Settings(BaseSettings):
@@ -29,13 +30,46 @@ class Settings(BaseSettings):
     geocoder_user_agent: str = "RGV-Flood-Impact-Visualizer/1.0 (UTRGV senior project)"
     log_level: str = "INFO"
 
+    # The data chatbot. Secrets are SecretStr, so they never appear in a repr or a dump.
+    # Chat switches on only when the Azure settings and a long session secret are all present.
+    azure_openai_endpoint: str = ""
+    azure_openai_api_key: SecretStr = SecretStr("")
+    azure_openai_deployment: str = ""
+    azure_openai_api_version: str = "2024-10-21"
+    # Sign in with a UTRGV Microsoft account (see the README for the app registration).
+    ms_client_id: str = ""
+    ms_client_secret: SecretStr = SecretStr("")
+    ms_tenant_id: str = ""  # UTRGV's tenant, used to check who signed in
+    public_url: str = ""  # the site's own https address, for the sign-in return address
+    session_secret: SecretStr = SecretStr("")  # signs the chat cookies; at least 32 characters
+    # Daily message counts; defaults to a file next to the database (see below).
+    chat_usage_database: Path | None = None
+
+    @property
+    def chat_enabled(self) -> bool:
+        return bool(
+            self.azure_openai_endpoint and self.azure_openai_deployment
+            and self.azure_openai_api_key.get_secret_value()
+            and len(self.session_secret.get_secret_value()) >= SESSION_SECRET_MIN
+        )
+
+    @property
+    def login_enabled(self) -> bool:
+        return bool(
+            self.chat_enabled and self.ms_client_id and self.ms_tenant_id and self.public_url
+            and self.ms_client_secret.get_secret_value()
+        )
+
     @model_validator(mode="after")
     def _lock_file_next_to_database(self) -> Settings:
         if self.live_signals_scheduler_lock_file is None:
             self.live_signals_scheduler_lock_file = self.database.parent / ".live-signals-scheduler.lock"
+        if self.chat_usage_database is None:
+            self.chat_usage_database = self.database.parent / "chat-usage.sqlite3"
         return self
 
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    # A local `.env` (gitignored) is read by the running app only, not by tests that build Settings() directly.
+    return Settings(_env_file=".env")

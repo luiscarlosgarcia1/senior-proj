@@ -22,6 +22,7 @@ from rgv_flood import pages
 from rgv_flood.api import api_router, geocode
 from rgv_flood.api import health as health_api
 from rgv_flood.assets import STATIC_ROOT, VersionedStaticFiles
+from rgv_flood.chat.service import ChatService
 from rgv_flood.db import Database
 from rgv_flood.security import SecurityHeadersMiddleware
 from rgv_flood.settings import Settings, get_settings
@@ -119,6 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="RGV Flood Impact Visualizer", version="1", lifespan=lifespan)
     app.state.settings = settings
     app.state.db = Database(settings.database)
+    app.state.chat = ChatService.from_settings(settings, app.state.db) if settings.chat_enabled else None
     geocode.install(app)
 
     app.add_middleware(AccessLogMiddleware)
