@@ -77,6 +77,22 @@ Set these environment variables on the server (or in a local `.env` file, which 
 Chat turns on when the first four and the session secret are set. Sign-in turns on when the rest are set too.
 Secrets stay on the server: they are never sent to the browser, never logged and never shown in an error.
 
+**If a question gets "The assistant is unavailable right now."** the page never says why (so nothing sensitive can leak),
+but the terminal running the app does: look for a line starting `azure chat answered`, which gives Azure's status and
+error code. The usual ones:
+
+| In the log | Usually means |
+| --- | --- |
+| `404 DeploymentNotFound` | `RGV_AZURE_OPENAI_DEPLOYMENT` is not the deployment's *name* in your resource |
+| `404 Resource not found` | the endpoint is wrong; it should be only `https://<name>.openai.azure.com` |
+| `401 ...` | the key is wrong, or belongs to a different resource |
+| `400 ... API version ...` | set `RGV_AZURE_OPENAI_API_VERSION`; reasoning models (the o-series, such as o4-mini) need a newer one, for example `2025-04-01-preview` |
+| `429 ...` | Azure's own rate limit or quota for the deployment |
+| `azure chat request failed: ConnectError` | the server cannot reach Azure (network or a wrong address) |
+
+Reasoning models are supported: the client switches to `max_completion_tokens` and drops `temperature` on its own if
+Azure refuses them.
+
 **Microsoft sign-in, step by step** (done once in your own Azure account; nothing is changed in UTRGV's):
 
 1. In the Azure portal open **Microsoft Entra ID**, then **App registrations**, then **New registration**.

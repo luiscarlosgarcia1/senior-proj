@@ -230,3 +230,104 @@ def test_azure_failures_become_model_unavailable_without_secrets(handler, caplog
 
     assert KEY not in str(raised.value) and KEY not in repr(raised.value) and KEY not in caplog.text
     assert "boom" not in str(raised.value)  # nor whatever the server said
+
+
+# ---- why Azure said no: the server log says, the visitor never sees it ----
+
+REASONING_TOKENS = 3200
+
+
+def azure_replies(*replies):
+    """An Azure client whose answers are scripted: ints are error statuses (with the next dict as the body)."""
+    calls = []
+    queue = list(replies)
+
+    def handler(request):
+        calls.append(json.loads(request.content))
+        status, body = queue.pop(0)
+        return httpx2.Response(status, json=body)
+
+    return client(handler), calls
+
+
+def refusal(message, code="unsupported_parameter"):
+    return 400, {"error": {"code": code, "message": message}}
+
+
+GOOD = (200, {"choices": [{"message": {"role": "assistant", "content": "hi"}}]})
+
+
+def test_a_failure_is_logged_with_its_status_and_code_but_never_the_key(caplog):
+    caplog.set_level(logging.WARNING)
+    azure, _ = azure_replies((404, {"error": {"code": "DeploymentNotFound",
+                                              "message": f"The API deployment for this resource does not exist. key={KEY}"}}))
+
+    with pytest.raises(ModelUnavailable) as raised:
+        azure.complete([{"role": "user", "content": "q"}], None)
+
+    assert "404" in caplog.text and "DeploymentNotFound" in caplog.text and "does not exist" in caplog.text
+    assert KEY not in caplog.text and KEY not in str(raised.value)
+
+
+def test_a_connection_failure_logs_only_the_kind_of_error(caplog):
+    caplog.set_level(logging.WARNING)
+
+    with pytest.raises(ModelUnavailable):
+        client(lambda request: (_ for _ in ()).throw(httpx2.ConnectError(f"cannot reach host with {KEY}"))).complete([], None)
+
+    assert "ConnectError" in caplog.text and KEY not in caplog.text
+
+
+def test_it_switches_to_max_completion_tokens_when_the_model_asks_and_remembers():
+    azure, calls = azure_replies(
+        refusal("Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."),
+        GOOD, GOOD,
+    )
+
+    assert azure.complete([{"role": "user", "content": "q"}], None)["content"] == "hi"
+    azure.complete([{"role": "user", "content": "q2"}], None)
+
+    assert len(calls) == 3  # the refused try, the retry, and the next question straight away
+    assert "max_tokens" in calls[0] and "max_tokens" not in calls[1] and "max_tokens" not in calls[2]
+    assert calls[1]["max_completion_tokens"] == calls[2]["max_completion_tokens"] == REASONING_TOKENS  # room to think
+
+
+def test_it_drops_temperature_when_the_model_refuses_it():
+    azure, calls = azure_replies(
+        refusal("Unsupported value: 'temperature' does not support 0.2 with this model. Only the default (1) value is supported.",
+                code="unsupported_value"),
+        GOOD,
+    )
+
+    azure.complete([{"role": "user", "content": "q"}], None)
+
+    assert "temperature" in calls[0] and "temperature" not in calls[1] and calls[1]["max_tokens"] == 800
+
+
+def test_both_adjustments_can_happen_in_one_question():
+    azure, calls = azure_replies(
+        refusal("Unsupported parameter: 'max_tokens'. Use 'max_completion_tokens' instead."),
+        refusal("Unsupported value: 'temperature' does not support 0.2.", code="unsupported_value"),
+        GOOD,
+    )
+
+    assert azure.complete([{"role": "user", "content": "q"}], None)["content"] == "hi"
+    assert len(calls) == 3 and "temperature" not in calls[2] and "max_completion_tokens" in calls[2]
+
+
+def test_it_gives_up_after_a_few_tries():
+    azure, calls = azure_replies(*[refusal("Use 'max_completion_tokens' instead.")] * 5)
+
+    with pytest.raises(ModelUnavailable):
+        azure.complete([{"role": "user", "content": "q"}], None)
+
+    assert len(calls) <= 3
+
+
+def test_other_400_errors_are_not_retried():
+    azure, calls = azure_replies(refusal("The content was filtered.", code="content_filter"))
+
+    with pytest.raises(ModelUnavailable):
+        azure.complete([{"role": "user", "content": "q"}], None)
+
+    assert len(calls) == 1

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_CALLS = 8
 MAX_OUTPUT_TOKENS = 800
+REASONING_OUTPUT_TOKENS = 3200  # a reasoning model's budget also covers its hidden thinking
 MAX_TOOL_CHARS = 12000  # a tool result is cut to this many characters before the model sees it
 UNAVAILABLE = "The assistant is unavailable right now."
 NO_ANSWER = "I couldn't produce an answer to that. Please try rephrasing the question."
@@ -36,26 +37,78 @@ class ModelClient(Protocol):
 
 
 class AzureModelClient:
-    """Azure OpenAI chat completions. The key stays in a header and out of every error."""
+    """Azure OpenAI chat completions. The key stays in a header and out of every error and log line.
+
+    Chat models (gpt-4o-mini) take `max_tokens` and `temperature`. Reasoning models (o-series) refuse both
+    and want `max_completion_tokens`, counting their hidden thinking too. Rather than ask which kind of
+    deployment this is, the client starts with the chat-model parameters and, if Azure says a parameter is
+    not accepted, switches once and remembers.
+    """
 
     def __init__(self, endpoint: str, api_key: str, deployment: str, api_version: str, *, transport=None, timeout: float = 60.0):
         self.url = f"{endpoint.rstrip('/')}/openai/deployments/{deployment}/chat/completions"
         self.api_version = api_version
+        self.api_key = api_key
         self.client = httpx2.Client(transport=transport, timeout=timeout, headers={"api-key": api_key})
+        self.reasoning_model = False  # set when Azure asks for max_completion_tokens
+        self.send_temperature = True
 
-    def complete(self, messages: list[dict], tools: list[dict] | None) -> dict:
-        body: dict = {"messages": messages, "max_tokens": MAX_OUTPUT_TOKENS, "temperature": 0.2}
+    def _body(self, messages: list[dict], tools: list[dict] | None) -> dict:
+        body: dict = {"messages": messages}
+        if self.reasoning_model:
+            body["max_completion_tokens"] = REASONING_OUTPUT_TOKENS
+        else:
+            body["max_tokens"] = MAX_OUTPUT_TOKENS
+        if self.send_temperature:
+            body["temperature"] = 0.2
         if tools:
             body["tools"] = tools
+        return body
+
+    def _error(self, response: httpx2.Response) -> tuple[str, str]:
+        """(Azure's error code, a short message) from a failed response, with the key blanked out."""
         try:
-            response = self.client.post(self.url, params={"api-version": self.api_version}, json=body)
-            response.raise_for_status()
-            message = response.json()["choices"][0]["message"]
-            if not isinstance(message, dict):
-                raise TypeError("message is not an object")
-            return message
-        except (httpx2.HTTPError, ValueError, KeyError, IndexError, TypeError):
-            raise ModelUnavailable(UNAVAILABLE) from None
+            error = response.json()["error"]
+            code, message = str(error.get("code") or ""), str(error.get("message") or "")
+        except (ValueError, KeyError, TypeError, AttributeError):
+            code, message = "", ""
+        if len(self.api_key) >= 8:
+            message = message.replace(self.api_key, "***")
+        return code[:80], " ".join(message.split())[:300]
+
+    def _adjust(self, response: httpx2.Response) -> bool:
+        """True if Azure refused a parameter this client can change, so the same question may be tried again."""
+        _, message = self._error(response)
+        text = message.lower()
+        changed = False
+        if "max_completion_tokens" in text and not self.reasoning_model:
+            self.reasoning_model, changed = True, True
+        if "temperature" in text and self.send_temperature:
+            self.send_temperature, changed = False, True
+        return changed
+
+    def complete(self, messages: list[dict], tools: list[dict] | None) -> dict:
+        for _attempt in range(3):
+            try:
+                response = self.client.post(
+                    self.url, params={"api-version": self.api_version}, json=self._body(messages, tools)
+                )
+            except httpx2.HTTPError as error:
+                logger.warning("azure chat request failed: %s", type(error).__name__)
+                raise ModelUnavailable(UNAVAILABLE) from None
+            if response.status_code == 400 and self._adjust(response):
+                continue
+            try:
+                response.raise_for_status()
+                message = response.json()["choices"][0]["message"]
+                if not isinstance(message, dict):
+                    raise TypeError("message is not an object")
+                return message
+            except (httpx2.HTTPError, ValueError, KeyError, IndexError, TypeError):
+                code, text = self._error(response)
+                logger.warning("azure chat answered %s %s: %s", response.status_code, code, text)
+                raise ModelUnavailable(UNAVAILABLE) from None
+        raise ModelUnavailable(UNAVAILABLE)
 
 
 @dataclass
