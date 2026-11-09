@@ -4,6 +4,7 @@
 
 import { getJson, isAbort } from "./api.js";
 import { t } from "./i18n.js";
+import "./chat.js"; // the chat box (its template is only on the page when chat is set up)
 
 const THEME_KEY = "rgv-theme";
 

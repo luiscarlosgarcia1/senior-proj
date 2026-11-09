@@ -146,3 +146,25 @@ def test_trends_page_renders_before_build(make_client, tmp_path):
     response = make_client(tmp_path / "not-built.sqlite3").get("/trends")
 
     assert response.status_code == 200 and "No data yet" in response.text
+
+
+# ---- the chat box ----
+
+PAGES = ("/", "/map", "/claims", "/trends")
+
+
+def test_chat_button_is_absent_when_chat_is_off(api_client):
+    for path in PAGES:
+        assert "data-chat" not in api_client.get(path).text, path
+
+
+def test_chat_button_is_on_every_page_when_chat_is_on(make_client, fixture_db, tmp_path):
+    client = make_client(
+        fixture_db, chat_usage_database=tmp_path / "usage.sqlite3", azure_openai_endpoint="https://az.invalid",
+        azure_openai_api_key="not-a-real-key", azure_openai_deployment="none", session_secret="x" * 40,
+    )
+
+    for path in PAGES:
+        html = client.get(path).text
+        assert "data-chat-toggle" in html and "data-chat-panel" in html, path
+        assert "not-a-real-key" not in html and "x" * 40 not in html  # no secret reaches a page

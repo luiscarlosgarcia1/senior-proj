@@ -7,6 +7,7 @@ layer. Basemaps point at the app's offline style, so no test needs the network.
 
 from __future__ import annotations
 
+import contextlib
 import gzip
 import json
 import socket
@@ -117,13 +118,14 @@ def _free_port() -> int:
         return probe.getsockname()[1]
 
 
-@pytest.fixture(scope="session")
-def live_server(browser_db):
+@contextlib.contextmanager
+def serving(database, **settings):
+    """The real app on a free port, for the duration of the block: yields (its address, the app)."""
     vendor.fetch_all()
     assets.build_css(minify=False)
     app = create_app(Settings(
-        database=browser_db, live_signals_scheduler_enabled=False,
-        basemap_light_style=OFFLINE, basemap_dark_style=OFFLINE,
+        database=database, live_signals_scheduler_enabled=False,
+        basemap_light_style=OFFLINE, basemap_dark_style=OFFLINE, **settings,
     ))
     port = _free_port()
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
@@ -134,9 +136,37 @@ def live_server(browser_db):
         if time.monotonic() > deadline:
             raise RuntimeError("test server did not start")
         time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}"
-    server.should_exit = True
-    thread.join(timeout=5)
+    try:
+        yield f"http://127.0.0.1:{port}", app
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+
+
+@pytest.fixture(scope="session")
+def live_server(browser_db):
+    with serving(browser_db) as (address, _app):
+        yield address
+
+
+class NoModel:
+    """Stands in for the chatbot's model in browser tests: it must never be asked anything."""
+
+    def complete(self, messages, tools):
+        raise AssertionError("a browser test reached the model; stub /api/v1/chat with page.route instead")
+
+
+@pytest.fixture(scope="session")
+def chat_server(browser_db, tmp_path_factory):
+    """The app with the chat box switched on. The settings are made-up values that only turn the feature on;
+    the model is replaced so nothing here can ever call Azure."""
+    with serving(
+        browser_db, chat_usage_database=tmp_path_factory.mktemp("chat") / "usage.sqlite3",
+        azure_openai_endpoint="https://azure.invalid", azure_openai_api_key="not-a-real-key",
+        azure_openai_deployment="none", session_secret="x" * 40,
+    ) as (address, app):
+        app.state.chat.model = NoModel()
+        yield address
 
 
 @pytest.fixture()

@@ -18,6 +18,7 @@
     {% if not data_ready %}{% include "components/no_data.html" %}{% endif %}
     {% block content %}{% endblock %}
   {% endblock %}
+  {% if chat_enabled %}{% include "components/chat_box.html" %}{% endif %}
   {% block scripts %}{% endblock %}
   <script type="module" src="{{ asset_url('js/store.js') }}"></script>
   <script defer src="{{ asset_url('vendor/alpine/alpine-csp.min.js') }}"></script>

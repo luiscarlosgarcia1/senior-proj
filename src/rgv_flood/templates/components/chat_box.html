@@ -1,0 +1,41 @@
+{# The data assistant: a button at the bottom right that opens a chat panel. Answers are shown as text only. #}
+<div x-data="chatBox" data-chat class="pointer-events-none fixed bottom-20 right-4 z-[1500] flex flex-col items-end gap-2 lg:bottom-4">
+  <section id="chat-panel" data-chat-panel x-show="open" x-cloak role="dialog" aria-label="{{ t('chat.title') }}"
+           class="pointer-events-auto flex h-[min(520px,calc(100vh-8rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-line bg-panel shadow-2">
+    <header class="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
+      <h2 class="text-md font-semibold">{{ t("chat.title") }}</h2>
+      <button type="button" data-chat-close class="rounded px-2 text-lg leading-none text-muted hover:text-ink" aria-label="{{ t('chat.close') }}" x-on:click="toggle">&times;</button>
+    </header>
+
+    <div data-chat-log role="log" aria-live="polite" class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-3 py-2">
+      <p class="text-sm text-muted" x-show="empty">{{ t("chat.empty") }}</p>
+      <template x-for="message in messages" x-bind:key="message.id">
+        <div data-chat-message class="max-w-[88%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 leading-snug" x-bind:class="bubbleClass()" x-text="message.text"></div>
+      </template>
+      <p class="text-sm text-muted" data-chat-thinking x-show="busy" x-cloak>{{ t("chat.thinking") }}</p>
+      <p class="text-sm text-warn" data-chat-error role="alert" x-show="error" x-cloak x-text="error"></p>
+    </div>
+
+    <footer class="border-t border-line px-3 py-2">
+      <div class="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted">
+        <span data-chat-left x-text="leftText"></span>
+        <span data-chat-account x-show="signedIn" x-cloak>
+          <span x-text="account"></span>
+          <a href="/auth/logout" data-chat-signout>{{ t("chat.signout") }}</a>
+        </span>
+      </div>
+      <p class="mb-1.5 text-xs" x-show="showSignin" x-cloak><a data-chat-signin x-bind:href="signinUrl">{{ t("chat.signin") }}</a></p>
+      <div class="flex items-end gap-2">
+        <textarea data-chat-input rows="2" maxlength="1000" x-model="draft" x-on:keydown="onKey"
+                  class="min-h-[44px] flex-1 resize-none rounded-md border border-line2 bg-bg px-2 py-1.5 leading-snug"
+                  placeholder="{{ t('chat.placeholder') }}" aria-label="{{ t('chat.placeholder') }}"></textarea>
+        <button type="button" data-chat-send x-on:click="send" x-bind:disabled="cannotSend"
+                class="h-9 rounded-md bg-accent px-3 font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-40">{{ t("chat.send") }}</button>
+      </div>
+      <p class="mt-1.5 text-[11px] leading-snug text-muted">{{ t("chat.notice") }}</p>
+    </footer>
+  </section>
+
+  <button type="button" data-chat-toggle aria-controls="chat-panel" x-bind:aria-expanded="open" x-on:click="toggle"
+          class="pointer-events-auto h-11 rounded-full border border-line2 bg-panel px-5 font-semibold shadow-2 hover:bg-panel2">{{ t("chat.open") }}</button>
+</div>

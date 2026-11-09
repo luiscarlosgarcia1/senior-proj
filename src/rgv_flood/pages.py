@@ -52,6 +52,7 @@ def _render(request: Request, template: str, db, nav_active: str, **context):
         "theme_bootstrap": THEME_BOOTSTRAP,
         "catalog": load_catalog(),
         "data_ready": db.exists,
+        "chat_enabled": request.app.state.chat is not None,
         "settings": request.app.state.settings,
         **context,
     })
