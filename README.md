@@ -67,6 +67,8 @@ Set these environment variables on the server (or in a local `.env` file, which 
 | `RGV_AZURE_OPENAI_ENDPOINT` | The Azure OpenAI resource's address, like `https://<name>.openai.azure.com` | no |
 | `RGV_AZURE_OPENAI_DEPLOYMENT` | The name of the deployed chat model (for example a gpt-4o-mini deployment) | no |
 | `RGV_AZURE_OPENAI_API_VERSION` | Optional; defaults to `2024-10-21` | no |
+| `RGV_AZURE_OPENAI_API_KEY_FILE` | Instead of the key itself: the path to a file that holds it, such as `keys/azure.rtf` (RTF or plain text; relative to the repository root). The key in the environment wins if both are set | no (the file is) |
+| `RGV_AZURE_OPENAI_API_KEY_LABEL` | Only if that file holds several values: the text before the colon on the line with the key (for example `Key 1`) | no |
 | `RGV_AZURE_OPENAI_API_KEY` | The resource's key | **yes** |
 | `RGV_SESSION_SECRET` | Any random text of at least 32 characters; signs the chat cookies | **yes** |
 | `RGV_PUBLIC_URL` | The site's public `https://` address (needed only for sign-in) | no |
@@ -76,6 +78,8 @@ Set these environment variables on the server (or in a local `.env` file, which 
 
 Chat turns on when the first four and the session secret are set. Sign-in turns on when the rest are set too.
 Secrets stay on the server: they are never sent to the browser, never logged and never shown in an error.
+
+**Reading the key from a file.** To keep the key out of `.env`, set `RGV_AZURE_OPENAI_API_KEY_FILE=keys/azure.rtf`. The server reads the file itself when it starts and never prints its text. To check what it finds without showing the key, run `uv run python -m rgv_flood.chat.keyfile keys/azure.rtf`: it reports the key's length and kinds of characters, nothing more. A file that holds a value that is not the key, such as an endpoint or a second service's key, is skipped; if two values could both be the key, the log says so and you set `RGV_AZURE_OPENAI_API_KEY_LABEL`.
 
 **If a question gets "The assistant is unavailable right now."** the page never says why (so nothing sensitive can leak),
 but the terminal running the app does: look for a line starting `azure chat answered`, which gives Azure's status and
