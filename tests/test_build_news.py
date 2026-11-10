@@ -391,3 +391,16 @@ def test_the_data_source_note_says_what_was_skipped_and_what_is_stored(tmp_path)
     with closing(sqlite3.connect(database)) as connection:
         (notes,) = connection.execute("select notes from data_sources where id = 'news-closed'").fetchone()
     assert "made from the story's address" in notes and "no description is stored" in notes
+
+
+def test_a_host_that_asked_us_to_come_back_later_is_named_at_the_end_of_the_run(tmp_path, capsys):
+    class Waiting(FakeFetcher):
+        def paused_hosts(self):
+            return {"limited.test": 2700.0}
+
+    source = FakeSource([listing(GOOD)], {GOOD: page(GOOD, "Flooding closes streets in McAllen")})
+
+    build_news.main(tmp_path / "db.sqlite3", sources=[source], fetcher=Waiting())
+
+    out = capsys.readouterr().out
+    assert "limited.test" in out and "45 more minutes" in out and "run it again" in out

@@ -238,3 +238,55 @@ def test_slowing_down_has_a_ceiling(tmp_path):
     sleeps.clear()
 
     assert fetcher.get(second) == b"ok" and sleeps == [30.0]  # not skipped as a host that asks for too much, just kept slow
+
+
+# ---- a host that says "come back later" ----
+
+def clocked(tmp_path, web, now):
+    return Fetcher(tmp_path / "cache", delay=0.0, get=web, sleep=lambda seconds: None, clock=lambda: now[0])
+
+
+def test_a_host_that_says_come_back_in_an_hour_is_left_alone_until_then(tmp_path):
+    first, second = "https://limited.test/1", "https://limited.test/2"
+    web = Web({"https://limited.test/robots.txt": b"", first: [http_error(first, 503, {"Retry-After": "3600"})], second: b"ok"})
+    now = [100.0]
+    fetcher = clocked(tmp_path, web, now)
+
+    assert fetcher.get(first) is None
+    assert web.calls.count(first) == 1  # told to wait an hour: not tried again in half a minute
+
+    now[0] = 100.0 + 1800
+    assert fetcher.get(second) is None and second not in web.calls  # still inside the hour: no request at all
+    assert fetcher.stats["host_paused"] == 1 and 0 < fetcher.paused_hosts()["limited.test"] <= 1800
+
+    now[0] = 100.0 + 3601
+    assert fetcher.get(second) == b"ok" and fetcher.paused_hosts() == {}
+
+
+def test_a_pause_is_for_that_host_only(tmp_path):
+    first = "https://limited.test/1"
+    web = Web({"https://limited.test/robots.txt": b"", first: http_error(first, 429, {"Retry-After": "600"}),
+               "https://fine.test/robots.txt": b"", "https://fine.test/1": b"fine"})
+    fetcher = clocked(tmp_path, web, [100.0])
+
+    fetcher.get(first)
+
+    assert fetcher.get("https://fine.test/1") == b"fine"
+
+
+def test_a_pause_never_lasts_longer_than_the_ceiling(tmp_path):
+    first = "https://limited.test/1"
+    web = Web({"https://limited.test/robots.txt": b"", first: http_error(first, 503, {"Retry-After": str(10 * 24 * 3600)})})
+    fetcher = clocked(tmp_path, web, [100.0])
+
+    fetcher.get(first)
+
+    assert fetcher.paused_hosts()["limited.test"] <= 6 * 3600
+
+
+def test_a_short_retry_after_is_still_waited_out_and_retried(tmp_path):
+    url = "https://busy.test/1"
+    web = Web({"https://busy.test/robots.txt": b"", url: [http_error(url, 503, {"Retry-After": "90"}), b"back"]})
+    fetcher = clocked(tmp_path, web, [100.0])
+
+    assert fetcher.get(url) == b"back" and fetcher.paused_hosts() == {}

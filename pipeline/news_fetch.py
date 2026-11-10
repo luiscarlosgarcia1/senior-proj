@@ -35,6 +35,7 @@ TRACKING_PARAMS = frozenset(("fbclid", "gclid"))
 GZIP_MAGIC = b"\x1f\x8b"
 MAX_CRAWL_DELAY = 30.0  # a host asking for more than this between requests is skipped, not waited on
 MAX_RETRY_WAIT = 120.0
+MAX_PAUSE = 6 * 3600.0  # the longest we leave a host alone when it says "come back later"
 
 
 def normalize_url(url: str) -> str:
@@ -70,6 +71,7 @@ class Fetcher:
         self._host_delay: dict[str, float] = dict(delays or {})  # hosts that must be asked less often than `delay`
         self._last_request: dict[str, float] = {}
         self._refusals: dict[str, int] = defaultdict(int)
+        self._paused_until: dict[str, float] = {}  # hosts that told us to come back later
         self.blocked_hosts: set[str] = set()
         self._not_found: set[str] = set()
         self.stats: Counter[str] = Counter()
@@ -155,6 +157,9 @@ class Fetcher:
             if host in self.blocked_hosts:
                 self._count("host_blocked")
                 return None
+            if self._clock() < self._paused_until.get(host, 0.0):
+                self._count("host_paused")
+                return None
             parser = self._robots_for(url)
             if parser is None or not parser.can_fetch(net.USER_AGENT["User-Agent"], url):
                 self._count("blocked_by_robots")
@@ -187,12 +192,17 @@ class Fetcher:
                     if self._refusals[host] >= self.BLOCK_AFTER:
                         self.blocked_hosts.add(host)
                 elif error.code in (429, 503):
-                    if attempt == 1:
-                        self._sleep(self._retry_wait(error))
+                    asked = self._retry_after(error)
+                    if asked is not None and asked > MAX_RETRY_WAIT:
+                        # "Come back in an hour": leave the host alone until then, not ask again in half a minute.
+                        self._paused_until[host] = self._clock() + min(asked, MAX_PAUSE)
+                    elif attempt == 1:
+                        self._sleep(self._retry_wait(asked))
                         continue
-                    # Asked twice and told to slow down twice: ask less often for the rest of the run.
-                    current = max(self._host_delay.get(host, self.delay), 1.0)
-                    self._host_delay[host] = min(current * 2, MAX_CRAWL_DELAY)
+                    else:
+                        # Asked twice and told to slow down twice: ask less often for the rest of the run.
+                        current = max(self._host_delay.get(host, self.delay), 1.0)
+                        self._host_delay[host] = min(current * 2, MAX_CRAWL_DELAY)
                 self._count("failed")
                 return None
             except NETWORK_ERRORS:
@@ -203,9 +213,18 @@ class Fetcher:
         return None
 
     @staticmethod
-    def _retry_wait(error: urllib.error.HTTPError) -> float:
+    def _retry_after(error: urllib.error.HTTPError) -> float | None:
+        """Seconds the server asked us to wait (its Retry-After header), or None if it gave no number."""
         try:
-            asked = float((error.headers or {}).get("Retry-After", ""))
+            return float((error.headers or {}).get("Retry-After", ""))
         except (TypeError, ValueError):
-            asked = 30.0
-        return max(1.0, min(asked, MAX_RETRY_WAIT))
+            return None
+
+    @staticmethod
+    def _retry_wait(asked: float | None) -> float:
+        return max(1.0, min(30.0 if asked is None else asked, MAX_RETRY_WAIT))
+
+    def paused_hosts(self) -> dict[str, float]:
+        """Hosts that asked us to come back later, and how many seconds of their wait are left."""
+        now = self._clock()
+        return {host: until - now for host, until in self._paused_until.items() if until > now}

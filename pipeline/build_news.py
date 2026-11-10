@@ -274,6 +274,9 @@ def main(
     new_rows, stats = collect(sources, fetcher, retrieved_at=retrieved_at, limit=limit, stop=stop, heartbeat_seconds=heartbeat_seconds)
     for source in sources:
         print(f"{source.id}: {dict(stats[source.id])}")
+    for host, seconds in getattr(fetcher, "paused_hosts", dict)().items():
+        print(f"{host} asked us to come back later, so its pages were skipped for {seconds / 60:.0f} more minutes: "
+              "wait that long and run it again (--only that source); everything downloaded is kept.")
     if limit is not None:  # a look at what a run does: never replaces the table with a partial set
         print(f"dry run: {len(new_rows)} stories would be kept so far; nothing was written")
         return
