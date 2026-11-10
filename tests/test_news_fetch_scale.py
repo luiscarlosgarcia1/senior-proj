@@ -290,3 +290,20 @@ def test_a_short_retry_after_is_still_waited_out_and_retried(tmp_path):
     fetcher = clocked(tmp_path, web, [100.0])
 
     assert fetcher.get(url) == b"back" and fetcher.paused_hosts() == {}
+
+
+# ---- offline: only what is already downloaded ----
+
+def test_an_offline_fetcher_reads_the_cache_and_never_touches_the_network(tmp_path):
+    url, missing = "https://cached.test/1", "https://cached.test/2"
+    web = Web({"https://cached.test/robots.txt": b"", url: b"saved", missing: b"never asked"})
+    online, _ = make(tmp_path, web)
+    assert online.get(url) == b"saved"
+    web.calls.clear()
+
+    offline, _ = make(tmp_path, web, offline=True)
+
+    assert offline.get(url) == b"saved"
+    assert offline.get(missing) is None
+    assert offline.get("https://cached.test/3", use_cache=False) is None  # a page that is always asked for is not in the cache
+    assert web.calls == [] and offline.stats["not_cached"] == 2 and offline.stats["cached"] == 1

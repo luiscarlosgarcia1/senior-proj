@@ -514,3 +514,20 @@ def test_the_data_source_note_says_what_cleaning_removed(tmp_path):
         notes = dict(connection.execute("select id, notes from data_sources"))
     assert "1 merged into another outlet" in notes["news-b"] and "Cleaning removed nothing" in notes["news-a"]
     assert "1 rejected (1 bad_date)" in notes["news-c"]
+
+
+def test_offline_builds_with_a_fetcher_that_never_goes_to_the_network(tmp_path, monkeypatch):
+    made = []
+
+    class Spy(FakeFetcher):
+        def __init__(self, cache_dir, **options):
+            super().__init__()
+            made.append(options)
+
+    monkeypatch.setattr(build_news, "Fetcher", Spy)
+    source = FakeSource([listing(GOOD)], {GOOD: page(GOOD, "Flooding closes streets in McAllen")})
+
+    build_news.main(tmp_path / "db.sqlite3", cache_dir=tmp_path / "cache", sources=[source], offline=True)
+    build_news.main(tmp_path / "db2.sqlite3", cache_dir=tmp_path / "cache", sources=[source])
+
+    assert made[0]["offline"] is True and made[1]["offline"] is False

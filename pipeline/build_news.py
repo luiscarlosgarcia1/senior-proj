@@ -22,10 +22,11 @@ refuse us (Nexstar's), the headline is made from the address and no description 
 Fills news_articles, and one `data_sources` row per publisher. A publisher that gave nothing this time keeps its
 earlier stories, so a flaky site or a partial run never erases data.
 
-Run:  uv run python pipeline/build_news.py [--only news-krgv,news-tpr] [--limit N] [--list]
+Run:  uv run python pipeline/build_news.py [--only news-krgv,news-tpr] [--limit N] [--list] [--offline]
 The first run downloads tens of thousands of pages at one per second per site and takes hours; stop it any
 time (Ctrl+C) and run it again: everything downloaded is kept and read from the cache. `--limit N` is a dry run:
-it stops after N new downloads, prints what it found and writes nothing.
+it stops after N new downloads, prints what it found and writes nothing. `--offline` uses only the pages already
+downloaded and never touches the network (it rebuilds the table from the cache, then cleans it).
 """
 
 from __future__ import annotations
@@ -289,6 +290,7 @@ def main(
     only: Sequence[str] | None = None,
     stop: threading.Event | None = None,
     heartbeat_seconds: float | None = None,
+    offline: bool = False,
 ) -> None:
     sources = list(sources if sources is not None else default_sources())
     if only:
@@ -296,7 +298,7 @@ def main(
         if unknown:
             raise SystemExit(f"Unknown source(s): {', '.join(unknown)}. Known: {', '.join(source.id for source in sources)}")
         sources = [source for source in sources if source.id in only]
-    fetcher = fetcher or Fetcher(cache_dir, delays=FETCH_DELAYS)
+    fetcher = fetcher or Fetcher(cache_dir, delays=FETCH_DELAYS, offline=offline)
     retrieved_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     new_rows, stats = collect(sources, fetcher, retrieved_at=retrieved_at, limit=limit, stop=stop, heartbeat_seconds=heartbeat_seconds)
@@ -343,6 +345,7 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, help="dry run: stop after this many new downloads and write nothing")
     parser.add_argument("--only", help="comma-separated source ids to run (see --list); the others keep their rows")
     parser.add_argument("--list", action="store_true", help="show the source ids and exit")
+    parser.add_argument("--offline", action="store_true", help="use only the pages already downloaded; never touch the network")
     arguments = parser.parse_args()
     if arguments.list:
         for source in default_sources():
@@ -350,7 +353,10 @@ if __name__ == "__main__":
         sys.exit(0)
     stopper = threading.Event()
     try:
-        main(limit=arguments.limit, only=arguments.only.split(",") if arguments.only else None, stop=stopper, heartbeat_seconds=HEARTBEAT_SECONDS)
+        main(
+            limit=arguments.limit, only=arguments.only.split(",") if arguments.only else None, stop=stopper,
+            heartbeat_seconds=HEARTBEAT_SECONDS, offline=arguments.offline,
+        )
     except KeyboardInterrupt:
         stopper.set()
         print("\nInterrupted: nothing was written. Run it again to carry on; every download so far is kept.")

@@ -59,11 +59,13 @@ class Fetcher:
         *,
         delay: float = 1.0,
         delays: Mapping[str, float] | None = None,
+        offline: bool = False,
         get: Callable[..., bytes] = net.get_bytes,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.cache_dir = cache_dir
+        self.offline = offline  # read the cache only; a page that is not in it is simply not there
         self.delay = delay
         self._get, self._sleep, self._clock = get, sleep, clock
         self._takes_limit = "limit" in inspect.signature(get).parameters
@@ -153,6 +155,9 @@ class Fetcher:
             if missing.exists():  # asked before and the publisher said it is not there
                 self._count("known_missing")
                 return None
+        if self.offline:
+            self._count("not_cached")
+            return None
         with self._host_lock(host):
             if host in self.blocked_hosts:
                 self._count("host_blocked")
