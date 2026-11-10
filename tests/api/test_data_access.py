@@ -123,7 +123,7 @@ def test_trends_news_by_year(fixture_db):
     everything = _trends(fixture_db)
     hidalgo = _trends(fixture_db, county="hidalgo")
 
-    assert everything["news_first_year"] == data_access.NEWS_FIRST_YEAR
+    assert everything["news_first_year"] == 2018  # the earliest story in the fixture
     assert {y["year"]: y["count"] for y in everything["news_by_year"]} == {2018: 1, 2019: 0, 2020: 2, 2021: 0}
     assert {y["year"]: y["count"] for y in hidalgo["news_by_year"]}[2020] == 1
 
@@ -151,3 +151,28 @@ def test_trends_database_built_before_monthly_rain_existed(fixture_db):
 
     assert result["rain_months"] == []
     assert result["rain_years"]  # the rest of the page still has its data
+
+
+def test_trends_news_chart_starts_at_the_earliest_story(fixture_db):
+    import sqlite3
+    from contextlib import closing
+
+    with closing(sqlite3.connect(fixture_db)) as connection, connection:
+        connection.execute("update news_articles set published_at = '2006-10-17' where id = 'news-2'")
+
+    result = _trends(fixture_db)
+
+    assert result["news_first_year"] == 2006 and result["news_by_year"][0] == {"year": 2006, "count": 1}
+    assert {y["year"]: y["count"] for y in result["news_by_year"]}[2020] == 2
+
+
+def test_trends_news_for_a_county_includes_valley_wide_stories(fixture_db):
+    import sqlite3
+    from contextlib import closing
+
+    with closing(sqlite3.connect(fixture_db)) as connection, connection:
+        connection.execute("update news_articles set county = null, counties = '' where id = 'news-2'")  # a 2018 story
+
+    cameron = {y["year"]: y["count"] for y in _trends(fixture_db, county="cameron")["news_by_year"]}
+
+    assert cameron[2018] == 1 and cameron[2020] == 1  # the Valley-wide one, and the Brownsville one

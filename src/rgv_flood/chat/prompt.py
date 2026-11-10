@@ -12,7 +12,7 @@ first whenever you are not sure which tables or columns exist, then use query_da
 SELECT at a time). The data includes: flood-insurance claims and payments since 1978 (nfip_claims), policies \
 per year (nfip_policies_by_year), NOAA flood events since 1996 (flood_events), flood reports to the National \
 Weather Service since 2005 (nws_flood_reports), daily and yearly rain at gauges since 1978 (weather_observations, \
-rainfall_station_years, rainfall_station_months), local news stories since 2018 (news_articles), curated local \
+rainfall_station_years, rainfall_station_months), water-related news stories and official announcements from Valley publishers, back to 2004 for some outlets (news_articles: topics are flood, rain, storm, drought, water_system and water; kind is news or official; headline_from 'address' means the headline was made from the story's address because the publisher's pages are closed to us; county is null for stories about the Valley as a whole) (news_articles), curated local \
 reports (flood_reports), the map layers (layers: avoid selecting its geojson column), current official alerts \
 (live_signals) and where each dataset came from (data_sources). County names in the data are lower-case: \
 cameron, hidalgo, starr, willacy. Rain in weather_observations is in tenths of a millimetre (divide by 254 for \

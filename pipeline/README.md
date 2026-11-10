@@ -32,7 +32,7 @@ Every table is defined in `database.py`. Every query the app runs is in
 | `nfip_claims` | NFIP flood-insurance claim in the four counties, 1978 on | `build_history.py` |
 | `nfip_policies_by_year` | county and year: NFIP policies in force, 2009 on | `build_history.py` |
 | `nws_flood_reports` | flood, flash flood, heavy rain or coastal flood report to NWS Brownsville, 2005 on | `build_history.py` |
-| `news_articles` | flood-related news story, 2018 on: headline, excerpt (at most 300 characters), county, city, link | `build_news.py` |
+| `news_articles` | water-related news story or official announcement: headline, excerpt (at most 300 characters), county, city, topics, link | `build_news.py` |
 | `data_sources` | dataset loaded into the database: publisher, URL, when it was downloaded, how many records | every build script |
 | `build_info` | `built_at`: when `build_all.py` last finished | `build_all.py` |
 | `live_signals` | current official alert, road condition or county notice | `run_*.py`, while the app runs |
@@ -100,48 +100,72 @@ if it reported on at least 25 days.
 `seed_nfip_policies.py` regenerates the policy seed file from a saved copy of
 FEMA's retired v2 policies export; the build never runs it.
 
-## `build_news.py` — flood news stories
+## `build_news.py` — water in the news
 
 ```bash
-uv run python pipeline/build_news.py [--limit N]
+uv run python pipeline/build_news.py [--only news-krgv,news-tpr] [--limit N] [--list]
 ```
 
-Collects flood-related news from two publishers, 2018 on:
+Collects water-related news and official announcements from the Valley's publishers into `news_articles`.
+"Water-related" is wide on purpose: **floods, rain, storms and hurricanes, drought and water supply, drainage
+and water systems, and anything that says "water"**, in English and Spanish. Each story keeps the topics it
+matched (`flood`, `rain`, `storm`, `drought`, `water_system`, `water`), so you can narrow it again.
 
-| Publisher | How stories are listed | Date |
-| --- | --- | --- |
-| KRGV Channel 5 News (`krgv.com`) | `sitemap.xml` → 24 `sitemap-news-N.xml` pages of 5,000 stories, not in date order, so each story is judged by its own date | the sitemap's `news:publication_date` (the page has none) |
-| The Monitor, Brownsville Herald and Valley Morning Star (`myrgv.com`) | WordPress `wp-sitemap.xml` → `wp-sitemap-posts-post-N.xml`, about 62,000 posts from 2016 | the day in the post's address, then the page's `article:published_time` |
+Every source is read side by side (one thread each), back to the first story its sitemaps show: there is no date floor.
 
-The steps for each story:
+| Source id | Publisher | How stories are listed | Archive begins |
+| --- | --- | --- | --- |
+| `news-krgv` | KRGV Channel 5 | `sitemap.xml` → `sitemap-news-N.xml`, not in date order; date from the sitemap | about 2017 |
+| `news-myrgv` | The Monitor, Brownsville Herald, Valley Morning Star (`myrgv.com`) | WordPress sitemaps; date from the address, then the page | 2016 |
+| `news-valleycentral` | ValleyCentral (KVEO, KGBT) | one sitemap per day at `sitemap.xml?yyyy=&mm=&dd=` | 2016 |
+| `news-borderreport` | Border Report | the same, day by day | Sept 2019 |
+| `news-foxrgv` | Fox RGV (KFXV) | WordPress/Yoast sitemaps | rolling |
+| `news-riograndeguardian` | Rio Grande Guardian | one sitemap of every story | 2006 |
+| `news-progresstimes` | Progress Times (Pharr, San Juan, Alamo) | WordPress sitemaps | 2016 |
+| `news-pispp` | Port Isabel-South Padre Press | sitemaps | 2012 |
+| `news-texasborderbusiness` | Texas Border Business | Yoast sitemaps | 2013 |
+| `news-tpr` | Texas Public Radio | one sitemap a month, `sitemap-YYYYMM.xml` | 2004 |
+| `news-texastribune` | The Texas Tribune | Yoast sitemaps | 2011 |
+| `official-cameroncounty`, `official-pharr`, `official-ibwc` | Cameron County, City of Pharr, International Boundary and Water Commission | WordPress sitemaps | 2019 to 2024 |
 
-1. Skip it if it is dated before 2018, or if its headline (the sitemap's title,
-   or the words in the address) has no flood term. That is most of them, and
+`python pipeline/build_news.py --list` prints the ids. Outlets that cover far more than the Valley (Border Report,
+Texas Public Radio, the Texas Tribune) are only read for a story whose address names a Valley place.
+
+**Steps for each story**
+
+1. Skip it if its sitemap title, or the headline made from its address, has no water word. That is most of them;
    they are never downloaded.
-2. Download the page through `news_fetch.Fetcher`: robots.txt is read first and
-   obeyed, requests to one host are at least a second apart, and every page is
-   kept in `tmp/news/`. A rebuild reads the cache and works offline.
-3. Read the headline and the page's own description (`news_sources.py`).
-4. Keep it only if the text has a flood term **and** names a county or a
-   city in one of the four (`news_match.py`: English and Spanish flood terms;
-   city names are case-sensitive, so "Rio Grande Valley" is not Rio Grande City
-   and "mission statement" is not Mission).
+2. Download the page through `news_fetch.Fetcher` (below), reading only the first 200 KB, which holds the headline and description.
+3. Keep it only if the text has a water word **and** names a Valley town, a county, or the Valley as a whole
+   (`news_match.py`; city names are case-sensitive, so "mission statement" is not Mission, and "Silicon Valley" is not the Valley).
+   A story that names only the whole Valley has no `county` and shows under every county.
 
-What is stored is the headline, the first 300 characters of the page's
-description, the link, the publisher, the county and city, and any streets or
-waterways the headline and description name. **Never the article text**, and no
-coordinate: a story is not given a location it doesn't state. The `county`
-column is the first county named; `counties` lists every one.
+**Nexstar's sites (ValleyCentral, Border Report) refuse our crawler.** Every article answers "403 Forbidden" to a crawler that
+identifies itself, although robots.txt allows crawling. We do not disguise the crawler to get past that. For these two, a
+story is its address, its day (from that day's sitemap) and a headline made from the address (`headline_from = address`,
+no description). ValleyCentral's local-news and weather sections are accepted without a named town.
 
-Each publisher also gets a `data_sources` row saying how many stories it listed,
-kept and skipped. A publisher that can't be reached is skipped and the other
-still loads. The first run downloads thousands of pages at one per second, so it
-takes hours; `--limit N` is a dry run: it stops after N new downloads, prints what it found and writes nothing.
+**What is stored:** the headline, the first 300 characters of the page's own description, the link, publisher, day,
+county and city, topics, and any streets or waterways named. **Never article text**, and no coordinates.
 
-Known limits: terms like "hurricane" or "drainage" also catch stories that are
-not about a flood; headline capitalization makes the streets and waterways
-list approximate; ValleyCentral and Border Report (no deep archive) and
-2000–2017 coverage (the Wayback Machine) are not included yet.
+**The fetcher is built for a long crawl** (`news_fetch.py`): robots.txt and `Crawl-delay` obeyed (a host asking for more than
+30 seconds is skipped); one request at a time to each host, at least a second apart, while different hosts run in parallel;
+a host that answers 401/403 five times in a row is left alone for the run; a 429/503 is retried once after the wait the
+server asks for; pages that do not exist (404) are remembered; every page is cached gzip-compressed in `tmp/news/`, so a
+rerun reads the cache and works offline.
+
+**Running it.** The first run downloads tens of thousands of pages and takes hours. Stop it any time (Ctrl+C) and run it
+again: nothing is lost, and a stopped run writes nothing. A progress line prints every minute. `--limit N` is a dry run
+that stops after N new downloads and writes nothing; `--only` runs some sources and leaves the others' rows in place.
+A publisher that gave nothing this time (down, or its sitemap changed) keeps the stories it had.
+
+Each source gets a `data_sources` row: how many stories it listed, how many were kept, and what was skipped and why.
+
+**Limits.** A water word is a broad net ("water", "storm", "canal"), so some stories are only loosely about water; the
+topics let you tell. The Wayback Machine and Common Crawl, which could reach the old Monitor, Brownsville Herald,
+Valley Morning Star and KRGV sites before 2016, were both down when this was built (HTTP 503 and 504), so the archives
+here begin where each outlet's sitemaps do. Streets and waterways named in a headline are approximate. Terms of service
+were not reviewed: robots.txt allows crawling, which is not permission to republish, so only short excerpts and links are kept.
 
 ## `build_layers.py` — map layers
 

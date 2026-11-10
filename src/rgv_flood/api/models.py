@@ -149,6 +149,9 @@ class NewsArticle(BaseModel):
     counties: list[str]
     city: str | None = None
     places: str | None = None
+    topics: list[str] = []
+    kind: str = "news"
+    headline_from: str = "page"
 
 
 class EventContext(BaseModel):

@@ -35,7 +35,11 @@ NEAREST_GAUGES = 3
 NEWS_DAYS_BEFORE = 1
 NEWS_DAYS_AFTER = 3
 NEWS_LIMIT = 200
-NEWS_COLUMNS = "id, publisher, source_url, headline, published_at, excerpt, county, counties, city, places"
+NEWS_COLUMNS = (
+    "id, publisher, source_url, headline, published_at, excerpt, county, counties, city, places, topics, kind, headline_from"
+)
+# A story that names only the Valley as a whole has no county; it belongs to every county's list.
+NEWS_COUNTY = "(county = :county or ',' || counties || ',' like :like or county is null)"
 
 
 def _where(equals: dict[str, str | None]) -> tuple[str, tuple]:
@@ -270,24 +274,34 @@ def _news_rows(db: Database, query: str, parameters: tuple | dict = ()) -> list[
         return []
     for row in rows:
         row["counties"] = [slug for slug in row["counties"].split(",") if slug]
+        row["topics"] = [topic for topic in row["topics"].split(",") if topic]
     return rows
 
 
-def news_articles(db: Database, county_slug: str | None = None, year: int | None = None) -> list[dict]:
-    """Flood news stories, newest first (at most NEWS_LIMIT), optionally for one
-    county (any story that names it) and/or one year of publication."""
-    conditions, parameters = [], []
+def news_articles(
+    db: Database, county_slug: str | None = None, year: int | None = None, topic: str | None = None, kind: str | None = None
+) -> list[dict]:
+    """Water-related stories and announcements, newest first (at most NEWS_LIMIT), optionally for one county
+    (any story that names it, and the Valley-wide ones), one year, one topic or one kind (news or official)."""
+    conditions: list[str] = []
+    parameters: dict = {}
     if county_slug:
-        conditions.append("(county = ? or ',' || counties || ',' like ?)")
-        parameters += [county_slug, f"%,{county_slug},%"]
+        conditions.append(NEWS_COUNTY)
+        parameters |= {"county": county_slug, "like": f"%,{county_slug},%"}
     if year:
-        conditions.append("substr(published_at, 1, 4) = ?")
-        parameters.append(str(year))
+        conditions.append("substr(published_at, 1, 4) = :year")
+        parameters["year"] = str(year)
+    if topic:
+        conditions.append("',' || topics || ',' like :topic")
+        parameters["topic"] = f"%,{topic},%"
+    if kind:
+        conditions.append("kind = :kind")
+        parameters["kind"] = kind
     where = f" where {' and '.join(conditions)}" if conditions else ""
     return _news_rows(
         db,
         f"select {NEWS_COLUMNS} from news_articles{where} order by published_at desc, id limit {NEWS_LIMIT}",
-        tuple(parameters),
+        parameters,
     )
 
 
@@ -303,7 +317,7 @@ def news_near_event(db: Database, event: dict) -> list[dict]:
     return _news_rows(
         db,
         f"""select {NEWS_COLUMNS} from news_articles
-            where (county = :county or ',' || counties || ',' like :like)
+            where {NEWS_COUNTY}
               and substr(published_at, 1, 10) between :first and :last
             order by published_at, id""",
         {
@@ -509,7 +523,6 @@ def history_by_year(db: Database, county_slug: str | None, last_year: int) -> di
 
 TRENDS_FIRST_YEAR = 1996  # NOAA's flood events start here
 NWS_FIRST_YEAR = 2005  # NWS Brownsville reports start here
-NEWS_FIRST_YEAR = 2018  # the news archive starts here
 # A gauge's month counts toward a monthly chart only if it reported rain on at
 # least this many of its days (a year needs COMPLETE_GAUGE_DAYS).
 COMPLETE_MONTH_DAYS = 25
@@ -534,24 +547,25 @@ def _counts_by_year(
 
 
 def _news_by_year(db: Database, county_slug: str | None, last_year: int) -> list[dict]:
-    """Stories per year from NEWS_FIRST_YEAR, or nothing when there is no news table or it is empty."""
-    county, parameters = "", ()
+    """Stories per year from the year of the earliest story (the archives begin in different years), or nothing
+    when there is no news table or it is empty. A county's count includes the Valley-wide stories."""
+    county, parameters = "", {}
     if county_slug:
-        county = " where county = ? or ',' || counties || ',' like ?"
-        parameters = (county_slug, f"%,{county_slug},%")
+        county = f" where {NEWS_COUNTY}"
+        parameters = {"county": county_slug, "like": f"%,{county_slug},%"}
     try:
         rows = db.app_rows(
             f"select substr(published_at, 1, 4) as year, count(*) as n from news_articles{county} group by year", parameters
         )
-        any_news = db.scalar("select count(*) from news_articles")
+        first = db.scalar("select min(substr(published_at, 1, 4)) from news_articles")
     except sqlite3.OperationalError as error:
         if "no such table" not in str(error):
             raise
         return []
-    if not any_news:
+    if not first:
         return []
     counts = {int(row["year"]): row["n"] for row in rows}
-    return [{"year": year, "count": counts.get(year, 0)} for year in range(NEWS_FIRST_YEAR, last_year + 1)]
+    return [{"year": year, "count": counts.get(year, 0)} for year in range(int(first), last_year + 1)]
 
 
 def _rain_years(db: Database, county_slug: str | None, station_id: str | None) -> list[dict]:
@@ -663,5 +677,5 @@ def trends(db: Database, county_slug: str | None, station_id: str | None, last_y
             parameters, NWS_FIRST_YEAR, last_year, "by_kind",
         ),
         "news_by_year": (news := _news_by_year(db, county_slug, last_year)),
-        "news_first_year": NEWS_FIRST_YEAR if news else None,
+        "news_first_year": news[0]["year"] if news else None,
     }

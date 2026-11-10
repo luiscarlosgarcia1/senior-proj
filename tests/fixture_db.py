@@ -135,8 +135,8 @@ def _news(story_id: str, county: str, published_at: str, headline: str, **values
 
 NEWS = [
     _news("news-1", "hidalgo", "2020-07-27T14:03:00Z", "Flooding closes Weslaco streets", city="Weslaco"),
-    _news("news-2", "hidalgo", "2018-06-21", "Hidalgo County drainage crews work after June rain"),
-    _news("news-3", "cameron", "2020-07-27T09:00:00Z", "Brownsville flooding strands drivers", city="Brownsville"),
+    _news("news-2", "hidalgo", "2018-06-21", "Hidalgo County drainage crews work after June rain", topics="water_system,rain"),
+    _news("news-3", "cameron", "2020-07-27T09:00:00Z", "Brownsville flooding strands drivers", city="Brownsville", topics="flood,storm"),
 ]
 
 

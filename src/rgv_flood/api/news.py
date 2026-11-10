@@ -1,8 +1,8 @@
-"""/api/v1/news: flood-related news stories, linked to the publisher."""
+"""/api/v1/news: water-related news stories and official announcements, linked to the publisher."""
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Request
 
@@ -20,7 +20,9 @@ def news(
     request: Request,
     db: Db,
     county: County | None = None,
-    year: Annotated[int | None, Query(ge=2018, le=2100)] = None,
+    year: Annotated[int | None, Query(ge=1990, le=2100)] = None,
+    topic: Literal["flood", "rain", "storm", "drought", "water_system", "water"] | None = None,
+    kind: Literal["news", "official"] | None = None,
 ):
-    rows = data_access.news_articles(db, county, year)
+    rows = data_access.news_articles(db, county, year, topic, kind)
     return conditional_json(request, [NewsArticle(**row) for row in rows], MAX_AGE)

@@ -12,7 +12,7 @@ def test_news_lists_newest_first(api_client):
         "id": "news-1", "publisher": "KRGV Channel 5 News", "source_url": "https://example.test/news/news-1",
         "headline": "Flooding closes Weslaco streets", "published_at": "2020-07-27T14:03:00Z",
         "excerpt": "A short description.", "county": "hidalgo", "counties": ["hidalgo"], "city": "Weslaco",
-        "places": None,
+        "places": None, "topics": ["flood"], "kind": "news", "headline_from": "page",
     }
 
 
@@ -85,3 +85,52 @@ def test_news_text_keys_exist():
 
     for key in ("news.title", "news.note", "news.none", "events.news", "events.news_note", "events.no_news"):
         assert catalog.get(key), key
+
+
+def test_news_filtered_by_topic(api_client):
+    stories = api_client.get("/api/v1/news", params={"topic": "water_system"}).json()
+
+    assert [s["id"] for s in stories] == ["news-2"]
+    assert stories[0]["topics"] == ["water_system", "rain"]
+
+
+def test_news_filtered_by_kind(api_client, fixture_db):
+    with closing(sqlite3.connect(fixture_db)) as connection, connection:
+        connection.execute("update news_articles set kind = 'official' where id = 'news-3'")
+
+    assert [s["id"] for s in api_client.get("/api/v1/news", params={"kind": "official"}).json()] == ["news-3"]
+    assert "news-3" not in [s["id"] for s in api_client.get("/api/v1/news", params={"kind": "news"}).json()]
+
+
+def test_news_bad_topic_or_kind_422(api_client):
+    assert api_client.get("/api/v1/news", params={"topic": "weather"}).status_code == 422
+    assert api_client.get("/api/v1/news", params={"kind": "gossip"}).status_code == 422
+
+
+def test_news_from_before_2018_is_accepted_now_that_the_archive_goes_back_further(api_client, fixture_db):
+    with closing(sqlite3.connect(fixture_db)) as connection, connection:
+        connection.execute("update news_articles set published_at = '2006-10-17' where id = 'news-2'")
+
+    assert [s["id"] for s in api_client.get("/api/v1/news", params={"year": 2006}).json()] == ["news-2"]
+    assert api_client.get("/api/v1/news", params={"year": 1989}).status_code == 422
+
+
+def test_stories_about_the_whole_valley_show_under_every_county(api_client, fixture_db):
+    with closing(sqlite3.connect(fixture_db)) as connection, connection:
+        connection.execute("update news_articles set county = null, counties = '' where id = 'news-2'")
+
+    for county in ("cameron", "starr"):
+        ids = [s["id"] for s in api_client.get("/api/v1/news", params={"county": county}).json()]
+        assert "news-2" in ids, county
+    assert api_client.get("/api/v1/news").json()[-1]["counties"] == []
+
+
+def test_an_event_also_gets_valley_wide_stories_from_its_days(api_client, fixture_db):
+    with closing(sqlite3.connect(fixture_db)) as connection, connection:
+        connection.execute(
+            "update news_articles set county = null, counties = '', published_at = '2020-07-26T10:00:00Z' where id = 'news-2'"
+        )
+
+    context = api_client.get("/api/v1/events/noaa-storm-events-1/context").json()
+
+    assert [s["id"] for s in context["news"]] == ["news-2", "news-1"]
