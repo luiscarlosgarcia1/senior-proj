@@ -14,6 +14,7 @@ import math
 import sqlite3
 from datetime import date, timedelta
 
+from rgv_flood.counties import COUNTIES
 from rgv_flood.db import Database
 
 LAYER_COLUMNS = (
@@ -40,6 +41,15 @@ NEWS_COLUMNS = (
 )
 # A story that names only the Valley as a whole has no county; it belongs to every county's list.
 NEWS_COUNTY = "(county = :county or ',' || counties || ',' like :like or county is null)"
+NEWS_NAMES_COUNTY = "(county = :county or ',' || counties || ',' like :like)"
+
+
+def _news_in(county_slug: str | None, *, valley_wide: bool = True) -> tuple[str, dict]:
+    """(SQL condition, its parameters) for the news stories of one county; true for every story when there is none.
+    `valley_wide` also counts the stories about the whole Valley, which name no county."""
+    if not county_slug:
+        return "1=1", {}
+    return (NEWS_COUNTY if valley_wide else NEWS_NAMES_COUNTY), {"county": county_slug, "like": f"%,{county_slug},%"}
 
 
 def _where(equals: dict[str, str | None]) -> tuple[str, tuple]:
@@ -306,11 +316,8 @@ def news_articles(
 ) -> list[dict]:
     """Water-related stories and announcements, newest first (at most NEWS_LIMIT), optionally for one county
     (any story that names it, and the Valley-wide ones), one year, one topic or one kind (news or official)."""
-    conditions: list[str] = []
-    parameters: dict = {}
-    if county_slug:
-        conditions.append(NEWS_COUNTY)
-        parameters |= {"county": county_slug, "like": f"%,{county_slug},%"}
+    county, parameters = _news_in(county_slug)
+    conditions = [county]
     if year:
         conditions.append("substr(published_at, 1, 4) = :year")
         parameters["year"] = str(year)
@@ -320,7 +327,7 @@ def news_articles(
     if kind:
         conditions.append("kind = :kind")
         parameters["kind"] = kind
-    where = f" where {' and '.join(conditions)}" if conditions else ""
+    where = f" where {' and '.join(conditions)}"
     return _news_rows(
         db,
         f"select {NEWS_COLUMNS} from news_articles{where} order by published_at desc, id limit {NEWS_LIMIT}",
@@ -337,15 +344,14 @@ def news_near_event(db: Database, event: dict) -> list[dict]:
     """
     began = date.fromisoformat(event["date"])
     ended = max(began, date.fromisoformat(event["date_end"] or event["date"]))
+    county, parameters = _news_in(event["county"])
     return _news_rows(
         db,
         f"""select {NEWS_COLUMNS} from news_articles
-            where {NEWS_COUNTY}
+            where {county}
               and substr(published_at, 1, 10) between :first and :last
             order by published_at, id""",
-        {
-            "county": event["county"],
-            "like": f"%,{event['county']},%",
+        parameters | {
             "first": (began - timedelta(days=NEWS_DAYS_BEFORE)).isoformat(),
             "last": (ended + timedelta(days=NEWS_DAYS_AFTER)).isoformat(),
         },
@@ -572,13 +578,10 @@ def _counts_by_year(
 def _news_by_year(db: Database, county_slug: str | None, last_year: int) -> list[dict]:
     """Stories per year from the year of the earliest story (the archives begin in different years), or nothing
     when there is no news table or it is empty. A county's count includes the Valley-wide stories."""
-    county, parameters = "", {}
-    if county_slug:
-        county = f" where {NEWS_COUNTY}"
-        parameters = {"county": county_slug, "like": f"%,{county_slug},%"}
+    county, parameters = _news_in(county_slug)
     try:
         rows = db.app_rows(
-            f"select substr(published_at, 1, 4) as year, count(*) as n from news_articles{county} group by year", parameters
+            f"select substr(published_at, 1, 4) as year, count(*) as n from news_articles where {county} group by year", parameters
         )
         first = db.scalar("select min(substr(published_at, 1, 4)) from news_articles")
     except sqlite3.OperationalError as error:
@@ -720,7 +723,6 @@ TOP_PLACES = 20
 TOP_WATER_TOWNS = 15
 SURPRISES = 6
 TIMELINE_MAX_DAYS = 31
-NEWS_COUNTIES = ("cameron", "hidalgo", "starr", "willacy")
 # A street or waterway that is only a kind of road, not a place.
 VAGUE_PLACES = frozenset(("state highway", "highway", "expressway", "business"))
 _SPANISH_WORDS = frozenset(("de", "la", "el", "los", "las", "en", "por", "para", "del", "se", "con", "y", "tras", "una",
@@ -794,7 +796,7 @@ def news_insights(db: Database, county_slug: str | None, through: date) -> dict:
             raise
         return empty
     since, until = f"{first}-01-01", through.isoformat()
-    where, parameters = (NEWS_COUNTY, {"county": county_slug, "like": f"%,{county_slug},%"}) if county_slug else ("1=1", {})
+    where, parameters = _news_in(county_slug)
     window = {"since": since, "until": until + "T99"}  # a time on the last day still counts
     in_window = "published_at >= :since and published_at <= :until"
 
@@ -852,11 +854,11 @@ def _busiest_days(rows: list[dict]) -> list[dict]:
 def _coverage(db: Database, since: str, until: str) -> list[dict]:
     """Each county's stories (those that name it; Valley-wide ones belong to no county) beside its claims and NWS reports."""
     result = []
-    for slug in NEWS_COUNTIES:
+    for slug in sorted(COUNTIES):
+        names, parameters = _news_in(slug, valley_wide=False)
         stories = db.scalar(
-            """select count(*) from news_articles where (county = :county or ',' || counties || ',' like :like)
-               and published_at >= :since and published_at <= :until""",
-            {"county": slug, "like": f"%,{slug},%", "since": since, "until": until + "T99"},
+            f"select count(*) from news_articles where {names} and published_at >= :since and published_at <= :until",
+            parameters | {"since": since, "until": until + "T99"},
         ) or 0
         claims = _count_by(db, "select 'all' as key, count(*) as n from nfip_claims where county = ? and date_of_loss >= ?"
                                " and date_of_loss <= ?", (slug, since, until)).get("all", 0)
@@ -903,7 +905,7 @@ def _water_problems(rows: list[dict]) -> list[dict]:
 
 def news_timeline(db: Database, start: date, end: date, county_slug: str | None = None) -> list[dict]:
     """Every day from `start` to `end` with the stories published that day, oldest first."""
-    where, parameters = (NEWS_COUNTY, {"county": county_slug, "like": f"%,{county_slug},%"}) if county_slug else ("1=1", {})
+    where, parameters = _news_in(county_slug)
     stories = _news_rows(
         db,
         f"""select {NEWS_COLUMNS} from news_articles where {where}
