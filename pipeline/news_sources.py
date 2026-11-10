@@ -108,6 +108,10 @@ class KrgvSource:
     id = "news-krgv"
     publisher = "KRGV Channel 5 News"
     home_url = "https://www.krgv.com"
+    kind = "news"
+    reads_pages = True
+    needs_place_in_address = False
+    local_sections: tuple[str, ...] = ()
     index_url = "https://www.krgv.com/sitemap.xml"
 
     def listings(self, fetcher: Fetcher) -> Iterator[Listing]:
@@ -176,6 +180,10 @@ class MyrgvSource:
     id = "news-myrgv"
     publisher = "The Monitor / Brownsville Herald / Valley Morning Star (myrgv.com)"
     home_url = "https://myrgv.com"
+    kind = "news"
+    reads_pages = True
+    needs_place_in_address = False
+    local_sections: tuple[str, ...] = ()
     index_url = "https://myrgv.com/wp-sitemap.xml"
 
     def listings(self, fetcher: Fetcher) -> Iterator[Listing]:
