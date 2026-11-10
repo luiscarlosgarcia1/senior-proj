@@ -64,6 +64,9 @@ NEWS_SINCE = "1990-01-01"  # no real floor: each publisher's sitemaps begin when
 EXCERPT_LIMIT = 300
 PAGE_LIMIT = 200_000  # a story's headline and description are in the first bytes of its page
 HEARTBEAT_SECONDS = 60
+# Hosts asked less often than once a second: the archive serves every old page, and myrgv.com rate-limited us
+# (HTTP 503, "come back in an hour") after about 850 pages at one a second.
+HOST_DELAYS = {**FETCH_DELAYS, "myrgv.com": 3.0}
 COUNT_LABELS = (
     ("before_since", "dated before the start date"), ("slug_skipped", "with no water word in the address or title"),
     ("not_valley_address", "from outlets that cover more than the Valley, with no Valley place in the address"),
@@ -298,7 +301,7 @@ def main(
         if unknown:
             raise SystemExit(f"Unknown source(s): {', '.join(unknown)}. Known: {', '.join(source.id for source in sources)}")
         sources = [source for source in sources if source.id in only]
-    fetcher = fetcher or Fetcher(cache_dir, delays=FETCH_DELAYS, offline=offline)
+    fetcher = fetcher or Fetcher(cache_dir, delays=HOST_DELAYS, offline=offline)
     retrieved_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     new_rows, stats = collect(sources, fetcher, retrieved_at=retrieved_at, limit=limit, stop=stop, heartbeat_seconds=heartbeat_seconds)

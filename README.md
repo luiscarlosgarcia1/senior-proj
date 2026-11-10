@@ -258,7 +258,9 @@ Everything lives in `data/generated/rgv-flood.sqlite3`, built by
 | `flood_events` | Flood-type events from NOAA's Storm Events Database, 1996–2025 |
 | `flood_reports` | Hand-curated local news and government flood reports |
 | `nws_flood_reports` | Flooding reported to the National Weather Service in Brownsville, 2005 on |
-| `news_articles` | Water-related news stories and official announcements from Valley publishers: headline, short excerpt, county, city, topics, link (never the article text) |
+| `news_articles` | Water-related news stories and official announcements from Valley publishers, cleaned: headline, short excerpt, county, city, topics, link (never the article text) |
+| `news_article_copies` | The same story told by another outlet within three days of one in `news_articles`: kept so every outlet is cited, not counted twice |
+| `news_rejected` | Stories that failed a check (bad date, near-empty headline, only a place name), whole, with the reason; the app never reads it |
 | `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily rain readings, 1978–2025 |
 | `rainfall_station_years` | Each gauge's yearly rain, wettest day and days reported |
 | `rainfall_station_months` | Each gauge's monthly rain, wettest day and days reported |

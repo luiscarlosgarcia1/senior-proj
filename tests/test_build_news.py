@@ -531,3 +531,8 @@ def test_offline_builds_with_a_fetcher_that_never_goes_to_the_network(tmp_path, 
     build_news.main(tmp_path / "db2.sqlite3", cache_dir=tmp_path / "cache", sources=[source])
 
     assert made[0]["offline"] is True and made[1]["offline"] is False
+
+
+def test_the_hosts_that_asked_for_a_gentler_pace_get_one():
+    assert build_news.HOST_DELAYS["web.archive.org"] >= 2.5  # one host serving every old page
+    assert build_news.HOST_DELAYS["myrgv.com"] >= 3.0  # rate-limited us at a page a second

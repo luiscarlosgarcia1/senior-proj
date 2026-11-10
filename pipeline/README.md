@@ -32,7 +32,8 @@ Every table is defined in `database.py`. Every query the app runs is in
 | `nfip_claims` | NFIP flood-insurance claim in the four counties, 1978 on | `build_history.py` |
 | `nfip_policies_by_year` | county and year: NFIP policies in force, 2009 on | `build_history.py` |
 | `nws_flood_reports` | flood, flash flood, heavy rain or coastal flood report to NWS Brownsville, 2005 on | `build_history.py` |
-| `news_articles` | water-related news story or official announcement: headline, excerpt (at most 300 characters), county, city, topics, link | `build_news.py` |
+| `news_articles` | water-related news story or official announcement, cleaned: headline, excerpt (at most 300 characters), county, city, topics, link | `build_news.py` |
+| `news_article_copies`, `news_rejected` | stories cleaning merged into another outlet's copy, and stories that failed a check, whole, with the reason | `build_news.py` |
 | `data_sources` | dataset loaded into the database: publisher, URL, when it was downloaded, how many records | every build script |
 | `build_info` | `built_at`: when `build_all.py` last finished | `build_all.py` |
 | `live_signals` | current official alert, road condition or county notice | `run_*.py`, while the app runs |
@@ -103,7 +104,7 @@ FEMA's retired v2 policies export; the build never runs it.
 ## `build_news.py` — water in the news
 
 ```bash
-uv run python pipeline/build_news.py [--only news-krgv,news-tpr] [--limit N] [--list]
+uv run python pipeline/build_news.py [--only news-krgv,news-tpr] [--limit N] [--list] [--offline]
 ```
 
 Collects water-related news and official announcements from the Valley's publishers into `news_articles`.
@@ -162,6 +163,25 @@ names a Valley place. Each site stops where its live sitemaps begin (the three p
 begins in 2016; KRGV at the end of 2016), so no story is listed twice. The archive is one host and is asked for one page every
 2.5 seconds, slower if it asks us to slow down. Their publisher names end in "(via Wayback Machine)".
 
+**Cleaning** (`news_clean.py`) runs on every story just before it is stored, and nothing in it rewrites a headline or an excerpt:
+
+1. *Tidy.* HTML codes left in text (`&hellip;`) are decoded, spaces are evened out, and an outlet's own name is cut from the end
+   of its headlines (`... | FOX RGV`, `... - Rio Grande Guardian`; only those outlets, only their own names).
+2. *Check.* A story is rejected for a date that is unreadable, before 1990 or in the future (`bad_date`), a headline under 12
+   characters (`short_headline`), or a water match that is only the river's name in a place name (`place_name_only`).
+   "Rio Grande Valley" and "Rio Grande City" are not water words, so they neither match a story nor give it the `water_system`
+   topic (`news_match.PLACE_NAME_TERMS`); in a sample this was the only match for a third of all stories (a sentencing, a sports
+   roundup, a flu death).
+3. *Blank.* A description a site puts on three or more of its own stories is the site's, not the story's, so it is dropped (never replaced).
+4. *Merge.* The same headline (ignoring case and punctuation) within three days is one story: the publisher's own headline beats one
+   made from an address, then one with an excerpt, then the earlier. The rest go to `news_article_copies`, so every outlet is still cited.
+   The same headline more than three days apart (a recurring flood advisory) is a new story.
+
+Merged copies and rejected stories go to `news_article_copies` and `news_rejected` **as whole rows, with the reason**, so nothing is
+lost. Every build judges them again together with the stored stories, so a copy whose partner is gone becomes a story again, a
+`--only` run gives the same result as a full one, and changing a rule needs no new crawl: `build_news.py --offline` rebuilds from the
+downloaded pages without touching the network. Each source's `data_sources` note says how many of its stories were merged or rejected.
+
 **What is stored:** the headline, the first 300 characters of the page's own description, the link, publisher, day,
 county and city, topics, and any streets or waterways named. **Never article text**, and no coordinates.
 
@@ -170,7 +190,7 @@ county and city, topics, and any streets or waterways named. **Never article tex
 different hosts run in parallel; a host that answers 401/403 five times in a row is left alone for the run; a 429/503 is retried
 once after the wait the server asks for, and a host that says it twice in a row is then asked half as often (up to 30 seconds
 apart); pages that do not exist (404) are remembered; every page is cached gzip-compressed in `tmp/news/`, so a
-rerun reads the cache and works offline.
+rerun reads the cache, and `--offline` guarantees no request is made.
 
 **Running it.** The first run downloads tens of thousands of pages and takes hours. Stop it any time (Ctrl+C) and run it
 again: nothing is lost, and a stopped run writes nothing. A progress line prints every minute. `--limit N` is a dry run
