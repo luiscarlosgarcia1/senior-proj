@@ -1,0 +1,13 @@
+{# One news story inside an x-for over `story`: headline linked to the publisher, who and when, whether the headline
+   was rebuilt from the web address, and the other outlets that told the same story. The component supplies
+   storyMeta(), fromAddress() and hasOthers(). #}
+<a x-bind:href="story.source_url" target="_blank" rel="noopener" x-text="story.headline"></a>
+<span class="text-muted" x-text="storyMeta()"></span>
+<span class="ml-1 rounded-sm border border-line px-1 text-[11px] text-muted" x-show="fromAddress()" x-cloak data-from-address
+      title="{{ t('news.from_address_title') }}">{{ t("news.from_address") }}</span>
+<div class="text-xs text-muted" x-show="hasOthers()" x-cloak data-also-reported>
+  {{ t("news.also_reported_by") }}
+  <template x-for="other in story.also_reported_by" x-bind:key="other.source_url">
+    <a class="mr-2" x-bind:href="other.source_url" target="_blank" rel="noopener" x-text="other.publisher"></a>
+  </template>
+</div>

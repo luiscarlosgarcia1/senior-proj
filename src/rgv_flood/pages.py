@@ -1,4 +1,5 @@
-"""The pages: the landing page ("/"), the map explorer ("/map"), claims & rainfall by year ("/claims") and trends ("/trends").
+"""The pages: the landing page ("/"), the map explorer ("/map"), claims & rainfall by year ("/claims"), trends ("/trends")
+and water in the news ("/news").
 
 Templates hold structure only; every piece of data on a page comes from the
 JSON API, fetched by the page's scripts. Pages are revalidated on every load
@@ -73,6 +74,11 @@ def map_page(request: Request, db: Db):
 @router.get("/trends", include_in_schema=False)
 def trends_page(request: Request, db: Db):
     return _render(request, "trends.html", db, "trends", built_label=_built_label(db))
+
+
+@router.get("/news", include_in_schema=False)
+def news_page(request: Request, db: Db):
+    return _render(request, "news.html", db, "news", built_label=_built_label(db))
 
 
 @router.get("/claims", include_in_schema=False)

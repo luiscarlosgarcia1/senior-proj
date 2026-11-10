@@ -148,9 +148,33 @@ def test_trends_page_renders_before_build(make_client, tmp_path):
     assert response.status_code == 200 and "No data yet" in response.text
 
 
+def test_news_page_renders_and_every_page_links_to_it(api_client):
+    response = api_client.get("/news")
+
+    assert response.status_code == 200
+    assert 'id="news-page"' in response.text and "js/pages/news.js" in response.text
+    for section in ("data-busiest", "data-places", "data-water-systems", "data-coverage", 'data-chart="stories"', 'data-chart="signals"'):
+        assert section in response.text, section
+    assert 'href="/news"' in api_client.get("/").text and 'href="/news"' in api_client.get("/map").text
+    assert response.headers["cache-control"] == "no-cache"
+    assert not re.search(r"\son[a-z]+\s*=", response.text)
+
+
+def test_news_page_renders_before_build(make_client, tmp_path):
+    response = make_client(tmp_path / "not-built.sqlite3").get("/news")
+
+    assert response.status_code == 200 and "No data yet" in response.text
+
+
+def test_a_story_says_when_its_headline_was_rebuilt_from_the_web_address_and_who_else_told_it(api_client):
+    html = api_client.get("/map").text
+
+    assert "data-from-address" in html and "data-also-reported" in html  # in the news panel and an event's news
+
+
 # ---- the chat box ----
 
-PAGES = ("/", "/map", "/claims", "/trends")
+PAGES = ("/", "/map", "/claims", "/trends", "/news")
 
 
 def test_chat_button_is_absent_when_chat_is_off(api_client):

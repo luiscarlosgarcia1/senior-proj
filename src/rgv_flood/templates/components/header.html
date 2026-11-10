@@ -24,6 +24,10 @@
          {% if nav_active == "trends" %}aria-current="page"{% endif %}>
         <span class="hidden sm:inline">{{ t("nav.trends") }}</span><span class="sm:hidden">{{ t("nav.trends_short") }}</span>
       </a>
+      <a href="/news" class="flex items-center px-3 font-medium no-underline {{ 'nav-active' if nav_active == 'news' else 'text-muted hover:text-ink' }}"
+         {% if nav_active == "news" %}aria-current="page"{% endif %}>
+        <span class="hidden sm:inline">{{ t("nav.news") }}</span><span class="sm:hidden">{{ t("nav.news_short") }}</span>
+      </a>
     </nav>
     {% include "components/theme_toggle.html" %}
     {% if nav_active == "map" %}

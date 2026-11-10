@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% from "components/county_select.html" import county_select %}
+{% from "components/stat_tile.html" import stat_tile %}
+{% block title %}{{ t("app.news_title") }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="news-page" x-data="newsPage">
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+    {{ county_select("news") }}
+    <p class="text-sm text-muted lg:ml-auto" x-text="span"></p>
+  </div>
+  <p class="mt-3 max-w-[920px] text-sm text-muted">{{ t("news.page.intro") }}</p>
+
+  <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {{ stat_tile("stories", t("news.page.tile.stories"), "tileStories", "tileStoriesSub") }}
+    {{ stat_tile("rain", t("news.page.tile.rain"), "tileRain", "tileRainSub") }}
+    {{ stat_tile("nws", t("news.page.tile.nws"), "tileNws", "tileNwsSub") }}
+    {{ stat_tile("claims", t("news.page.tile.claims"), "tileClaims", "tileClaimsSub") }}
+  </div>
+
+  {# 1. news against the measurements, month by month #}
+  <div class="mt-4 flex flex-col rounded-lg border border-line bg-panel shadow-1">
+    {% for chart, dot in (("stories", "bg-layer-photos"), ("signals", "bg-layer-nws")) %}
+    <section class="relative px-2 py-1 {{ 'border-b border-line' if not loop.last }}" data-chart-card="{{ chart }}">
+      <div class="flex items-center gap-2 px-2 pt-2 text-sm">
+        <i class="h-2 w-2 rounded-sm {{ dot }}" aria-hidden="true"></i>
+        <b class="font-semibold">{{ t("news.page.chart." ~ chart) }}</b>
+      </div>
+      <p class="px-2 text-xs text-muted">{{ t("news.page.note." ~ chart) }}</p>
+      <div data-chart="{{ chart }}" class="w-full"></div>
+    </section>
+    {% endfor %}
+  </div>
+
+  <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+    {% for list, getter in (("wet_quiet", "wetQuiet"), ("loud_dry", "loudDry")) %}
+    <section class="rounded-lg border border-line bg-panel p-4 shadow-1" data-surprises="{{ list }}">
+      <h2 class="text-md font-semibold">{{ t("news.page." ~ list) }}</h2>
+      <p class="mt-0.5 text-xs text-muted">{{ t("news.page." ~ list ~ "_note") }}</p>
+      <ul class="mt-2 flex flex-col gap-1 font-mono text-sm">
+        <template x-for="m in {{ getter }}" x-bind:key="m.month">
+          <li class="flex justify-between gap-3 border-t border-line pt-1"><span x-text="monthName()"></span><span class="text-muted" x-text="monthNumbers()"></span></li>
+        </template>
+      </ul>
+      <p class="mt-2 text-sm text-muted" x-show="!{{ getter }}.length" x-cloak>{{ t("news.page.none_found") }}</p>
+    </section>
+    {% endfor %}
+  </div>
+
+  {# 2. the busiest days, and every outlet's stories around one of them #}
+  <section class="mt-4 rounded-lg border border-line bg-panel p-4 shadow-1" data-busiest>
+    <h2 class="text-md font-semibold">{{ t("news.page.busiest") }}</h2>
+    <p class="mt-0.5 text-xs text-muted">{{ t("news.page.busiest_note") }}</p>
+    <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <template x-for="d in busiest" x-bind:key="d.date">
+        <button type="button" class="rounded-md border border-line bg-bg p-2.5 text-left hover:border-accent" data-day
+                x-on:click="openDay()" x-bind:aria-pressed="isOpen()" x-bind:class="dayClass()">
+          <div class="font-mono text-sm font-medium" x-text="dayName()"></div>
+          <div class="text-xs text-muted" x-text="dayCounts()"></div>
+          <div class="mt-1 line-clamp-2 text-xs leading-snug" x-text="d.headline"></div>
+        </button>
+      </template>
+    </div>
+
+    <div class="mt-4 border-t border-line pt-3" x-show="openDate" x-cloak data-timeline>
+      <h3 class="text-sm font-semibold" x-text="timelineTitle"></h3>
+      <p class="text-sm text-muted" x-show="loadingTimeline">{{ t("news.page.loading") }}</p>
+      <ol class="mt-2 flex flex-col gap-3">
+        <template x-for="tday in timeline" x-bind:key="tday.date">
+          <li x-show="tday.stories.length">
+            <div class="font-mono text-xs font-medium text-muted" x-text="timelineDay()"></div>
+            <ul class="mt-1 flex flex-col gap-1.5 text-sm leading-snug">
+              <template x-for="story in tday.stories" x-bind:key="story.id">
+                <li data-timeline-story>{% include "components/news_story.html" %}</li>
+              </template>
+            </ul>
+          </li>
+        </template>
+      </ol>
+    </div>
+  </section>
+
+  <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+    {# 3. the streets and waterways named again and again #}
+    <section class="rounded-lg border border-line bg-panel p-4 shadow-1" data-places>
+      <h2 class="text-md font-semibold">{{ t("news.page.places") }}</h2>
+      <p class="mt-0.5 text-xs text-muted">{{ t("news.page.places_note") }}</p>
+      <table class="mt-2 w-full border-collapse text-sm">
+        <thead class="text-xs text-muted"><tr><th class="py-1 text-left">{{ t("news.page.col.place") }}</th><th class="py-1 text-right">{{ t("news.page.col.stories") }}</th><th class="py-1 pl-3 text-left">{{ t("news.page.col.latest") }}</th></tr></thead>
+        <tbody>
+          <template x-for="p in places" x-bind:key="p.name">
+            <tr class="border-t border-line align-top">
+              <td class="py-1.5 font-medium" x-text="p.name"></td>
+              <td class="py-1.5 text-right font-mono" x-text="p.stories"></td>
+              <td class="py-1.5 pl-3"><a x-bind:href="p.latest_url" target="_blank" rel="noopener" x-text="p.latest_headline"></a>
+                <div class="font-mono text-xs text-muted" x-text="placeSpan()"></div></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p class="mt-2 text-sm text-muted" x-show="!places.length" x-cloak>{{ t("news.page.none_found") }}</p>
+    </section>
+
+    {# 4. water-service problems, town by town #}
+    <section class="rounded-lg border border-line bg-panel p-4 shadow-1" data-water-systems>
+      <h2 class="text-md font-semibold">{{ t("news.page.water") }}</h2>
+      <p class="mt-0.5 text-xs text-muted">{{ t("news.page.water_note") }}</p>
+      <table class="mt-2 w-full border-collapse text-sm">
+        <thead class="text-xs text-muted"><tr><th class="py-1 text-left">{{ t("news.page.col.town") }}</th><th class="py-1 text-right">{{ t("news.page.col.stories") }}</th><th class="py-1 pl-3 text-left">{{ t("news.page.col.latest") }}</th></tr></thead>
+        <tbody>
+          <template x-for="w in towns" x-bind:key="w.city">
+            <tr class="border-t border-line align-top">
+              <td class="py-1.5 font-medium" x-text="w.city"></td>
+              <td class="py-1.5 text-right font-mono" x-text="w.stories"></td>
+              <td class="py-1.5 pl-3"><a x-bind:href="w.latest_url" target="_blank" rel="noopener" x-text="w.latest_headline"></a>
+                <div class="font-mono text-xs text-muted" x-text="townSpan()"></div></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p class="mt-2 text-sm text-muted" x-show="!towns.length" x-cloak>{{ t("news.page.none_found") }}</p>
+    </section>
+  </div>
+
+  {# 5. coverage against what happened, county by county #}
+  <section class="mt-4 rounded-lg border border-line bg-panel p-4 shadow-1" data-coverage>
+    <h2 class="text-md font-semibold">{{ t("news.page.coverage") }}</h2>
+    <p class="mt-0.5 text-xs text-muted">{{ t("news.page.coverage_note") }}</p>
+    <div class="overflow-auto">
+      <table class="mt-2 w-full min-w-[560px] border-collapse font-mono text-sm">
+        <thead class="font-sans text-xs text-muted"><tr>
+          <th class="py-1 text-left">{{ t("news.page.col.county") }}</th><th class="py-1 text-right">{{ t("news.page.col.stories") }}</th>
+          <th class="py-1 text-right">{{ t("news.page.col.claims") }}</th><th class="py-1 text-right">{{ t("news.page.col.nws") }}</th>
+          <th class="py-1 text-right">{{ t("news.page.col.per_claims") }}</th><th class="py-1 text-right">{{ t("news.page.col.per_nws") }}</th></tr></thead>
+        <tbody>
+          <template x-for="c in coverage" x-bind:key="c.county">
+            <tr class="border-t border-line">
+              <td class="py-1.5 font-sans font-medium" x-text="countyName()"></td><td class="py-1.5 text-right" x-text="c.stories"></td>
+              <td class="py-1.5 text-right" x-text="c.claims"></td><td class="py-1.5 text-right" x-text="c.nws_reports"></td>
+              <td class="py-1.5 text-right" x-text="perClaims()"></td><td class="py-1.5 text-right" x-text="perReport()"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-3 text-sm" x-text="languageText" data-languages></p>
+  </section>
+
+  <p class="mt-4 text-xs leading-relaxed text-muted">{{ t("news.page.caveat") }}</p>
+  {% if built_label %}
+  <footer class="mt-2 text-[11.5px] leading-relaxed text-muted"><p>{{ built_label }}</p></footer>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script defer src="{{ asset_url('vendor/plotly/plotly-basic.min.js') }}"></script>
+<script type="module" src="{{ asset_url('js/pages/news.js') }}"></script>
+{% endblock %}

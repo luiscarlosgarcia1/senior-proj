@@ -151,7 +151,7 @@ def test_news_panel_lists_stories_and_follows_the_county(map_page):
     expect(stories.first).to_contain_text("Flooding closes Weslaco streets")
     expect(stories.first).to_contain_text("KRGV Channel 5 News")
     expect(stories.first.locator("a")).to_have_attribute("href", "https://example.test/news/news-1")
-    expect(page.locator("[data-panel=news]")).to_contain_text("not verified flood conditions")
+    expect(page.locator("[data-panel=news]")).to_contain_text("They are not verified conditions")
 
     page.locator("#county-header").select_option("cameron")
 

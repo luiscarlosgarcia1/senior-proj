@@ -152,8 +152,14 @@ document.addEventListener("alpine:init", () => {
     reportMeta() {
       return [this.report.publisher, day(this.report.event_date)].filter(Boolean).join(" · ");
     },
-    newsMeta() {
+    storyMeta() {
       return [this.story.publisher, day(this.story.published_at), this.story.city].filter(Boolean).join(" · ");
+    },
+    fromAddress() {
+      return this.story.headline_from === "address";
+    },
+    hasOthers() {
+      return (this.story.also_reported_by || []).length > 0;
     },
     nwsMeta() {
       const when = new Date(this.nws.reported_at).toLocaleTimeString("en-US", { timeZone: "America/Chicago", timeStyle: "short" });
