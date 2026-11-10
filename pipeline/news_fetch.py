@@ -70,6 +70,7 @@ class Fetcher:
         self._last_request: dict[str, float] = {}
         self._refusals: dict[str, int] = defaultdict(int)
         self.blocked_hosts: set[str] = set()
+        self._not_found: set[str] = set()
         self.stats: Counter[str] = Counter()
         self._lock = threading.Lock()
         self._host_locks: dict[str, threading.Lock] = {}
@@ -134,15 +135,21 @@ class Fetcher:
 
     # ---- the one public call
 
-    def get(self, url: str, *, limit: int | None = None) -> bytes | None:
+    def get(self, url: str, *, limit: int | None = None, use_cache: bool = True) -> bytes | None:
         """The page's bytes (only the first `limit` of them, if given), or None if robots.txt forbids
-        it, the host is being left alone, or it can't be fetched."""
+        it, the host is being left alone, it does not exist, or it can't be fetched. With `use_cache`
+        False the page is always asked for and never stored (a page that changes, like today's sitemap)."""
         url = normalize_url(url)
         host = urlsplit(url).netloc
         cached = self._cache_path(url)
-        if cached.is_file() and cached.stat().st_size > 0:
-            self._count("cached")
-            return self._read_cached(cached)
+        missing = cached.with_suffix(".missing")
+        if use_cache:
+            if cached.is_file() and cached.stat().st_size > 0:
+                self._count("cached")
+                return self._read_cached(cached)
+            if missing.exists():  # asked before and the publisher said it is not there
+                self._count("known_missing")
+                return None
         with self._host_lock(host):
             if host in self.blocked_hosts:
                 self._count("host_blocked")
@@ -156,9 +163,14 @@ class Fetcher:
                 return None
             body = self._download(url, host, limit)
         if body is None:
+            if use_cache and url in self._not_found:
+                self._not_found.discard(url)
+                missing.parent.mkdir(parents=True, exist_ok=True)
+                missing.touch()
             return None
-        cached.parent.mkdir(parents=True, exist_ok=True)
-        cached.write_bytes(gzip.compress(body, 6))
+        if use_cache:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            cached.write_bytes(gzip.compress(body, 6))
         self._count("fetched")
         return body
 
@@ -167,6 +179,8 @@ class Fetcher:
             try:
                 body = self._request(url, limit)
             except urllib.error.HTTPError as error:
+                if error.code in (404, 410):
+                    self._not_found.add(url)
                 if error.code in (401, 403):
                     self._refusals[host] += 1
                     if self._refusals[host] >= self.BLOCK_AFTER:

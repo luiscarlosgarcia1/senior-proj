@@ -162,3 +162,34 @@ def test_stats_stay_exact_across_threads(tmp_path):
     run(lambda n: fetcher.get(f"https://t.test/{n}"), range(40))
 
     assert fetcher.stats["fetched"] == 40
+
+
+def test_a_404_is_remembered_so_a_rerun_does_not_ask_again(tmp_path):
+    web = Web({"https://a.test/robots.txt": b""})  # /gone is a 404
+    first, _ = make(tmp_path, web)
+
+    assert first.get("https://a.test/gone") is None
+    asked = len(web.calls)
+    again, _ = make(tmp_path, web)
+
+    assert again.get("https://a.test/gone") is None
+    assert len(web.calls) == asked and again.stats["known_missing"] == 1
+
+
+def test_other_failures_are_not_remembered(tmp_path):
+    url = "https://a.test/flaky"
+    web = Web({"https://a.test/robots.txt": b"", url: [http_error(url, 500), b"worked"]})
+    fetcher, _ = make(tmp_path, web)
+
+    assert fetcher.get(url) is None
+    assert fetcher.get(url) == b"worked"
+
+
+def test_without_the_cache_it_always_asks_and_stores_nothing(tmp_path):
+    url = "https://a.test/today"
+    web = Web({"https://a.test/robots.txt": b"", url: [b"v1", b"v2"]})
+    fetcher, _ = make(tmp_path, web)
+
+    assert fetcher.get(url, use_cache=False) == b"v1"
+    assert fetcher.get(url, use_cache=False) == b"v2"
+    assert not (tmp_path / "cache" / "a.test").exists() or not list((tmp_path / "cache" / "a.test").iterdir())
