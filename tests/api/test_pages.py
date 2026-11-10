@@ -153,7 +153,7 @@ def test_news_page_renders_and_every_page_links_to_it(api_client):
 
     assert response.status_code == 200
     assert 'id="news-page"' in response.text and "js/pages/news.js" in response.text
-    for section in ("data-busiest", "data-places", "data-water-systems", "data-coverage", 'data-chart="stories"', 'data-chart="signals"'):
+    for section in ("data-outlet-directory", "data-outlet-archive", "data-source-stories", "data-coverage-context"):
         assert section in response.text, section
     assert 'href="/news"' in api_client.get("/").text and 'href="/news"' in api_client.get("/map").text
     assert response.headers["cache-control"] == "no-cache"
