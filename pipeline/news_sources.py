@@ -166,21 +166,7 @@ class KrgvSource:
         return Page(url=url, headline=headline, description=description, published_at=listing.published)
 
 
-_PATH_DATE = re.compile(r"/(\d{4})/(\d{2})/(\d{2})/")
 _TRUNCATED = re.compile(r"\s*\[(?:…|\.\.\.)\]\s*$")
-
-
-def _date_in_path(url: str) -> str | None:
-    """'/featured/2021/01/12/slug/' -> '2021-01-12'; None for a path with no real date."""
-    hit = _PATH_DATE.search(url)
-    if not hit:
-        return None
-    year, month, day = map(int, hit.groups())
-    try:
-        date(year, month, day)
-    except ValueError:
-        return None
-    return f"{year:04d}-{month:02d}-{day:02d}" if 2000 <= year <= 2100 else None
 
 
 class MyrgvSource:
@@ -216,7 +202,7 @@ class MyrgvSource:
                 continue
             for url in _sitemap_entries(page, "url"):
                 address = normalize_url((url.findtext(f"{SITEMAP}loc") or "").strip())
-                day = _date_in_path(address)
+                day = date_in_url(address)
                 if day is None or address in seen:
                     continue
                 seen.add(address)

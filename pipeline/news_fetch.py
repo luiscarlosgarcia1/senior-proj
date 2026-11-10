@@ -123,11 +123,6 @@ class Fetcher:
                     self._host_delay[host] = max(self.delay, float(asked), self._host_delay.get(host, 0.0))
         return self._robots[host]
 
-    def allowed(self, url: str) -> bool:
-        with self._host_lock(urlsplit(url).netloc):
-            parser = self._robots_for(url)
-        return parser is not None and parser.can_fetch(net.USER_AGENT["User-Agent"], url)
-
     # ---- the cache
 
     def _cache_path(self, url: str) -> Path:

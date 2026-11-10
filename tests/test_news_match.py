@@ -7,7 +7,6 @@ from news_match import (
     match_story,
     mentions_flood,
     places_in,
-    slug_may_be_flood,
 )
 
 
@@ -50,7 +49,7 @@ def test_no_place_is_dropped():
 def test_rio_grande_valley_is_the_whole_region_not_rio_grande_city():
     match = match_story("Rio Grande Valley braces for flooding", "")
 
-    assert match.region is True and match.counties == () and match.city is None
+    assert match.counties == () and match.city is None  # a story about the whole Valley
 
 
 def test_rio_grande_city_is_starr():
@@ -67,8 +66,8 @@ def test_spanish_flood_story_matches():
 
 
 def test_slug_prefilter():
-    assert slug_may_be_flood("https://www.krgv.com/news/flash-flooding-closes-streets-in-mcallen")
-    assert not slug_may_be_flood("https://www.krgv.com/news/wreaths-across-america-project-in-need-of-volunteers")
+    assert mentions_flood(headline_from_slug("https://www.krgv.com/news/flash-flooding-closes-streets-in-mcallen"))
+    assert not mentions_flood(headline_from_slug("https://www.krgv.com/news/wreaths-across-america-project-in-need-of-volunteers"))
 
 
 def test_places_in_finds_streets():
@@ -127,7 +126,7 @@ def test_unrelated_stories_stay_out(headline):
 
 def test_the_valley_as_a_whole_is_a_place():
     for text in ("RGV flooding worsens", "Rain soaks the Valley", "Lower Rio Grande Valley under flood watch"):
-        assert match_story(text, "").region is True
+        assert match_story(text, "").counties == ()
 
 
 def test_silicon_valley_is_not_the_rio_grande_valley():
@@ -178,9 +177,9 @@ def test_valley_place_in_a_headline(text, strict, expected):
 
 
 def test_water_words_widen_the_address_prefilter():
-    assert slug_may_be_flood("https://x.test/news/boil-water-notice-for-edinburg")
-    assert slug_may_be_flood("https://x.test/news/drought-hits-farmers")
-    assert not slug_may_be_flood("https://x.test/news/football-team-wins")
+    assert mentions_flood(headline_from_slug("https://x.test/news/boil-water-notice-for-edinburg"))
+    assert mentions_flood(headline_from_slug("https://x.test/news/drought-hits-farmers"))
+    assert not mentions_flood(headline_from_slug("https://x.test/news/football-team-wins"))
 
 
 # ---- the river's name in a place name is not a water word ----

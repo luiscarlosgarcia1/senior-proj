@@ -18,11 +18,5 @@ def read_ndjson(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def write_json(path: Path, value: object) -> None:
-    """A human-readable JSON file (indented, newline-terminated)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
-
-
 def feature_collection(features: list[dict]) -> dict:
     return {"type": "FeatureCollection", "features": features}

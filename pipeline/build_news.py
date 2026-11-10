@@ -129,7 +129,7 @@ def _match(source: NewsSource, page: Page) -> StoryMatch | None:
         if words and any(section in page.url for section in sections):
             return StoryMatch(
                 counties=(), city=None, terms=tuple(dict.fromkeys(w for _, w, _ in words)),
-                topics=tuple(dict.fromkeys(t for _, _, t in words)), region=True,
+                topics=tuple(dict.fromkeys(t for _, _, t in words)),
             )
     return match
 

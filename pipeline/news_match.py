@@ -7,9 +7,9 @@ anything else that says "water". Each story gets the topics it matched so a
 reader can narrow it again. A story is kept only if it also names a place in
 the Valley (a town, a county, or the Valley as a whole).
 
-`match_story` is the authority. `slug_may_be_flood` is a cheap pre-filter on a URL
-so pages that cannot match are never downloaded, and `headline_from_slug` rebuilds
-a readable headline from an address for sites whose pages we may not read.
+`match_story` is the authority. `mentions_flood` on the headline `headline_from_slug`
+rebuilds from an address is a cheap pre-filter, so pages that cannot match are never
+downloaded; that rebuilt headline also stands in for sites whose pages we may not read.
 """
 
 from __future__ import annotations
@@ -82,7 +82,6 @@ class StoryMatch:
     city: str | None  # the first city named
     terms: tuple[str, ...]  # the water words found, lower-case, in order of appearance
     topics: tuple[str, ...] = ()  # flood, rain, storm, drought, water_system, water
-    region: bool = False  # the story names the Valley as a whole
 
 
 def topics_in(text: str) -> list[tuple[int, str, str]]:
@@ -138,7 +137,6 @@ def match_story(headline: str, description: str) -> StoryMatch | None:
         city=next((city for _, _, city, _ in mentions if city), None),
         terms=tuple(dict.fromkeys(term for _, term, _ in words)),
         topics=tuple(dict.fromkeys(topic for _, _, topic in words)),
-        region=any(is_region for _, _, _, is_region in mentions),
     )
 
 
@@ -163,10 +161,6 @@ def headline_from_slug(url: str) -> str:
     text = " ".join(word.capitalize() for word in words)
     return _CANONICAL_RE.sub(lambda hit: _CANONICAL[hit.group(1).lower()], text)
 
-
-def slug_may_be_flood(url: str) -> bool:
-    """Whether the address's headline words have a water word, so the page is worth reading."""
-    return mentions_flood(headline_from_slug(url))
 
 
 _STREET = re.compile(
