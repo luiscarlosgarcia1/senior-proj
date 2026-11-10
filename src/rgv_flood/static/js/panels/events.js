@@ -6,6 +6,8 @@ import { getJson, isAbort } from "../api.js";
 import { mapReady } from "../map/main.js";
 import { select } from "../map/popups.js";
 import { day, eventSeverity } from "./format.js";
+import { capitalized } from "../charts.js";
+import { storyMethods } from "../story.js";
 
 const RECENT_YEARS = 5;
 const contextOf = (id) => getJson(`events/${encodeURIComponent(id)}/context`);
@@ -119,7 +121,7 @@ document.addEventListener("alpine:init", () => {
     },
     get subheading() {
       const e = this.context.event;
-      return [e.county.charAt(0).toUpperCase() + e.county.slice(1) + " County", "NOAA Storm Events"].join(" · ");
+      return [`${capitalized(e.county)} County`, "NOAA Storm Events"].join(" · ");
     },
     get beganIndex() {
       return Math.max(0, this.context.rain.days.findIndex((d) => d.began));
@@ -152,15 +154,7 @@ document.addEventListener("alpine:init", () => {
     reportMeta() {
       return [this.report.publisher, day(this.report.event_date)].filter(Boolean).join(" · ");
     },
-    storyMeta() {
-      return [this.story.publisher, day(this.story.published_at), this.story.city].filter(Boolean).join(" · ");
-    },
-    fromAddress() {
-      return this.story.headline_from === "address";
-    },
-    hasOthers() {
-      return (this.story.also_reported_by || []).length > 0;
-    },
+    ...storyMethods,
     nwsMeta() {
       const when = new Date(this.nws.reported_at).toLocaleTimeString("en-US", { timeZone: "America/Chicago", timeStyle: "short" });
       return ["NWS", this.nws.city, when].filter(Boolean).join(" · ");

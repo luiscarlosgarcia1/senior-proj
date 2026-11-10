@@ -8,6 +8,7 @@ import * as maplibregl from "../../vendor/maplibre/maplibre-gl.mjs";
 import { getJson } from "../api.js";
 import { hideForeignLabels, usSideMask } from "./labels.js";
 import { beginStyleSwitch, loadedData, ownStyle } from "./layers.js";
+import { capitalized } from "../charts.js";
 
 const VALLEY = [[-99.2, 25.8], [-97.1, 26.8]]; // west-south, east-north of the four counties
 const container = document.getElementById("map");
@@ -72,11 +73,10 @@ function applyTheme(map, theme) {
   });
 }
 
-const titleCase = (slug) => slug.charAt(0).toUpperCase() + slug.slice(1);
 
 /** Fit the map to a county (or the whole valley) and emphasize its outline. */
 function showCounty(map, slug, duration = 600) {
-  const name = slug ? titleCase(slug) : null;
+  const name = slug ? capitalized(slug) : null;
   const outline = "lyr-county-boundaries-line";
   if (map.getLayer(outline)) {
     map.setPaintProperty(outline, "line-width", name ? ["case", ["==", ["get", "county"], name], 2.6, 0.8] : 1.2);

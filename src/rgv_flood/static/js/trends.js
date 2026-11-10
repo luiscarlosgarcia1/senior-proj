@@ -4,6 +4,7 @@
  * Data: /api/v1/trends. */
 
 import { getJson, isAbort } from "./api.js";
+import { MONTHS, baseLayout, capitalized, drawChart, sum, token } from "./charts.js";
 import { t } from "./i18n.js";
 
 const FIRST_YEAR = 1978; // the rain record's first year; every chart shares this axis
@@ -18,10 +19,7 @@ const CHARTS = {
 };
 // Stacked series take these in turn.
 const PALETTE = ["--c-claims", "--c-nfhl", "--c-firm", "--c-photos", "--c-infra", "--c-drain", "--c-nws"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const sum = (numbers) => numbers.reduce((total, n) => total + n, 0);
 const kindName = (key) => key.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
 
 document.addEventListener("alpine:init", () => {
@@ -85,7 +83,7 @@ document.addEventListener("alpine:init", () => {
         const slug = Alpine.store("app").county;
         const gauge = this.stations.find((s) => s.station_id === this.station);
         if (gauge) return gauge.name;
-        return slug ? t("claims.county", { name: slug.charAt(0).toUpperCase() + slug.slice(1) }) : t("county.all");
+        return slug ? t("claims.county", { name: capitalized(slug) }) : t("county.all");
       },
       get span() {
         return this.trends ? t("trends.span", { place: this.place, first: this.first, last: this.last }) : "";
@@ -175,7 +173,6 @@ document.addEventListener("alpine:init", () => {
       // ---- charts
       figure(chart) {
         const settings = CHARTS[chart];
-        const ink = token("--text");
         const muted = token("--muted");
         const data = this.traces(chart).map((trace, i) => ({
           type: "bar", name: trace.name, x: trace.x, y: trace.y, customdata: trace.text,
@@ -185,17 +182,12 @@ document.addEventListener("alpine:init", () => {
         return {
           data,
           layout: {
-            height: settings.height,
-            margin: { l: 56, r: 16, t: 10, b: 24 },
-            paper_bgcolor: "rgba(0,0,0,0)",
-            plot_bgcolor: "rgba(0,0,0,0)",
+            ...baseLayout(settings.height, { l: 56, r: 16, t: 10, b: 24 }),
             bargap: chart === "months" ? 0 : 0.3,
             barmode: settings.stack ? "stack" : "group",
             hovermode: "closest",
             showlegend: Boolean(settings.stack),
             legend: { orientation: "h", y: 1.18, x: 0, font: { size: 10, color: muted } },
-            hoverlabel: { bgcolor: token("--panel2"), bordercolor: token("--accent"), font: { color: ink, family: "Public Sans", size: 11 } },
-            font: { family: "Public Sans", size: 10, color: muted },
             xaxis: { range: [this.first - 0.6, this.last + 0.6], fixedrange: true, showgrid: false, zeroline: false, dtick: 5, tick0: 1980 },
             yaxis: { fixedrange: true, gridcolor: token("--line"), zeroline: false, nticks: 3, rangemode: "tozero", tickformat: "~s" },
           },
@@ -207,7 +199,7 @@ document.addEventListener("alpine:init", () => {
           const element = this.$root.querySelector(`[data-chart="${chart}"]`);
           if (!element || this.tables[chart]) continue;
           const { data, layout } = this.figure(chart);
-          window.Plotly.react(element, data, layout, { displayModeBar: false, responsive: true });
+          drawChart(element, data, layout);
         }
       },
     };

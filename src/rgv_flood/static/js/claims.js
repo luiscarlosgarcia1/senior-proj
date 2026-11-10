@@ -3,6 +3,7 @@
  * shows it in all three and highlights its table row. Data: /api/v1/history. */
 
 import { getJson, isAbort } from "./api.js";
+import { baseLayout, capitalized, drawChart, token } from "./charts.js";
 import { t } from "./i18n.js";
 
 const CHARTS = {
@@ -13,7 +14,6 @@ const CHARTS = {
 const ANNOTATED_YEARS = [2008, 2010, 2020]; // Dolly, Alex, Hanna: the valley's big flood years
 const METRIC_FIELD = { claims: "claims", paid: "paid", rate: "claims_per_1000_policies" };
 
-const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const dollars = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`);
 const dash = (value, format) => (value === null || value === undefined ? "—" : format(value));
 const stormName = (event) => (event || "").replace(/^(Hurricane|Tropical Storm)\s+/i, "");
@@ -68,7 +68,7 @@ document.addEventListener("alpine:init", () => {
     },
     get countyName() {
       const slug = Alpine.store("app").county;
-      return slug ? t("claims.county", { name: slug.charAt(0).toUpperCase() + slug.slice(1) }) : t("county.all");
+      return slug ? t("claims.county", { name: capitalized(slug) }) : t("county.all");
     },
 
     // ---- tiles
@@ -154,7 +154,6 @@ document.addEventListener("alpine:init", () => {
       const values = this.values(chart);
       const color = token(CHARTS[chart].color);
       const ink = token("--text");
-      const muted = token("--muted");
       const annotations = chart !== "claims" ? [] : ANNOTATED_YEARS.flatMap((year) => {
         const row = this.history.years.find((y) => y.year === year);
         const i = years.indexOf(year);
@@ -170,14 +169,9 @@ document.addEventListener("alpine:init", () => {
           hovertemplate: "%{x} · %{customdata}<extra></extra>",
         }],
         layout: {
-          height: CHARTS[chart].height,
-          margin: { l: 56, r: 16, t: 14, b: CHARTS[chart].last ? 26 : 6 },
-          paper_bgcolor: "rgba(0,0,0,0)",
-          plot_bgcolor: "rgba(0,0,0,0)",
+          ...baseLayout(CHARTS[chart].height, { l: 56, r: 16, t: 14, b: CHARTS[chart].last ? 26 : 6 }),
           bargap: 0.3,
           hovermode: "x",
-          hoverlabel: { bgcolor: token("--panel2"), bordercolor: token("--accent"), font: { color: ink, family: "Public Sans", size: 11 } },
-          font: { family: "Public Sans", size: 10, color: muted },
           xaxis: {
             range: [1977.4, last + 0.6], fixedrange: true, showgrid: false, zeroline: false, ticks: "",
             showticklabels: Boolean(CHARTS[chart].last), dtick: 5, tick0: 1980,
@@ -195,7 +189,7 @@ document.addEventListener("alpine:init", () => {
         const element = this.$root.querySelector(`[data-chart="${chart}"]`);
         if (!element || this.tables[chart]) continue;
         const { data, layout } = this.figure(chart);
-        window.Plotly.react(element, data, layout, { displayModeBar: false, responsive: true });
+        drawChart(element, data, layout);
         if (!element.dataset.wired) this.wire(element);
       }
     },

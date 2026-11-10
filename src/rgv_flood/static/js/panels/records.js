@@ -3,6 +3,7 @@
 
 import { getJson, isAbort } from "../api.js";
 import { t } from "../i18n.js";
+import { storyMethods } from "../story.js";
 import { day } from "./format.js";
 
 /** A component that loads one API list and reloads it when the county changes,
@@ -60,15 +61,7 @@ document.addEventListener("alpine:init", () => {
 
   Alpine.data("newsPanel", countyList("news", {
     // inside x-for: `this.story` (components/news_story.html)
-    storyMeta() {
-      return [this.story.publisher, day(this.story.published_at), this.story.city].filter(Boolean).join(" · ");
-    },
-    fromAddress() {
-      return this.story.headline_from === "address";
-    },
-    hasOthers() {
-      return (this.story.also_reported_by || []).length > 0;
-    },
+    ...storyMethods,
   }));
 
   Alpine.data("sourcesPanel", () => ({

@@ -6,15 +6,13 @@
 
 import { getJson, isAbort } from "./api.js";
 import { t } from "./i18n.js";
+import { MONTHS, baseLayout, capitalized, drawChart, sum, token } from "./charts.js";
 import { day } from "./panels/format.js";
+import { storyMethods } from "./story.js";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const TIMELINE_DAYS_AROUND = 3;
 
-const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const sum = (numbers) => numbers.reduce((total, n) => total + n, 0);
 const monthName = (key) => `${MONTHS[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
-const capitalized = (slug) => slug.charAt(0).toUpperCase() + slug.slice(1);
 
 /** "2020-07-27" moved by `days`, as an ISO day. */
 function shift(iso, days) {
@@ -143,15 +141,7 @@ document.addEventListener("alpine:init", () => {
       return day(this.tday.date);
     },
     // inside x-for: `this.story` (components/news_story.html)
-    storyMeta() {
-      return [this.story.publisher, day(this.story.published_at), this.story.city].filter(Boolean).join(" · ");
-    },
-    fromAddress() {
-      return this.story.headline_from === "address";
-    },
-    hasOthers() {
-      return this.story.also_reported_by.length > 0;
-    },
+    ...storyMethods,
 
     // ---- recurring places (this.p) and water-service problems (this.w)
     get places() {
@@ -193,7 +183,6 @@ document.addEventListener("alpine:init", () => {
       const months = this.months;
       const x = months.map((m) => `${m.month}-15`);
       const text = months.map((m) => monthName(m.month));
-      const ink = token("--text");
       const muted = token("--muted");
       const series = chart === "stories"
         ? [
@@ -216,16 +205,11 @@ document.addEventListener("alpine:init", () => {
       return {
         data,
         layout: {
-          height: 190,
-          margin: { l: 48, r: 48, t: 10, b: 24 },
-          paper_bgcolor: "rgba(0,0,0,0)",
-          plot_bgcolor: "rgba(0,0,0,0)",
+          ...baseLayout(190, { l: 48, r: 48, t: 10, b: 24 }),
           bargap: 0.15,
           hovermode: "x unified",
           showlegend: true,
           legend: { orientation: "h", y: 1.2, x: 0, font: { size: 10, color: muted } },
-          hoverlabel: { bgcolor: token("--panel2"), bordercolor: token("--accent"), font: { color: ink, family: "Public Sans", size: 11 } },
-          font: { family: "Public Sans", size: 10, color: muted },
           xaxis: { type: "date", fixedrange: true, showgrid: false, zeroline: false },
           yaxis: axis,
           // "auto": Plotly otherwise lines the right axis's ticks up with the left's, at odd numbers
@@ -239,7 +223,7 @@ document.addEventListener("alpine:init", () => {
         const element = this.$root.querySelector(`[data-chart="${chart}"]`);
         if (!element) continue;
         const { data, layout } = this.figure(chart);
-        window.Plotly.react(element, data, layout, { displayModeBar: false, responsive: true });
+        drawChart(element, data, layout);
       }
     },
   }));
