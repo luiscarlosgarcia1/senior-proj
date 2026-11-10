@@ -220,7 +220,7 @@ def test_the_roster():
 
     assert len(by_id) == len(sources)  # every id once
     assert {"news-krgv", "news-myrgv", "news-valleycentral", "news-borderreport", "news-foxrgv", "news-riograndeguardian",
-            "news-progresstimes", "news-pispp", "news-tpr", "news-texastribune"} <= set(by_id)
+            "news-progresstimes", "news-pispp", "news-tpr", "news-texastribune", "news-elperiodicousa"} <= set(by_id)
     assert by_id["news-valleycentral"].reads_pages is False and by_id["news-valleycentral"].local_sections
     assert all(by_id[i].needs_place_in_address for i in ("news-borderreport", "news-tpr", "news-texastribune"))
     assert not any(by_id[i].needs_place_in_address for i in ("news-krgv", "news-myrgv", "news-foxrgv", "news-riograndeguardian"))

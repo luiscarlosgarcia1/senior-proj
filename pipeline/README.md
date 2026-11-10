@@ -122,6 +122,7 @@ Every source is read side by side (one thread each), back to the first story its
 | `news-foxrgv` | Fox RGV (KFXV) | WordPress/Yoast sitemaps | rolling |
 | `news-riograndeguardian` | Rio Grande Guardian | one sitemap of every story | 2006 |
 | `news-progresstimes` | Progress Times (Pharr, San Juan, Alamo) | WordPress sitemaps | 2016 |
+| `news-elperiodicousa` | El Periódico USA (McAllen, bilingual; asks for a 10-second delay, which is honored) | WordPress sitemaps | to be filled from the data |
 | `news-pispp` | Port Isabel-South Padre Press | sitemaps | 2012 |
 | `news-texasborderbusiness` | Texas Border Business | Yoast sitemaps | 2013 |
 | `news-tpr` | Texas Public Radio | one sitemap a month, `sitemap-YYYYMM.xml` | 2004 |

@@ -247,6 +247,8 @@ def default_sources() -> list[NewsSource]:
                       ["https://riograndeguardian.com/sitemaps/sitemaps-r2-default-default-1.xml"], url_filter=r"/stories/"),
         SitemapSource("news-progresstimes", "Progress Times (Pharr, San Juan, Alamo)", "https://www.progresstimes.net",
                       ["https://www.progresstimes.net/wp-sitemap.xml"], include=r"posts-post-\d+\.xml$"),
+        SitemapSource("news-elperiodicousa", "El Periódico USA (McAllen)", "https://elperiodicousa.com",
+                      ["https://elperiodicousa.com/wp-sitemap.xml"], include=r"wp-sitemap-posts-post-\d+\.xml$"),
         SitemapSource("news-pispp", "Port Isabel-South Padre Press", "https://www.portisabelsouthpadre.com",
                       ["https://www.portisabelsouthpadre.com/sitemap-index-1.xml"], include=r"/sitemap-\d+\.xml$", exclude="image"),
         SitemapSource("news-texasborderbusiness", "Texas Border Business", "https://texasborderbusiness.com",
