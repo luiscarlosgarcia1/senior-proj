@@ -34,11 +34,15 @@ TOPIC_PATTERNS: dict[str, re.Pattern[str]] = {
         "water_system": r"\b(?:drainage|drains?|ditch(?:es)?|levees?|resacas?|irrigation|canals?|pump stations?|sewers?"
                         r"|sewage|wastewater|stormwater|water mains?|boil[- ]water|water (?:treatment|quality|plants?|lines?"
                         r"|districts?|utilit(?:y|ies)|systems?|towers?|boards?|bills?|rates?|pipes?|pressure|outage)"
-                        r"|waterways?|aqueducts?|drenaje|riego|alcantarillad\w+|rio grande|rio bravo|sea level"
+                        r"|waterways?|aqueducts?|drenaje|riego|alcantarillad\w+|sea level"
                         r"|coastal erosion|tidal|dams?)\b",
         "water": r"\b(?:water|waters|agua)\b",
     }.items()
 }
+
+# The river's name inside a place name ("Rio Grande Valley", "Rio Grande City") says nothing about water, so it is not a
+# water word. `news_clean` also drops these from rows an earlier build stored.
+PLACE_NAME_TERMS = frozenset(("rio grande", "rio bravo"))
 
 # City or town -> county slug. Case-sensitive in the text, so "mission" the word is not Mission the city.
 CITY_COUNTY: dict[str, str] = {

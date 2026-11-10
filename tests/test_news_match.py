@@ -181,3 +181,30 @@ def test_water_words_widen_the_address_prefilter():
     assert slug_may_be_flood("https://x.test/news/boil-water-notice-for-edinburg")
     assert slug_may_be_flood("https://x.test/news/drought-hits-farmers")
     assert not slug_may_be_flood("https://x.test/news/football-team-wins")
+
+
+# ---- the river's name in a place name is not a water word ----
+
+@pytest.mark.parametrize("text", [
+    "Rio Grande Valley man arrested", "Smugglers drive load into the Rio Grande", "Rio Grande City woman sentenced",
+    "UTRGV baseball: Rio Grande Valley sports roundup", "Hallan cuerpo en el Rio Bravo",
+])
+def test_a_place_name_with_the_rivers_name_is_not_a_water_word(text):
+    assert not mentions_flood(text)
+
+
+def test_such_a_story_has_no_match_even_though_it_names_a_valley_place():
+    assert match_story("Rio Grande City woman sentenced to five years", "") is None
+    assert match_story("Smugglers near McAllen drive load into the Rio Grande", "") is None
+
+
+def test_the_river_still_counts_when_the_story_has_a_real_water_word():
+    assert mentions_flood("Rio Grande levee breach near Hidalgo")
+    match = match_story("Flooding in Rio Grande City", "")
+    assert match.topics == ("flood",) and "rio grande" not in match.terms
+
+
+def test_the_place_names_that_do_not_count_are_listed():
+    from news_match import PLACE_NAME_TERMS
+
+    assert PLACE_NAME_TERMS == frozenset({"rio grande", "rio bravo"})

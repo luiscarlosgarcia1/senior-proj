@@ -29,6 +29,23 @@ from typing import NamedTuple
 
 from paths import DATABASE
 
+# The columns of a news story, shared by news_articles and the two tables that hold what was set aside.
+_NEWS_COLUMNS = """id TEXT PRIMARY KEY,                  -- hash of the normalized URL
+             publisher TEXT NOT NULL,
+             source_url TEXT NOT NULL,
+             headline TEXT NOT NULL,
+             published_at TEXT NOT NULL,           -- UTC ISO 8601, or a bare date when that is all the page gave
+             excerpt TEXT,                         -- the page's own description, at most 300 characters
+             county TEXT,
+             counties TEXT NOT NULL,
+             city TEXT,
+             places TEXT,                          -- streets and water named in the headline or description
+             matched_terms TEXT NOT NULL,
+             topics TEXT NOT NULL,                 -- flood, rain, storm, drought, water_system, water
+             kind TEXT NOT NULL,                   -- news, or official for a county, city or agency
+             headline_from TEXT NOT NULL,          -- page, or address when the publisher's pages are closed to us and the headline is made from the address
+             retrieved_at TEXT NOT NULL"""
+
 # Table name -> the statements that create it (and its indexes).
 TABLES: dict[str, tuple[str, ...]] = {
     # Facts about the build itself; `built_at` is when build_all.py last finished.
@@ -193,24 +210,29 @@ TABLES: dict[str, tuple[str, ...]] = {
     # is the first county the story names, null when it names only the Valley as a
     # whole. A story gets no coordinate: nothing here is a location.
     "news_articles": (
-        """CREATE TABLE IF NOT EXISTS news_articles (
-             id TEXT PRIMARY KEY,                  -- hash of the normalized URL
-             publisher TEXT NOT NULL,
-             source_url TEXT NOT NULL,
-             headline TEXT NOT NULL,
-             published_at TEXT NOT NULL,           -- UTC ISO 8601, or a bare date when that is all the page gave
-             excerpt TEXT,                         -- the page's own description, at most 300 characters
-             county TEXT,
-             counties TEXT NOT NULL,
-             city TEXT,
-             places TEXT,                          -- streets and water named in the headline or description
-             matched_terms TEXT NOT NULL,
-             topics TEXT NOT NULL,                 -- flood, rain, storm, drought, water_system, water
-             kind TEXT NOT NULL,                   -- news, or official for a county, city or agency
-             headline_from TEXT NOT NULL,          -- page, or address when the publisher's pages are closed to us and the headline is made from the address
-             retrieved_at TEXT NOT NULL
+        f"""CREATE TABLE IF NOT EXISTS news_articles (
+             {_NEWS_COLUMNS}
            )""",
         "CREATE INDEX IF NOT EXISTS news_articles_by_county_date ON news_articles(county, published_at)",
+    ),
+    # The same story told by another outlet (or posted again within three days) as one already in news_articles:
+    # kept so every outlet is still cited, but not counted twice. Each row is the whole story, as it came in,
+    # plus the story it is a copy of.
+    "news_article_copies": (
+        f"""CREATE TABLE IF NOT EXISTS news_article_copies (
+             {_NEWS_COLUMNS},
+             article_id TEXT NOT NULL,             -- the news_articles story this is a copy of
+             reason TEXT NOT NULL                  -- same_story
+           )""",
+        "CREATE INDEX IF NOT EXISTS news_article_copies_by_article ON news_article_copies(article_id)",
+    ),
+    # Stories that failed a check (place_name_only, bad_date, short_headline), whole, with the reason. The app
+    # never reads this table; it is there so a rule can be changed without a new crawl.
+    "news_rejected": (
+        f"""CREATE TABLE IF NOT EXISTS news_rejected (
+             {_NEWS_COLUMNS},
+             reason TEXT NOT NULL
+           )""",
     ),
     # Every NFIP flood-insurance claim FEMA publishes for the four counties, 1978 on.
     "nfip_claims": (

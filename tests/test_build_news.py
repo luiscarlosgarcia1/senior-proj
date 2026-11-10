@@ -7,6 +7,7 @@ from contextlib import closing
 
 import build_news
 import pytest
+from database import open_database, replace_table
 from news_sources import Listing, Page
 
 
@@ -371,7 +372,7 @@ def test_old_rows_from_before_the_new_columns_are_carried_over(tmp_path):
         connection.execute("""CREATE TABLE news_articles (id TEXT PRIMARY KEY, publisher TEXT NOT NULL, source_url TEXT NOT NULL,
             headline TEXT NOT NULL, published_at TEXT NOT NULL, excerpt TEXT, county TEXT, counties TEXT NOT NULL, city TEXT,
             places TEXT, matched_terms TEXT NOT NULL, retrieved_at TEXT NOT NULL)""")
-        connection.execute("INSERT INTO news_articles VALUES ('1','Old Gazette','https://old.test/a','Flooding','2019-01-01',NULL,'hidalgo','hidalgo',NULL,NULL,'flood','2026-10-23T00:00:00Z')")
+        connection.execute("INSERT INTO news_articles VALUES ('1','Old Gazette','https://old.test/a','Flooding closes streets in Edinburg','2019-01-01',NULL,'hidalgo','hidalgo',NULL,NULL,'flood','2026-10-23T00:00:00Z')")
     fine = "https://fine.test/news/flooding-in-weslaco"
     working = FakeSource([listing(fine)], {fine: page(fine, "Flooding in Weslaco")})
 
@@ -404,3 +405,112 @@ def test_a_host_that_asked_us_to_come_back_later_is_named_at_the_end_of_the_run(
 
     out = capsys.readouterr().out
     assert "limited.test" in out and "45 more minutes" in out and "run it again" in out
+
+
+# ---- cleaning is part of the build ----
+
+def outlet(source_id, publisher, listings, pages):
+    source = FakeSource(listings, pages)
+    source.id, source.publisher = source_id, publisher
+    return source
+
+
+def table(database, name):
+    with closing(sqlite3.connect(database)) as connection:
+        connection.row_factory = sqlite3.Row
+        return [dict(row) for row in connection.execute(f"select * from {name} order by id")]
+
+
+URL_A = "https://a.test/news/flooding-closes-streets-in-mcallen"
+URL_B = "https://b.test/news/flooding-closes-streets-in-mcallen"
+
+
+def two_outlets():
+    a = outlet("news-a", "Outlet A", [listing(URL_A, "2020-07-26T12:00:00Z")],
+               {URL_A: page(URL_A, "Flooding closes streets &amp; roads in McAllen", published_at="2020-07-26T12:00:00Z")})
+    b = outlet("news-b", "Outlet B", [listing(URL_B, "2020-07-27T12:00:00Z")],
+               {URL_B: page(URL_B, "Flooding closes streets & roads in McAllen", published_at="2020-07-27T12:00:00Z")})
+    return a, b
+
+
+def test_the_build_tidies_the_text_and_keeps_the_other_outlets_copy_as_a_copy(tmp_path):
+    database = tmp_path / "db.sqlite3"
+
+    build_news.main(database, sources=list(two_outlets()), fetcher=FakeFetcher())
+
+    (kept,) = table(database, "news_articles")
+    assert kept["publisher"] == "Outlet A" and kept["headline"] == "Flooding closes streets & roads in McAllen"
+    (copy,) = table(database, "news_article_copies")
+    assert copy["publisher"] == "Outlet B" and copy["article_id"] == kept["id"] and copy["source_url"] == URL_B
+
+
+def test_a_story_that_fails_a_check_is_set_aside_with_its_reason_not_dropped(tmp_path):
+    database = tmp_path / "db.sqlite3"
+    future = outlet("news-c", "Outlet C", [listing(URL_A.replace("a.test", "c.test"), "2099-01-01T00:00:00Z")],
+                    {URL_A.replace("a.test", "c.test"): page(URL_A.replace("a.test", "c.test"), "Flooding closes streets in McAllen", published_at="2099-01-01T00:00:00Z")})
+    a, _ = two_outlets()
+
+    build_news.main(database, sources=[a, future], fetcher=FakeFetcher())
+
+    assert [row["publisher"] for row in table(database, "news_articles")] == ["Outlet A"]
+    (rejected,) = table(database, "news_rejected")
+    assert rejected["publisher"] == "Outlet C" and rejected["reason"] == "bad_date" and rejected["headline"] == "Flooding closes streets in McAllen"
+
+
+def test_a_copy_whose_partner_is_gone_comes_back_as_a_story_on_the_next_partial_run(tmp_path):
+    database = tmp_path / "db.sqlite3"
+    a, b = two_outlets()
+    build_news.main(database, sources=[a, b], fetcher=FakeFetcher())
+    assert len(table(database, "news_article_copies")) == 1
+
+    other = "https://a.test/news/drainage-project-begins-in-weslaco"
+    a_now = outlet("news-a", "Outlet A", [listing(other, "2020-09-01T12:00:00Z")], {other: page(other, "Drainage project begins in Weslaco", published_at="2020-09-01T12:00:00Z")})
+    build_news.main(database, sources=[a_now, b], only=["news-a"], fetcher=FakeFetcher())
+
+    assert sorted(row["publisher"] for row in table(database, "news_articles")) == ["Outlet A", "Outlet B"]
+    assert table(database, "news_article_copies") == []
+
+
+def test_a_partial_run_keeps_what_was_set_aside_for_the_outlets_it_did_not_run(tmp_path):
+    database = tmp_path / "db.sqlite3"
+    a, b = two_outlets()
+    build_news.main(database, sources=[a, b], fetcher=FakeFetcher())
+
+    build_news.main(database, sources=[a, b], only=["news-a"], fetcher=FakeFetcher())
+
+    (copy,) = table(database, "news_article_copies")
+    assert copy["publisher"] == "Outlet B"
+    assert [row["publisher"] for row in table(database, "news_articles")] == ["Outlet A"]
+
+
+def test_stories_stored_by_an_earlier_build_are_cleaned_too(tmp_path):
+    database = tmp_path / "db.sqlite3"
+    old = {
+        "id": "old1", "publisher": "Old Gazette", "source_url": "https://old.test/a", "headline": "Rio Grande City woman sentenced",
+        "published_at": "2020-01-01T00:00:00Z", "excerpt": None, "county": "starr", "counties": "starr", "city": "Rio Grande City",
+        "places": None, "matched_terms": "rio grande", "topics": "water_system", "kind": "news", "headline_from": "page",
+        "retrieved_at": "2024-01-01T00:00:00Z",
+    }
+    with open_database(database) as connection:
+        replace_table(connection, "news_articles", [old])
+    a, _ = two_outlets()
+
+    build_news.main(database, sources=[a], fetcher=FakeFetcher())
+
+    assert [row["publisher"] for row in table(database, "news_articles")] == ["Outlet A"]
+    (rejected,) = table(database, "news_rejected")
+    assert rejected["id"] == "old1" and rejected["reason"] == "place_name_only"
+
+
+def test_the_data_source_note_says_what_cleaning_removed(tmp_path):
+    database = tmp_path / "db.sqlite3"
+    a, b = two_outlets()
+    future = outlet("news-c", "Outlet C", [listing("https://c.test/news/flooding-in-weslaco", "2099-01-01T00:00:00Z")],
+                    {"https://c.test/news/flooding-in-weslaco": page("https://c.test/news/flooding-in-weslaco", "Flooding in Weslaco streets", published_at="2099-01-01T00:00:00Z")})
+
+    build_news.main(database, sources=[a, b, future], fetcher=FakeFetcher())
+
+    with closing(sqlite3.connect(database)) as connection:
+        notes = dict(connection.execute("select id, notes from data_sources"))
+    assert "1 merged into another outlet" in notes["news-b"] and "Cleaning removed nothing" in notes["news-a"]
+    assert "1 rejected (1 bad_date)" in notes["news-c"]

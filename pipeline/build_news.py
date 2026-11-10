@@ -43,6 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from database import open_database, record_sources, replace_table
+from news_clean import CleanResult, as_row, clean
 from news_fetch import NEWS_CACHE, Fetcher, normalize_url
 from news_match import (
     StoryMatch,
@@ -209,7 +210,7 @@ def collect(
     return sorted(rows.values(), key=lambda row: (row["published_at"], row["id"]), reverse=True), stats
 
 
-def _source_row(source: NewsSource, count: int, counts: Counter, retrieved_at: str) -> dict:
+def _source_row(source: NewsSource, count: int, counts: Counter, retrieved_at: str, cleaning: str = "") -> dict:
     skipped = ", ".join(f"{counts[key]:,} {label}" for key, label in COUNT_LABELS if counts[key])
     closed = not getattr(source, "reads_pages", True)
     official = getattr(source, "kind", "news") == "official"
@@ -222,6 +223,7 @@ def _source_row(source: NewsSource, count: int, counts: Counter, retrieved_at: s
         "record_count": count,
         "notes": (
             f"{counts['listed']:,} stories listed in the publisher's sitemaps, {count:,} kept. Skipped: {skipped or 'none'}. "
+            + cleaning
             + (
                 getattr(source, "about", None)
                 or (
@@ -250,6 +252,32 @@ def _old_rows(database: Path) -> list[dict]:
         row.setdefault("kind", "news")
         row.setdefault("headline_from", "page")
     return old
+
+
+def _set_aside_rows(database: Path) -> list[dict]:
+    """Stories an earlier build merged as copies or rejected, as the stories they were, so a new build can judge them again."""
+    if not database.exists():
+        return []
+    rows: list[dict] = []
+    with closing(sqlite3.connect(database)) as connection:
+        connection.row_factory = sqlite3.Row
+        for table in ("news_article_copies", "news_rejected"):
+            try:
+                rows += [as_row(dict(row)) for row in connection.execute(f"select * from {table}")]
+            except sqlite3.OperationalError:  # a database from before cleaning
+                continue
+    return rows
+
+
+def _cleaning_note(publisher: str, result: CleanResult) -> str:
+    merged = sum(1 for story in result.copies if story["publisher"] == publisher)
+    reasons = Counter(story["reason"] for story in result.rejected if story["publisher"] == publisher)
+    parts = []
+    if merged:
+        parts.append(f"{merged:,} merged into another outlet's copy of the same story")
+    if reasons:
+        parts.append(f"{sum(reasons.values()):,} rejected ({', '.join(f'{n:,} {why}' for why, n in reasons.items())})")
+    return f"Cleaning: {'; '.join(parts)}. " if parts else "Cleaning removed nothing. "
 
 
 def main(
@@ -287,18 +315,26 @@ def main(
         raise SystemExit("No news stories were collected; news_articles was left as it was.")
 
     # A publisher that listed nothing, or hit an error, keeps what it had; so does one that was not part of this run.
+    # What an earlier build set aside (copies, rejects) is judged again with everything else, so the result never
+    # depends on which sources happened to run, and a copy whose partner is gone becomes a story again.
     refreshed = {source.publisher for source in sources if stats[source.id]["listed"] and not stats[source.id]["error"]}
-    kept = {row["id"]: row for row in _old_rows(database) if row["publisher"] not in refreshed}
-    kept.update({row["id"]: row for row in new_rows})
-    rows = sorted(kept.values(), key=lambda row: (row["published_at"], row["id"]), reverse=True)
+    pool = {row["id"]: row for row in [*_old_rows(database), *_set_aside_rows(database)] if row["publisher"] not in refreshed}
+    pool.update({row["id"]: row for row in new_rows})
+    result = clean(list(pool.values()))
 
     with open_database(database) as connection:
-        replace_table(connection, "news_articles", rows)
+        replace_table(connection, "news_articles", result.kept)
+        replace_table(connection, "news_article_copies", result.copies)
+        replace_table(connection, "news_rejected", result.rejected)
         record_sources(connection, [
-            _source_row(source, sum(1 for r in rows if r["publisher"] == source.publisher), stats[source.id], retrieved_at)
+            _source_row(
+                source, sum(1 for r in result.kept if r["publisher"] == source.publisher), stats[source.id], retrieved_at,
+                _cleaning_note(source.publisher, result),
+            )
             for source in sources
         ])
-    print(f"news_articles: {len(rows):,} stories ({len(new_rows):,} from this run); fetcher {dict(fetcher.stats)}")
+    print(f"news_articles: {len(result.kept):,} stories ({len(new_rows):,} from this run); set aside: "
+          f"{len(result.copies):,} copies of another outlet's story, {len(result.rejected):,} rejected; fetcher {dict(fetcher.stats)}")
     print("written to", database)
 
 
