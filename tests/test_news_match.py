@@ -1,6 +1,14 @@
 """Pipeline: pipeline/news_match.py — which news stories are about flooding in the four counties."""
 
-from news_match import match_story, mentions_flood, places_in, slug_may_be_flood
+import pytest
+from news_match import (
+    has_valley_place,
+    headline_from_slug,
+    match_story,
+    mentions_flood,
+    places_in,
+    slug_may_be_flood,
+)
 
 
 def test_flood_story_with_city_matches():
@@ -39,8 +47,10 @@ def test_no_place_is_dropped():
     assert match_story("Flood insurance rates rise nationwide", "") is None
 
 
-def test_rio_grande_valley_is_not_rio_grande_city():
-    assert match_story("Rio Grande Valley braces for flooding", "") is None
+def test_rio_grande_valley_is_the_whole_region_not_rio_grande_city():
+    match = match_story("Rio Grande Valley braces for flooding", "")
+
+    assert match.region is True and match.counties == () and match.city is None
 
 
 def test_rio_grande_city_is_starr():
@@ -75,3 +85,99 @@ def test_places_in_nothing_found():
 def test_mentions_flood():
     assert mentions_flood("City of Pharr Prevents Future Flooding with Trash Pick-Up Event")
     assert not mentions_flood("Wreaths Across America Project in Need of Volunteers")
+
+
+# ---- everything about water, not only floods ----
+
+@pytest.mark.parametrize("headline, topic", [
+    ("Flash flooding closes streets in McAllen", "flood"),
+    ("Downpour soaks Harlingen overnight", "rain"),
+    ("Hurricane Hanna makes landfall near Port Mansfield", "storm"),
+    ("Drought leaves Falcon Lake at record low near Roma", "drought"),
+    ("Weslaco crews repair water main break", "water_system"),
+    ("Boil water notice lifted in Edinburg", "water_system"),
+    ("Hidalgo County drainage district clears ditches", "water_system"),
+    ("Water rates rising in Brownsville", "water_system"),
+    ("Water polo team wins in Mission this weekend", "water"),
+    ("Inundaciones dejan calles bajo el agua en Brownsville", "flood"),
+    ("Lluvias fuertes golpean Reynosa y McAllen", "rain"),
+    ("Sequía preocupa a agricultores de Hidalgo County", "drought"),
+])
+def test_topics_cover_flood_rain_storm_drought_and_water_systems(headline, topic):
+    match = match_story(headline, "")
+
+    assert match is not None and topic in match.topics
+
+
+def test_a_story_can_have_several_topics():
+    match = match_story("Storm brings heavy rain and street flooding to Brownsville", "")
+
+    assert {"storm", "rain", "flood"} <= set(match.topics)
+
+
+@pytest.mark.parametrize("headline", [
+    "Raiders beat Rainbow Warriors in Mission",  # rainbow, not rain
+    "Hidalgo County approves budget",
+    "Train derails near Harlingen",
+    "McAllen restaurant serves sunset dinners",
+])
+def test_unrelated_stories_stay_out(headline):
+    assert match_story(headline, "") is None
+
+
+def test_the_valley_as_a_whole_is_a_place():
+    for text in ("RGV flooding worsens", "Rain soaks the Valley", "Lower Rio Grande Valley under flood watch"):
+        assert match_story(text, "").region is True
+
+
+def test_silicon_valley_is_not_the_rio_grande_valley():
+    assert match_story("Flood of tech layoffs hits Silicon Valley", "") is None
+
+
+@pytest.mark.parametrize("place, county", [
+    ("Los Fresnos", "cameron"), ("Santa Rosa", "cameron"), ("Palm Valley", "cameron"), ("Port Mansfield", "willacy"),
+    ("Sullivan City", "hidalgo"), ("Peñitas", "hidalgo"), ("Palmhurst", "hidalgo"), ("Sharyland", "hidalgo"),
+    ("Boca Chica", "cameron"), ("Olmito", "cameron"), ("La Villa", "hidalgo"), ("Rangerville", "cameron"),
+])
+def test_more_valley_towns_are_known(place, county):
+    assert match_story(f"Flooding reported in {place}", "").counties == (county,)
+
+
+def test_county_names_in_spanish():
+    assert match_story("Inundaciones en el Condado de Hidalgo", "").counties == ("hidalgo",)
+
+
+# ---- stories known only by their address ----
+
+@pytest.mark.parametrize("url, expected", [
+    ("https://www.valleycentral.com/news/local-news/flash-flooding-closes-streets-in-mcallen/", "Flash Flooding Closes Streets In McAllen"),
+    ("https://riograndeguardian.com/stories/peterson-visits-rgv,6491", "Peterson Visits RGV"),
+    ("https://www.krgv.com/news/city-of-pharr-prevents-future-flooding.html", "City Of Pharr Prevents Future Flooding"),
+    ("https://example.test/2020/07/25/water-main-break-in-san-benito-12345678/", "Water Main Break In San Benito"),
+])
+def test_headline_from_slug(url, expected):
+    assert headline_from_slug(url) == expected
+
+
+def test_a_story_known_only_by_its_address_can_be_matched():
+    headline = headline_from_slug("https://www.valleycentral.com/news/local-news/street-flooding-in-los-fresnos/")
+
+    assert match_story(headline, "").counties == ("cameron",)
+
+
+@pytest.mark.parametrize("text, strict, expected", [
+    ("Street Flooding In Harlingen", True, True),
+    ("Street Flooding In Mission", True, False),  # a common word: only trusted with more
+    ("Street Flooding In Mission", False, True),
+    ("Rgv Rain Totals", True, True),
+    ("Flooding Closes Roads In Laredo", True, False),
+    ("Hidalgo County Drainage Plan", True, True),
+])
+def test_valley_place_in_a_headline(text, strict, expected):
+    assert has_valley_place(headline_from_slug(text.replace(" ", "-")), strict=strict) is expected
+
+
+def test_water_words_widen_the_address_prefilter():
+    assert slug_may_be_flood("https://x.test/news/boil-water-notice-for-edinburg")
+    assert slug_may_be_flood("https://x.test/news/drought-hits-farmers")
+    assert not slug_may_be_flood("https://x.test/news/football-team-wins")
