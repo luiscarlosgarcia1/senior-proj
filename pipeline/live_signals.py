@@ -224,6 +224,8 @@ class LiveSignalStore:
                 "VALUES (?, ?, ?, 1, ?)",
                 (source, observed_at, observed_at, len(entries)),
             )
+        # Keep the table small: records that ended long ago become tombstones, and old tombstones go.
+        self.purge_terminal_records(now=retrieved_at)
         inserted = len(seen_ids - known_ids)
         return IngestionResult(inserted, len(entries) - inserted, terminalized)
 

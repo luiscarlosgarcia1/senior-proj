@@ -347,3 +347,16 @@ def test_nws_snapshots_reconcile_only_nws_alerts(tmp_path: Path) -> None:
         assert connection.execute(
             "select lifecycle_state from live_signals where source='another-official-source'"
         ).fetchone() == ("active",)
+
+
+def test_every_complete_poll_purges_records_that_ended_over_30_days_ago(tmp_path: Path) -> None:
+    store = LiveSignalStore(tmp_path / "live-signals.sqlite3")
+    store.ingest("fixture-txdot", [_signal(source="fixture-txdot")], retrieved_at=NOW)
+    store.ingest("fixture-txdot", [], retrieved_at=NOW + timedelta(minutes=15))
+    store.ingest("fixture-txdot", [], retrieved_at=NOW + timedelta(minutes=30))  # now inactive
+
+    store.ingest("fixture-txdot", [], retrieved_at=NOW + timedelta(days=31))  # no purge call: the poll does it
+
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("select count(*) from live_signals").fetchone()[0] == 0
+        assert connection.execute("select count(*) from live_signal_tombstones").fetchone()[0] == 1
