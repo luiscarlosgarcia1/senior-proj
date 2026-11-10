@@ -5,17 +5,13 @@ Every setting has an RGV_ prefix and a default that works for local development.
 
 from __future__ import annotations
 
-import logging
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from rgv_flood.chat.keyfile import KeyFileError, read_key_file
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-logger = logging.getLogger(__name__)
 SESSION_SECRET_MIN = 32
 
 
@@ -40,11 +36,6 @@ class Settings(BaseSettings):
     azure_openai_api_key: SecretStr = SecretStr("")
     azure_openai_deployment: str = ""
     azure_openai_api_version: str = "2024-10-21"
-    # Instead of putting the key in the environment, point at a file that holds it (RTF or plain text).
-    # A relative path is from the repository root. A key in the environment wins over the file. If the
-    # file holds several values, `..._label` is the text before the colon on the right line.
-    azure_openai_api_key_file: Path | None = None
-    azure_openai_api_key_label: str = ""
     # Sign in with a UTRGV Microsoft account (see the README for the app registration).
     ms_client_id: str = ""
     ms_client_secret: SecretStr = SecretStr("")
@@ -68,18 +59,6 @@ class Settings(BaseSettings):
             self.chat_enabled and self.ms_client_id and self.ms_tenant_id and self.public_url
             and self.ms_client_secret.get_secret_value()
         )
-
-    @model_validator(mode="after")
-    def _key_from_file(self) -> Settings:
-        if self.azure_openai_api_key.get_secret_value() or self.azure_openai_api_key_file is None:
-            return self
-        path = Path(self.azure_openai_api_key_file)
-        path = path if path.is_absolute() else REPO_ROOT / path
-        try:
-            self.azure_openai_api_key = SecretStr(read_key_file(path, self.azure_openai_api_key_label))
-        except KeyFileError as error:  # the chat stays off; the rest of the site is unaffected
-            logger.warning("Azure key file not used: %s", error)
-        return self
 
     @model_validator(mode="after")
     def _lock_file_next_to_database(self) -> Settings:
