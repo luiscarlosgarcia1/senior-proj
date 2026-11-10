@@ -149,7 +149,7 @@
   "trends.note.months": "Average of the gauges that reported at least 25 days of the month; a month with fewer is left blank, not drawn as dry. NOAA GHCN-Daily.",
   "trends.note.events": "Flood-type events in NOAA's Storm Events Database, stacked by type.",
   "trends.note.nws": "Flooding reported to NWS Brownsville since 2005, stacked by kind.",
-  "trends.note.news": "Each outlet's archive begins in a different year (Texas Public Radio 2004, Rio Grande Guardian 2006, ValleyCentral and The Monitor 2016, KRGV 2017), so early years are thin. Stories are matched by a water word and a Valley place; they are not verified conditions.",
+  "trends.note.news": "The outlets' archives reach back unevenly: a few dozen stories a year before 2016, from the Rio Grande Guardian and old Monitor, Herald, Morning Star and KRGV pages kept by the Wayback Machine, then hundreds a year once KRGV, ValleyCentral and myrgv.com begin. Stories are matched by a water word and a Valley place; they are not verified conditions.",
   "trends.claims_link": "Flood insurance claims and policies, year by year, are on the claims page.",
   "claims.metric.label": "What the first chart counts",
   "claims.metric.claims": "Claims",

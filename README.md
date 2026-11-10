@@ -26,7 +26,7 @@ single gauge:
   drawn as dry.
 - **Flood events** per year from NOAA, stacked by type (1996 on).
 - **Flood reports** per year to NWS Brownsville, stacked by kind (2005 on).
-- **News stories** per year from the news archive (the earliest outlet's archive begins in 2004).
+- **News stories** per year from the news archive (a few dozen a year before 2016, hundreds a year after).
 
 Each chart can be viewed as a table. Flood insurance claims and policies stay
 on `/claims`, which `/trends` links to.

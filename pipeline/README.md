@@ -113,24 +113,25 @@ and water systems, and anything that says "water"**, in English and Spanish. Eac
 matched (`flood`, `rain`, `storm`, `drought`, `water_system`, `water`), so you can narrow it again.
 
 Every source is read side by side (one thread each), back to the first story its sitemaps show: there is no date floor.
-The four old newspaper sites that no sitemap lists any more are read from the Wayback Machine (last four rows).
+The four old newspaper sites that no sitemap lists any more are read from the Wayback Machine (last two rows). The last
+column counts the cleaned stories kept, not what each archive holds: most of an archive is not about water.
 
-| Source id | Publisher | How stories are listed | Archive begins |
+| Source id | Publisher | How stories are listed | Stories kept · first to last (Nov 2026 build) |
 | --- | --- | --- | --- |
-| `news-krgv` | KRGV Channel 5 | `sitemap.xml` → `sitemap-news-N.xml`, not in date order; date from the sitemap | about 2017 |
-| `news-myrgv` | The Monitor, Brownsville Herald, Valley Morning Star (`myrgv.com`) | WordPress sitemaps; date from the address, then the page | 2016 |
-| `news-valleycentral` | ValleyCentral (KVEO, KGBT) | one sitemap per day at `sitemap.xml?yyyy=&mm=&dd=` | 2016 |
-| `news-borderreport` | Border Report | the same, day by day | Sept 2019 |
-| `news-foxrgv` | Fox RGV (KFXV) | WordPress/Yoast sitemaps | rolling |
-| `news-riograndeguardian` | Rio Grande Guardian | one sitemap of every story | 2006 |
-| `news-progresstimes` | Progress Times (Pharr, San Juan, Alamo) | WordPress sitemaps | 2016 |
-| `news-pispp` | Port Isabel-South Padre Press | sitemaps | 2012 |
-| `news-texasborderbusiness` | Texas Border Business | Yoast sitemaps | 2013 |
-| `news-tpr` | Texas Public Radio | one sitemap a month, `sitemap-YYYYMM.xml` | 2004 |
-| `news-texastribune` | The Texas Tribune | Yoast sitemaps | 2011 |
-| `official-cameroncounty`, `official-pharr`, `official-ibwc` | Cameron County, City of Pharr, International Boundary and Water Commission | WordPress sitemaps | 2019 to 2024 |
-| `news-wayback-themonitor`, `-brownsvilleherald`, `-valleymorningstar` | The Monitor, Brownsville Herald, Valley Morning Star, before they moved to `myrgv.com` | Wayback Machine index, copies made up to 2015 | to be filled from the data |
-| `news-wayback-krgv` | KRGV's old site (`/2005/8/31/4232/Headline` addresses) | the same, copies made up to 2016 | to be filled from the data |
+| `news-krgv` | KRGV Channel 5 | `sitemap.xml` → `sitemap-news-N.xml`, not in date order; date from the sitemap | 2,347 · Dec 2016 to Oct 2026 |
+| `news-myrgv` | The Monitor, Brownsville Herald, Valley Morning Star (`myrgv.com`) | WordPress sitemaps; date from the address, then the page | 1,173 · Jan 2016 to Oct 2026 |
+| `news-valleycentral` | ValleyCentral (KVEO, KGBT) | one sitemap per day at `sitemap.xml?yyyy=&mm=&dd=` | 1,499 · Jul 2016 to Nov 2026 |
+| `news-borderreport` | Border Report | the same, day by day | 19 · Oct 2019 to Nov 2026 |
+| `news-foxrgv` | Fox RGV (KFXV) | WordPress/Yoast sitemaps | 448 · Mar 2024 to Oct 2026 |
+| `news-riograndeguardian` | Rio Grande Guardian | one sitemap of every story | 157 · Mar 2008 to Jul 2025 |
+| `news-progresstimes` | Progress Times (Pharr, San Juan, Alamo) | WordPress sitemaps | 157 · Mar 2014 to Aug 2026 |
+| `news-pispp` | Port Isabel-South Padre Press | sitemaps | 105 · May 2011 to May 2026 |
+| `news-texasborderbusiness` | Texas Border Business | Yoast sitemaps | 307 · Sep 2013 to Nov 2026 |
+| `news-tpr` | Texas Public Radio | one sitemap a month, `sitemap-YYYYMM.xml` | 17 · Jun 2018 to Jun 2026 |
+| `news-texastribune` | The Texas Tribune | Yoast sitemaps | 7 · Nov 2014 to Aug 2026 |
+| `official-cameroncounty`, `official-pharr`, `official-ibwc` | Cameron County, City of Pharr, International Boundary and Water Commission | WordPress sitemaps | 23, 19 and 1 · Jun 2018 to Oct 2026 |
+| `news-wayback-themonitor`, `-brownsvilleherald`, `-valleymorningstar` | The Monitor, Brownsville Herald, Valley Morning Star, before they moved to `myrgv.com` | Wayback Machine index, copies made up to 2015 | 43, 26 and 17 · Oct 2003 to Aug 2012 |
+| `news-wayback-krgv` | KRGV's old site (`/2005/8/31/4232/Headline` addresses) | the same, copies made up to 2016 | 33 · Aug 2005 to Dec 2014 |
 
 `python pipeline/build_news.py --list` prints the ids. Outlets that cover far more than the Valley (Border Report,
 Texas Public Radio, the Texas Tribune) are only read for a story whose address names a Valley place.
