@@ -63,11 +63,12 @@ class Fetcher:
         get: Callable[..., bytes] = net.get_bytes,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        wall: Callable[[], float] = time.time,
     ) -> None:
         self.cache_dir = cache_dir
         self.offline = offline  # read the cache only; a page that is not in it is simply not there
         self.delay = delay
-        self._get, self._sleep, self._clock = get, sleep, clock
+        self._get, self._sleep, self._clock, self._wall = get, sleep, clock, wall  # wall: to age cache files
         self._takes_limit = "limit" in inspect.signature(get).parameters
         self._robots: dict[str, RobotFileParser | None] = {}  # None: the host could not be checked, so skip it
         self._host_delay: dict[str, float] = dict(delays or {})  # hosts that must be asked less often than `delay`
@@ -135,24 +136,49 @@ class Fetcher:
 
     # ---- the one public call
 
-    def get(self, url: str, *, limit: int | None = None, use_cache: bool = True) -> bytes | None:
+    def get(
+        self, url: str, *, limit: int | None = None, use_cache: bool = True, max_age: float | None = None
+    ) -> bytes | None:
         """The page's bytes (only the first `limit` of them, if given), or None if robots.txt forbids
         it, the host is being left alone, it does not exist, or it can't be fetched. With `use_cache`
-        False the page is always asked for and never stored (a page that changes, like today's sitemap)."""
+        False the page is always asked for and never stored (a page that changes, like today's sitemap).
+        With `max_age` (seconds) a cached copy older than that is asked for again (a sitemap that grows);
+        if that fails, the older copy is used. Offline, any cached copy is used."""
         url = normalize_url(url)
         host = urlsplit(url).netloc
         cached = self._cache_path(url)
         missing = cached.with_suffix(".missing")
+        older = None  # a cached copy past `max_age`: the answer if asking again fails
         if use_cache:
             if cached.is_file() and cached.stat().st_size > 0:
-                self._count("cached")
-                return self._read_cached(cached)
-            if missing.exists():  # asked before and the publisher said it is not there
+                if max_age is None or self.offline or self._wall() - cached.stat().st_mtime <= max_age:
+                    self._count("cached")
+                    return self._read_cached(cached)
+                older = self._read_cached(cached)
+            elif missing.exists():  # asked before and the publisher said it is not there
                 self._count("known_missing")
                 return None
         if self.offline:
             self._count("not_cached")
             return None
+        body = self._fetch(url, host, limit)
+        if body is None:
+            if older is not None:
+                self._count("older_copy_used")
+                return older
+            if use_cache and url in self._not_found:
+                self._not_found.discard(url)
+                missing.parent.mkdir(parents=True, exist_ok=True)
+                missing.touch()
+            return None
+        if use_cache:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            cached.write_bytes(gzip.compress(body, 6))
+        self._count("fetched")
+        return body
+
+    def _fetch(self, url: str, host: str, limit: int | None) -> bytes | None:
+        """Ask the host, unless it is being left alone, paused, or robots.txt says no."""
         with self._host_lock(host):
             if host in self.blocked_hosts:
                 self._count("host_blocked")
@@ -167,18 +193,7 @@ class Fetcher:
             if self._host_delay.get(host, 0) > MAX_CRAWL_DELAY:
                 self._count("crawl_delay_too_long")
                 return None
-            body = self._download(url, host, limit)
-        if body is None:
-            if use_cache and url in self._not_found:
-                self._not_found.discard(url)
-                missing.parent.mkdir(parents=True, exist_ok=True)
-                missing.touch()
-            return None
-        if use_cache:
-            cached.parent.mkdir(parents=True, exist_ok=True)
-            cached.write_bytes(gzip.compress(body, 6))
-        self._count("fetched")
-        return body
+            return self._download(url, host, limit)
 
     def _download(self, url: str, host: str, limit: int | None) -> bytes | None:
         for attempt in (1, 2):

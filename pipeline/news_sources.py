@@ -18,6 +18,9 @@ from xml.etree import ElementTree
 
 from news_fetch import Fetcher, normalize_url
 
+# A sitemap grows as stories are published, so its cached copy is read again once it is this old (seconds);
+# a story's page never changes and stays cached.
+SITEMAP_MAX_AGE = 24 * 3600
 _URL_DATES = (
     re.compile(r"/((?:19|20)\d\d)/(\d{1,2})/(\d{1,2})/"),  # /2021/01/12/ and KRGV's old /2005/8/31/
     re.compile(r"/((?:19|20)\d\d)-(\d\d)-(\d\d)(?:/|$)"),
@@ -131,7 +134,7 @@ class KrgvSource:
     index_url = "https://www.krgv.com/sitemap.xml"
 
     def listings(self, fetcher: Fetcher) -> Iterator[Listing]:
-        index = fetcher.get(self.index_url)
+        index = fetcher.get(self.index_url, max_age=SITEMAP_MAX_AGE)
         if index is None:
             return
         seen: set[str] = set()
@@ -139,7 +142,7 @@ class KrgvSource:
             location = (entry.findtext(f"{SITEMAP}loc") or "").strip()
             if "/sitemap-news-" not in location:
                 continue
-            page = fetcher.get(location)
+            page = fetcher.get(location, max_age=SITEMAP_MAX_AGE)
             if page is None:
                 continue
             for url in _sitemap_entries(page, "url"):
@@ -189,7 +192,7 @@ class MyrgvSource:
     index_url = "https://myrgv.com/wp-sitemap.xml"
 
     def listings(self, fetcher: Fetcher) -> Iterator[Listing]:
-        index = fetcher.get(self.index_url)
+        index = fetcher.get(self.index_url, max_age=SITEMAP_MAX_AGE)
         if index is None:
             return
         seen: set[str] = set()
@@ -197,7 +200,7 @@ class MyrgvSource:
             location = (entry.findtext(f"{SITEMAP}loc") or "").strip()
             if "/wp-sitemap-posts-post-" not in location:
                 continue
-            page = fetcher.get(location)
+            page = fetcher.get(location, max_age=SITEMAP_MAX_AGE)
             if page is None:
                 continue
             for url in _sitemap_entries(page, "url"):

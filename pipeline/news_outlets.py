@@ -27,6 +27,7 @@ from news_sources import (
     _TRUNCATED,
     NEWS_NS,
     NOT_FREE,
+    SITEMAP_MAX_AGE,
     KrgvSource,
     Listing,
     MyrgvSource,
@@ -57,8 +58,8 @@ def _text(element: ElementTree.Element, name: str) -> str:
     return ""
 
 
-def _read_sitemap(fetcher: Fetcher, url: str, *, use_cache: bool = True) -> ElementTree.Element | None:
-    body = fetcher.get(url, use_cache=use_cache)
+def _read_sitemap(fetcher: Fetcher, url: str, *, use_cache: bool = True, max_age: float | None = None) -> ElementTree.Element | None:
+    body = fetcher.get(url, use_cache=use_cache, max_age=max_age)
     if not body:
         return None
     try:
@@ -138,7 +139,7 @@ class SitemapSource(_PageReader):
         if url in visited or depth > MAX_SITEMAP_DEPTH:
             return
         visited.add(url)
-        root = _read_sitemap(fetcher, url)
+        root = _read_sitemap(fetcher, url, max_age=self._max_age(url))
         if root is None:
             return
         for entry in list(root):
@@ -151,6 +152,10 @@ class SitemapSource(_PageReader):
                 listing = _entry_listing(entry)
                 if listing and (self._url_filter is None or self._url_filter.search(listing.url)):
                     yield listing
+
+    def _max_age(self, url: str) -> float | None:
+        """How old a cached copy of this sitemap may be before it is read again."""
+        return SITEMAP_MAX_AGE
 
     def listings(self, fetcher: Fetcher) -> Iterator[Listing]:
         roots = self._roots() if callable(self._roots) else self._roots
@@ -178,6 +183,14 @@ class MonthlySitemapSource(SitemapSource):
                 year, month = (year + 1, 1) if month == 12 else (year, month + 1)
 
         super().__init__(id, publisher, home_url, months, **options)
+        self._template, self._today = template, today
+
+    def _max_age(self, url: str) -> float | None:
+        """Only this month's and last month's files still change; an older month is read once and kept."""
+        end = self._today()
+        previous = (end.year, end.month - 1) if end.month > 1 else (end.year - 1, 12)
+        recent = {self._template.format(yyyy=f"{y:04d}", mm=f"{m:02d}") for y, m in ((end.year, end.month), previous)}
+        return SITEMAP_MAX_AGE if url in recent else None
 
 
 class NexstarDailySource:

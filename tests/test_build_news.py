@@ -18,7 +18,7 @@ class FakeFetcher:
         self.requested = []
         self.stats = Counter()
 
-    def get(self, url, *, limit=None, use_cache=True):
+    def get(self, url, *, limit=None, use_cache=True, max_age=None):
         self.requested.append(url)
         self.stats["fetched"] += 1
         return b"<html/>"

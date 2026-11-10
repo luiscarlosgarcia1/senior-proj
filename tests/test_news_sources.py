@@ -19,9 +19,11 @@ def fixture(name: str) -> bytes:
 class FakeFetcher:
     def __init__(self, pages):
         self.pages = pages
+        self.max_ages = {}
         self.requested = []
 
-    def get(self, url):
+    def get(self, url, *, max_age=None):
+        self.max_ages[url] = max_age
         self.requested.append(url)
         return self.pages.get(url)
 
@@ -128,3 +130,11 @@ def test_myrgv_parse_skips_page_without_headline():
     listing = Listing("https://myrgv.com/x/2019/02/18/y/", "2019-02-18", None)
 
     assert MyrgvSource().parse(listing.url, "<html><head></head></html>", listing) is None
+
+
+def test_krgv_and_myrgv_read_their_sitemaps_again_once_a_day():
+    from news_sources import SITEMAP_MAX_AGE
+
+    for source, fetcher in ((KrgvSource(), krgv_fetcher()), (MyrgvSource(), myrgv_fetcher())):
+        list(source.listings(fetcher))
+        assert fetcher.max_ages and set(fetcher.max_ages.values()) == {SITEMAP_MAX_AGE}, source.id

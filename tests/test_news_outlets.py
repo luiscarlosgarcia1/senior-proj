@@ -31,10 +31,11 @@ def index(*children):
 
 class FakeFetcher:
     def __init__(self, pages):
-        self.pages, self.calls = pages, []
+        self.pages, self.calls, self.max_ages = pages, [], {}
 
-    def get(self, url, *, limit=None, use_cache=True):
+    def get(self, url, *, limit=None, use_cache=True, max_age=None):
         self.calls.append((url, use_cache))
+        self.max_ages[url] = max_age
         return self.pages.get(url)
 
 
@@ -246,3 +247,35 @@ def test_the_roster():
     assert {s.kind for s in sources} == {"news", "official"} and by_id["official-ibwc"].kind == "official"
     for source in sources:
         assert source.home_url.startswith("https://") and source.publisher
+
+
+# ---- sitemaps grow, so a rebuild reads them again once a day ----
+
+def test_every_sitemap_of_an_index_is_asked_for_with_a_maximum_age():
+    from news_sources import SITEMAP_MAX_AGE
+
+    pages = {
+        "https://s.test/wp-sitemap.xml": index("https://s.test/post-sitemap1.xml"),
+        "https://s.test/post-sitemap1.xml": urlset(("https://s.test/2020/07/25/flood-hits-weslaco/", None)),
+    }
+    fetcher = FakeFetcher(pages)
+
+    list(SitemapSource("n", "S", "https://s.test", ["https://s.test/wp-sitemap.xml"]).listings(fetcher))
+
+    assert fetcher.max_ages == {"https://s.test/wp-sitemap.xml": SITEMAP_MAX_AGE, "https://s.test/post-sitemap1.xml": SITEMAP_MAX_AGE}
+    assert SITEMAP_MAX_AGE == 24 * 3600
+
+
+def test_only_this_month_and_last_month_are_read_again_from_a_monthly_sitemap():
+    from news_sources import SITEMAP_MAX_AGE
+
+    fetcher = FakeFetcher({})
+    source = MonthlySitemapSource("t", "T", "https://t.test", "https://t.test/sitemap-{yyyy}{mm}.xml", (2025, 11),
+                                  today=lambda: date(2026, 2, 3))
+
+    list(source.listings(fetcher))
+
+    assert fetcher.max_ages == {
+        "https://t.test/sitemap-202511.xml": None, "https://t.test/sitemap-202512.xml": None,
+        "https://t.test/sitemap-202601.xml": SITEMAP_MAX_AGE, "https://t.test/sitemap-202602.xml": SITEMAP_MAX_AGE,
+    }

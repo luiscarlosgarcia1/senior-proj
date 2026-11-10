@@ -307,3 +307,55 @@ def test_an_offline_fetcher_reads_the_cache_and_never_touches_the_network(tmp_pa
     assert offline.get(missing) is None
     assert offline.get("https://cached.test/3", use_cache=False) is None  # a page that is always asked for is not in the cache
     assert web.calls == [] and offline.stats["not_cached"] == 2 and offline.stats["cached"] == 1
+
+
+# ---- a page that changes (a sitemap) is read again once its copy is old ----
+
+def aged(tmp_path, web, *, wall, **options):
+    return Fetcher(tmp_path / "cache", delay=0.0, get=web, sleep=lambda seconds: None, clock=lambda: 100.0, wall=wall, **options)
+
+
+def test_a_copy_younger_than_max_age_is_used_without_asking(tmp_path):
+    url = "https://s.test/sitemap.xml"
+    web = Web({"https://s.test/robots.txt": b"", url: [b"first", b"second"]})
+    now = [time.time()]
+    fetcher = aged(tmp_path, web, wall=lambda: now[0])
+    fetcher.get(url, max_age=86400)
+    web.calls.clear()
+
+    now[0] += 3600
+    assert fetcher.get(url, max_age=86400) == b"first" and web.calls == []
+
+
+def test_an_older_copy_is_fetched_again_and_replaced(tmp_path):
+    url = "https://s.test/sitemap.xml"
+    web = Web({"https://s.test/robots.txt": b"", url: [b"first", b"second"]})
+    now = [time.time()]
+    fetcher = aged(tmp_path, web, wall=lambda: now[0])
+    fetcher.get(url, max_age=86400)
+
+    now[0] += 2 * 86400
+    assert fetcher.get(url, max_age=86400) == b"second"
+    assert fetcher.get(url) == b"second"  # the new copy is the cached one now
+
+
+def test_when_the_refresh_fails_the_older_copy_is_still_used(tmp_path):
+    url = "https://s.test/sitemap.xml"
+    web = Web({"https://s.test/robots.txt": b"", url: [b"first", http_error(url, 500)]})
+    now = [time.time()]
+    fetcher = aged(tmp_path, web, wall=lambda: now[0])
+    fetcher.get(url, max_age=86400)
+
+    now[0] += 2 * 86400
+    assert fetcher.get(url, max_age=86400) == b"first"
+
+
+def test_offline_an_old_copy_is_used_without_asking(tmp_path):
+    url = "https://s.test/sitemap.xml"
+    web = Web({"https://s.test/robots.txt": b"", url: [b"first"]})
+    now = [time.time()]
+    aged(tmp_path, web, wall=lambda: now[0]).get(url)
+    web.calls.clear()
+
+    now[0] += 30 * 86400
+    assert aged(tmp_path, web, wall=lambda: now[0], offline=True).get(url, max_age=86400) == b"first" and web.calls == []
