@@ -147,7 +147,7 @@ Texas Public Radio, the Texas Tribune) are only read for a story whose address n
 **Dates.** A story is dated only by its page (`article:published_time`, structured data, an itemprop), the sitemap's own
 publication date, or the day in its address. Never by a sitemap's `<lastmod>` (that is when it was last edited), never by a
 `<time>` tag (pages list other, newer stories in widgets), and never by when the Wayback Machine copied it: a story with no
-date of its own is skipped. This rule dropped El Peódico USA (McAllen) from the roster: its pages carry no date at all, only
+date of its own is skipped. This rule dropped El Periódico USA (McAllen) from the roster: its pages carry no date at all, only
 sidebar widgets, so its 18 matching stories could only have been given today's date. Its WordPress API could supply real dates;
 that source has not been built.
 
