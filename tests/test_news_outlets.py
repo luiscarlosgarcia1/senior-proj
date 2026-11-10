@@ -79,10 +79,11 @@ def test_a_sitemap_that_is_already_a_list_of_stories_works_and_url_filter_picks_
 
     (listing,) = list(source.listings(fetcher))
 
-    assert listing.url.endswith("rgv,6491") and listing.published == "2006-10-17"  # the sitemap's date, as a fallback
+    assert listing.url.endswith("rgv,6491")
+    assert listing.published is None  # a sitemap's last-modified time is not the day the story was published
 
 
-def test_the_listing_date_prefers_the_address_then_a_news_date_then_lastmod():
+def test_the_listing_date_is_a_news_date_or_the_addresss_and_never_the_last_modified_time():
     news = (
         f'<urlset {NS} xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"><url><loc>https://s.test/a</loc>'
         "<news:news><news:publication_date>2018-12-10T06:48:06-06:00</news:publication_date><news:title>Rain!</news:title></news:news>"
@@ -95,6 +96,9 @@ def test_the_listing_date_prefers_the_address_then_a_news_date_then_lastmod():
 
     assert (with_news.published, with_news.title) == ("2018-12-10T12:48:06Z", "Rain!")
     assert from_url.published == "2020-05-05"
+    (only_lastmod,) = SitemapSource("n", "S", "https://s.test", ["https://s.test/m.xml"]).listings(
+        FakeFetcher({"https://s.test/m.xml": urlset(("https://s.test/some-story/", "2021-06-01"))}))
+    assert only_lastmod.published is None
 
 
 def test_one_broken_or_missing_sitemap_does_not_stop_the_rest():
@@ -141,12 +145,23 @@ def test_a_page_gives_headline_description_and_its_own_time():
     assert result.published_at == "2019-02-19T03:46:44Z"
 
 
-def test_the_date_can_come_from_structured_data_or_a_time_tag():
+def test_the_date_can_come_from_structured_data_or_an_itemprop():
     ld = page('<meta property="og:title" content="T"><script type="application/ld+json">{"@type":"NewsArticle","datePublished":"2012-04-26T10:00:00-05:00"}</script>')
-    tag = page('<meta property="og:title" content="T">', '<time datetime="2013-05-06T07:08:09Z">May 6</time>')
+    tag = page('<meta property="og:title" content="T"><meta itemprop="datePublished" content="2013-05-06T07:08:09Z">')
 
     assert read(ld, published=None).published_at == "2012-04-26T15:00:00Z"
     assert read(tag, published=None).published_at == "2013-05-06T07:08:09Z"
+
+
+def test_a_time_tag_is_never_a_pages_date_because_widgets_for_other_stories_use_them():
+    # El Periodico's pages have only "latest news" widgets, and a theme may mark them "published" too
+    widget = page('<meta property="og:title" content="T">',
+                  '<time class="entry-date updated td-module-date" datetime="2026-11-05T15:21:14-06:00">11/05/2026</time>'
+                  '<time class="entry-date published" datetime="2026-11-04T15:21:14-06:00">11/04/2026</time>'
+                  '<time datetime="2026-11-03T14:35:07-06:00">11/03/2026</time>')
+
+    assert read(widget, published=None) is None
+    assert read(widget, published="2014-03-03").published_at == "2014-03-03"
 
 
 def test_without_a_date_on_the_page_the_listing_date_is_used_and_without_either_it_is_skipped():
@@ -223,7 +238,8 @@ def test_the_roster():
 
     assert len(by_id) == len(sources)  # every id once
     assert {"news-krgv", "news-myrgv", "news-valleycentral", "news-borderreport", "news-foxrgv", "news-riograndeguardian",
-            "news-progresstimes", "news-pispp", "news-tpr", "news-texastribune", "news-elperiodicousa"} <= set(by_id)
+            "news-progresstimes", "news-pispp", "news-tpr", "news-texastribune"} <= set(by_id)
+    assert "news-elperiodicousa" not in by_id  # its pages carry no publication date, so no story of it can be dated honestly
     assert by_id["news-valleycentral"].reads_pages is False and by_id["news-valleycentral"].local_sections
     assert all(by_id[i].needs_place_in_address for i in ("news-borderreport", "news-tpr", "news-texastribune"))
     assert not any(by_id[i].needs_place_in_address for i in ("news-krgv", "news-myrgv", "news-foxrgv", "news-riograndeguardian"))

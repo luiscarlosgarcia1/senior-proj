@@ -124,7 +124,6 @@ The four old newspaper sites that no sitemap lists any more are read from the Wa
 | `news-foxrgv` | Fox RGV (KFXV) | WordPress/Yoast sitemaps | rolling |
 | `news-riograndeguardian` | Rio Grande Guardian | one sitemap of every story | 2006 |
 | `news-progresstimes` | Progress Times (Pharr, San Juan, Alamo) | WordPress sitemaps | 2016 |
-| `news-elperiodicousa` | El Periódico USA (McAllen, bilingual; asks for a 10-second delay, which is honored) | WordPress sitemaps | to be filled from the data |
 | `news-pispp` | Port Isabel-South Padre Press | sitemaps | 2012 |
 | `news-texasborderbusiness` | Texas Border Business | Yoast sitemaps | 2013 |
 | `news-tpr` | Texas Public Radio | one sitemap a month, `sitemap-YYYYMM.xml` | 2004 |
@@ -144,6 +143,13 @@ Texas Public Radio, the Texas Tribune) are only read for a story whose address n
 3. Keep it only if the text has a water word **and** names a Valley town, a county, or the Valley as a whole
    (`news_match.py`; city names are case-sensitive, so "mission statement" is not Mission, and "Silicon Valley" is not the Valley).
    A story that names only the whole Valley has no `county` and shows under every county.
+
+**Dates.** A story is dated only by its page (`article:published_time`, structured data, an itemprop), the sitemap's own
+publication date, or the day in its address. Never by a sitemap's `<lastmod>` (that is when it was last edited), never by a
+`<time>` tag (pages list other, newer stories in widgets), and never by when the Wayback Machine copied it: a story with no
+date of its own is skipped. This rule dropped El Peódico USA (McAllen) from the roster: its pages carry no date at all, only
+sidebar widgets, so its 18 matching stories could only have been given today's date. Its WordPress API could supply real dates;
+that source has not been built.
 
 **Nexstar's sites (ValleyCentral, Border Report) refuse our crawler.** Every article answers "403 Forbidden" to a crawler that
 identifies itself, although robots.txt allows crawling. We do not disguise the crawler to get past that. For these two, a

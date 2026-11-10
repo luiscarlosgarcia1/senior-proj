@@ -40,7 +40,6 @@ from news_wayback import wayback_sources
 
 _JSON_LD_DATE = re.compile(r'"datePublished"\s*:\s*"([^"]+)"')
 _ITEMPROP_DATE = re.compile(r'<meta[^>]+itemprop=["\']datePublished["\'][^>]+content=["\']([^"\']+)["\']', re.IGNORECASE)
-_TIME_TAG = re.compile(r'<time[^>]+datetime=["\']([^"\']+)["\']', re.IGNORECASE)
 MAX_SITEMAP_DEPTH = 4
 # Addresses that are a section of a site, not a story.
 SECTION_SLUGS = frozenset(("news", "local-news", "weather", "sports", "top-stories", "national-news", "texas", "health", "politics",
@@ -75,12 +74,16 @@ def _entry_listing(entry: ElementTree.Element) -> Listing | None:
     news = next((child for child in entry if child.tag == f"{NEWS_NS}news"), None)
     stamp = to_utc(news.findtext(f"{NEWS_NS}publication_date")) if news is not None else None
     title = ((news.findtext(f"{NEWS_NS}title") or "").strip() or None) if news is not None else None
-    lastmod = _text(entry, "lastmod")[:10]
-    return Listing(url=url, published=stamp or date_in_url(url) or (lastmod if re.fullmatch(r"\d{4}-\d\d-\d\d", lastmod) else None), title=title)
+    # Never the sitemap's <lastmod>: that is when the story was last edited, not when it was published.
+    return Listing(url=url, published=stamp or date_in_url(url), title=title)
 
 
 class _PageReader:
-    """Reads a story page's head: headline, description, and the publication time."""
+    """Reads a story page's head: headline, description, and the publication time.
+
+    The time comes from the page's `article:published_time`, its structured data or an itemprop, then from the
+    sitemap's publication date or the address. Never from a `<time>` tag (a page lists other, newer stories in
+    widgets) and never from the sitemap's last-modified time: a story with no date of its own is skipped."""
 
     @staticmethod
     def parse(url: str, html: str, listing: Listing) -> Page | None:
@@ -93,7 +96,7 @@ class _PageReader:
             return None
         candidates = (
             head.meta.get("article:published_time"), head.meta.get("og:article:published_time"),
-            *(pattern.search(html).group(1) if pattern.search(html) else None for pattern in (_JSON_LD_DATE, _ITEMPROP_DATE, _TIME_TAG)),
+            *(pattern.search(html).group(1) if pattern.search(html) else None for pattern in (_JSON_LD_DATE, _ITEMPROP_DATE)),
         )
         published = next((stamp for stamp in map(to_utc, candidates) if stamp), None) or listing.published
         if not published:
@@ -239,8 +242,6 @@ def default_sources() -> list[NewsSource]:
                       ["https://riograndeguardian.com/sitemaps/sitemaps-r2-default-default-1.xml"], url_filter=r"/stories/"),
         SitemapSource("news-progresstimes", "Progress Times (Pharr, San Juan, Alamo)", "https://www.progresstimes.net",
                       ["https://www.progresstimes.net/wp-sitemap.xml"], include=r"posts-post-\d+\.xml$"),
-        SitemapSource("news-elperiodicousa", "El Periódico USA (McAllen)", "https://elperiodicousa.com",
-                      ["https://elperiodicousa.com/wp-sitemap.xml"], include=r"wp-sitemap-posts-post-\d+\.xml$"),
         SitemapSource("news-pispp", "Port Isabel-South Padre Press", "https://www.portisabelsouthpadre.com",
                       ["https://www.portisabelsouthpadre.com/sitemap-index-1.xml"], include=r"/sitemap-\d+\.xml$", exclude="image"),
         SitemapSource("news-texasborderbusiness", "Texas Border Business", "https://texasborderbusiness.com",

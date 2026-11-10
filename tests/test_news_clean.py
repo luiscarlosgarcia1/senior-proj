@@ -43,7 +43,7 @@ def test_html_codes_left_in_a_headline_or_excerpt_are_decoded_and_spaces_collaps
     ("Fox RGV (KFXV)", " | FOX RGV"),
     ("Rio Grande Guardian", " - Rio Grande Guardian"),
     ("City of Pharr", " – City Of Pharr"),
-    ("El Periódico USA (McAllen)", " | El Periódico USA"),
+    ("The Texas Tribune", " | The Texas Tribune"),
 ])
 def test_an_outlets_own_name_is_cut_from_the_end_of_its_headline(publisher, tail):
     (kept,) = run(row(publisher=publisher, headline="Hidalgo County flood advisory" + tail)).kept

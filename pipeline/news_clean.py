@@ -36,7 +36,6 @@ OWN_NAME_TAILS: dict[str, tuple[str, ...]] = {
     "Cameron County": ("Cameron County",),
     "City of Pharr": ("City of Pharr",),
     "The Texas Tribune": ("The Texas Tribune",),
-    "El Periódico USA (McAllen)": ("El Periódico USA",),
     "International Boundary and Water Commission, U.S. Section": ("IBWC",),
 }
 _TAILS = {
