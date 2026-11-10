@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
-import sys
 import time
 from contextlib import asynccontextmanager
 
@@ -25,21 +24,9 @@ from rgv_flood.api import health as health_api
 from rgv_flood.assets import STATIC_ROOT, VersionedStaticFiles
 from rgv_flood.chat.service import ChatService
 from rgv_flood.db import Database
+from rgv_flood.live_signals_scheduler import LiveSignalScheduler, build_refresh_commands
 from rgv_flood.security import SecurityHeadersMiddleware
 from rgv_flood.settings import Settings, get_settings
-
-# live_signals_scheduler.py's advisory lock uses fcntl, POSIX-only; Windows gets
-# the msvcrt-based twin with the same interface.
-if sys.platform == "win32":
-    from rgv_flood.live_signals_scheduler_windows import (
-        LiveSignalScheduler,
-        build_refresh_commands,
-    )
-else:
-    from rgv_flood.live_signals_scheduler import (
-        LiveSignalScheduler,
-        build_refresh_commands,
-    )
 
 # Windows can map .js to text/plain in the registry; module scripts must be JS.
 mimetypes.add_type("text/javascript", ".js")

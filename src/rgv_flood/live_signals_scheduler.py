@@ -1,8 +1,11 @@
-"""Periodic refreshes of the official live-signal snapshots."""
+"""Periodic refreshes of the official live-signal snapshots.
+
+One app worker owns the refreshes, chosen by a non-blocking lock on a file: `fcntl.flock` on Mac and
+Linux, `msvcrt.locking` on Windows (`_try_lock`); everything else is the same on both.
+"""
 
 from __future__ import annotations
 
-import fcntl
 import logging
 import subprocess
 import sys
@@ -20,7 +23,7 @@ class LiveSignalScheduler:
     """Run snapshot commands on one process at a fixed interval.
 
     The advisory lock is held for the scheduler's lifetime. This lets just one
-    Flask worker own live refreshes, including when Werkzeug starts its reloader.
+    app worker own live refreshes, however many workers Uvicorn starts.
     """
 
     def __init__(
@@ -69,14 +72,34 @@ class LiveSignalScheduler:
 
     def _claim_lock(self) -> bool:
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
-        lock_handle = self.lock_file.open("a+")
+        self._lock_handle = _try_lock(self.lock_file)
+        return self._lock_handle is not None
+
+
+def _try_lock(path: Path):
+    """An open handle holding an exclusive lock on `path`, or None if another process holds it."""
+    if sys.platform == "win32":
+        import msvcrt
+
+        # msvcrt.locking locks a byte range that must already exist in the file.
+        if not path.exists() or path.stat().st_size == 0:
+            path.write_bytes(b"\0")
+        handle = path.open("r+b")
         try:
-            fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            lock_handle.close()
-            return False
-        self._lock_handle = lock_handle
-        return True
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            handle.close()
+            return None
+        return handle
+    import fcntl
+
+    handle = path.open("a+")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    return handle
 
 
 def build_refresh_commands(database: Path) -> tuple[Command, ...]:

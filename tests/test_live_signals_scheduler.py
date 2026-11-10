@@ -4,10 +4,6 @@ import logging
 from pathlib import Path
 from threading import Event
 
-import pytest
-
-pytest.importorskip("fcntl", reason="POSIX-only lock; see test_live_signals_scheduler_windows.py")
-
 from rgv_flood.live_signals_scheduler import LiveSignalScheduler
 
 
