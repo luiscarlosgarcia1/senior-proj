@@ -21,7 +21,7 @@ import threading
 import time
 import urllib.error
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
@@ -57,6 +57,7 @@ class Fetcher:
         cache_dir: Path = NEWS_CACHE,
         *,
         delay: float = 1.0,
+        delays: Mapping[str, float] | None = None,
         get: Callable[..., bytes] = net.get_bytes,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
@@ -66,7 +67,7 @@ class Fetcher:
         self._get, self._sleep, self._clock = get, sleep, clock
         self._takes_limit = "limit" in inspect.signature(get).parameters
         self._robots: dict[str, RobotFileParser | None] = {}  # None: the host could not be checked, so skip it
-        self._host_delay: dict[str, float] = {}
+        self._host_delay: dict[str, float] = dict(delays or {})  # hosts that must be asked less often than `delay`
         self._last_request: dict[str, float] = {}
         self._refusals: dict[str, int] = defaultdict(int)
         self.blocked_hosts: set[str] = set()
@@ -115,7 +116,7 @@ class Fetcher:
             if parser is not None:
                 asked = parser.crawl_delay(net.USER_AGENT["User-Agent"])
                 if asked:
-                    self._host_delay[host] = max(self.delay, float(asked))
+                    self._host_delay[host] = max(self.delay, float(asked), self._host_delay.get(host, 0.0))
         return self._robots[host]
 
     def allowed(self, url: str) -> bool:
@@ -185,9 +186,13 @@ class Fetcher:
                     self._refusals[host] += 1
                     if self._refusals[host] >= self.BLOCK_AFTER:
                         self.blocked_hosts.add(host)
-                elif error.code in (429, 503) and attempt == 1:
-                    self._sleep(self._retry_wait(error))
-                    continue
+                elif error.code in (429, 503):
+                    if attempt == 1:
+                        self._sleep(self._retry_wait(error))
+                        continue
+                    # Asked twice and told to slow down twice: ask less often for the rest of the run.
+                    current = max(self._host_delay.get(host, self.delay), 1.0)
+                    self._host_delay[host] = min(current * 2, MAX_CRAWL_DELAY)
                 self._count("failed")
                 return None
             except NETWORK_ERRORS:

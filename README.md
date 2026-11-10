@@ -181,8 +181,8 @@ The front page, `/`, is a short landing page: what the project compares, which c
   Picking the selected event again clears it.
 - **Rainfall records, local reports, news stories, data sources.** The rest of
   the right panel: the wettest single days at the gauges, curated news and
-  government reports, water-related news stories and official announcements from fourteen
-  Valley sources (each linked to the publisher), and every dataset behind the map with the
+  government reports, water-related news stories and official announcements from Valley
+  publishers (each linked to the publisher or, for the old sites, to the archived copy), and every dataset behind the map with the
   date it was downloaded and the date the database was built.
 - **News stories.** A picked event also lists news stories for its county from
   the day before it began to three days after it ended. Nothing links a story
@@ -258,7 +258,7 @@ Everything lives in `data/generated/rgv-flood.sqlite3`, built by
 | `flood_events` | Flood-type events from NOAA's Storm Events Database, 1996–2025 |
 | `flood_reports` | Hand-curated local news and government flood reports |
 | `nws_flood_reports` | Flooding reported to the National Weather Service in Brownsville, 2005 on |
-| `news_articles` | Water-related news stories and official announcements from fourteen Valley sources: headline, short excerpt, county, city, topics, link (never the article text) |
+| `news_articles` | Water-related news stories and official announcements from Valley publishers: headline, short excerpt, county, city, topics, link (never the article text) |
 | `weather_stations`, `weather_observations` | NOAA GHCN-Daily stations and their daily rain readings, 1978–2025 |
 | `rainfall_station_years` | Each gauge's yearly rain, wettest day and days reported |
 | `rainfall_station_months` | Each gauge's monthly rain, wettest day and days reported |

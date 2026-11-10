@@ -44,6 +44,9 @@ class FakeFetcher:
     ("https://x.test/stories/peterson-visits-rgv,6491", None),
     ("https://x.test/uncategorized/0200/12/15/x/", None),
     ("https://x.test/2021/13/45/x/", None),
+    ("http://krgv.com:80/2005/8/31/4232/Valley-hurricane-relief-efforts", "2005-08-31"),  # KRGV's old addresses: no zero padding
+    ("https://x.test/2021/1/5/story/", "2021-01-05"),
+    ("https://x.test/2018/12/345/x", None),
 ])
 def test_date_in_url(url, expected):
     assert date_in_url(url) == expected

@@ -6,6 +6,9 @@ Most sites publish a sitemap: a list of every story's address. Three shapes cove
   * `MonthlySitemapSource`: one file a month (Texas Public Radio);
   * `NexstarDailySource`: one sitemap a day, at an address that takes the date (ValleyCentral, Border Report).
 
+The old Monitor, Brownsville Herald, Valley Morning Star and KRGV sites are no longer listed by any sitemap; `news_wayback.py`
+reads them from the Wayback Machine's copies.
+
 Reading a story's page needs the publisher's server to let us in. Nexstar's sites answer our identified
 crawler with "403 Forbidden" on every article, so for them we keep only what the sitemap itself says
 (address and day) and never pretend to be a browser to get past that.
@@ -30,10 +33,11 @@ from news_sources import (
     NewsSource,
     Page,
     _Head,
+    date_in_url,
     to_utc,
 )
+from news_wayback import wayback_sources
 
-_URL_DATES = (re.compile(r"/((?:19|20)\d\d)/(\d\d)/(\d\d)/"), re.compile(r"/((?:19|20)\d\d)-(\d\d)-(\d\d)(?:/|$)"))
 _JSON_LD_DATE = re.compile(r'"datePublished"\s*:\s*"([^"]+)"')
 _ITEMPROP_DATE = re.compile(r'<meta[^>]+itemprop=["\']datePublished["\'][^>]+content=["\']([^"\']+)["\']', re.IGNORECASE)
 _TIME_TAG = re.compile(r'<time[^>]+datetime=["\']([^"\']+)["\']', re.IGNORECASE)
@@ -41,18 +45,6 @@ MAX_SITEMAP_DEPTH = 4
 # Addresses that are a section of a site, not a story.
 SECTION_SLUGS = frozenset(("news", "local-news", "weather", "sports", "top-stories", "national-news", "texas", "health", "politics",
                            "entertainment", "mexico", "world", "business", "video", "videos", "us", "money", "technology"))
-
-
-def date_in_url(url: str) -> str | None:
-    """'/2021/01/12/' or '/2015-07-10/' in an address as '2021-01-12'; None if there is none or it is not a real date."""
-    for pattern in _URL_DATES:
-        hit = pattern.search(url)
-        if hit:
-            try:
-                return date(*map(int, hit.groups())).isoformat()
-            except ValueError:
-                return None
-    return None
 
 
 def _local(element: ElementTree.Element) -> str:
@@ -263,5 +255,6 @@ def default_sources() -> list[NewsSource]:
                       include=r"post-sitemap\d*\.xml$", kind="official"),
         SitemapSource("official-ibwc", "International Boundary and Water Commission, U.S. Section", "https://www.ibwc.gov",
                       ["https://www.ibwc.gov/wp-sitemap.xml"], include=r"post-sitemap\d*\.xml$", kind="official"),
+        *wayback_sources(),  # the old sites, before 2016, from the Wayback Machine
     ]
 

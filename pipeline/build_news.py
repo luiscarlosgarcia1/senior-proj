@@ -5,7 +5,8 @@
 water systems, anything about water (`news_match.py`). Every publisher in `news_outlets.py` (KRGV, The Monitor
 and Brownsville Herald, ValleyCentral, Border Report, Fox RGV, Rio Grande Guardian, Progress Times, the
 Port Isabel-South Padre Press, Texas Border Business, Texas Public Radio, the Texas Tribune, and a few county,
-city and agency sites) is read side by side, one thread each:
+city and agency sites, plus the old Monitor, Herald, Morning Star and KRGV sites from the Wayback Machine, `news_wayback.py`)
+is read side by side, one thread each:
 
   1. list its stories from its sitemaps, back to the first story the sitemaps show (no date floor);
   2. skip any whose address or title has no water word (they are never downloaded);
@@ -54,6 +55,7 @@ from news_match import (
 )
 from news_outlets import default_sources
 from news_sources import Listing, NewsSource, Page
+from news_wayback import FETCH_DELAYS
 from paths import DATABASE
 
 NEWS_SINCE = "1990-01-01"  # no real floor: each publisher's sitemaps begin when its archive does
@@ -168,7 +170,7 @@ def _collect_one(
             row = news_row(source.publisher, page, match, retrieved_at, kind=kind, headline_from="page" if reads_pages else "address")
             rows[row["id"]] = row
             counts["kept"] += 1
-    except Exception as error:  # noqa: BLE001 - one publisher's bug must not end a crawl of fourteen
+    except Exception as error:  # noqa: BLE001 - one publisher's bug must not end a crawl of nineteen
         counts["error"] += 1
         print(f"  {source.id}: stopped by {type(error).__name__}: {error}", flush=True)
 
@@ -221,8 +223,11 @@ def _source_row(source: NewsSource, count: int, counts: Counter, retrieved_at: s
         "notes": (
             f"{counts['listed']:,} stories listed in the publisher's sitemaps, {count:,} kept. Skipped: {skipped or 'none'}. "
             + (
-                "The publisher's pages refuse our crawler, so the headline is made from the story's address and no description is stored. "
-                if closed else "Only the headline, the page's own short description and the link are stored; article text is not stored. "
+                getattr(source, "about", None)
+                or (
+                    "The publisher's pages refuse our crawler, so the headline is made from the story's address and no description is stored. "
+                    if closed else "Only the headline, the page's own short description and the link are stored; article text is not stored. "
+                )
             )
             + "robots.txt obeyed; at most one request a second to each site."
         ),
@@ -263,7 +268,7 @@ def main(
         if unknown:
             raise SystemExit(f"Unknown source(s): {', '.join(unknown)}. Known: {', '.join(source.id for source in sources)}")
         sources = [source for source in sources if source.id in only]
-    fetcher = fetcher or Fetcher(cache_dir)
+    fetcher = fetcher or Fetcher(cache_dir, delays=FETCH_DELAYS)
     retrieved_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     new_rows, stats = collect(sources, fetcher, retrieved_at=retrieved_at, limit=limit, stop=stop, heartbeat_seconds=heartbeat_seconds)

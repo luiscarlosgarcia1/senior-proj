@@ -193,3 +193,48 @@ def test_without_the_cache_it_always_asks_and_stores_nothing(tmp_path):
     assert fetcher.get(url, use_cache=False) == b"v1"
     assert fetcher.get(url, use_cache=False) == b"v2"
     assert not (tmp_path / "cache" / "a.test").exists() or not list((tmp_path / "cache" / "a.test").iterdir())
+
+
+def test_a_host_can_be_given_a_longer_delay_than_the_rest(tmp_path):
+    web = Web({"https://slow.test/robots.txt": b"", "https://slow.test/1": b"1", "https://slow.test/2": b"2"})
+    fetcher, sleeps = make(tmp_path, web, delays={"slow.test": 2.5})
+
+    fetcher.get("https://slow.test/1")
+    fetcher.get("https://slow.test/2")
+
+    assert sleeps == [2.5, 2.5]
+
+
+def test_a_crawl_delay_in_robots_never_shortens_a_longer_one_we_set(tmp_path):
+    robots = b"User-agent: *\nCrawl-delay: 1\n"
+    web = Web({"https://slow.test/robots.txt": robots, "https://slow.test/1": b"1"})
+    fetcher, sleeps = make(tmp_path, web, delays={"slow.test": 2.5})
+
+    fetcher.get("https://slow.test/1")
+
+    assert sleeps == [2.5]
+
+
+def test_a_host_that_keeps_saying_slow_down_is_asked_less_often(tmp_path):
+    first, second = "https://busy.test/1", "https://busy.test/2"
+    asked = {"Retry-After": "1"}
+    web = Web({"https://busy.test/robots.txt": b"", first: [http_error(first, 429, asked), http_error(first, 429, asked)], second: b"ok"})
+    fetcher, sleeps = make(tmp_path, web, delays={"busy.test": 3.0})
+
+    assert fetcher.get(first) is None
+    sleeps.clear()
+    assert fetcher.get(second) == b"ok"
+
+    assert sleeps == [6.0]  # twice the wait it had
+
+
+def test_slowing_down_has_a_ceiling(tmp_path):
+    first, second = "https://busy.test/1", "https://busy.test/2"
+    asked = {"Retry-After": "1"}
+    web = Web({"https://busy.test/robots.txt": b"", first: [http_error(first, 503, asked), http_error(first, 503, asked)], second: b"ok"})
+    fetcher, sleeps = make(tmp_path, web, delays={"busy.test": 20.0})
+
+    fetcher.get(first)
+    sleeps.clear()
+
+    assert fetcher.get(second) == b"ok" and sleeps == [30.0]  # not skipped as a host that asks for too much, just kept slow

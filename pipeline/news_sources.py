@@ -18,6 +18,10 @@ from xml.etree import ElementTree
 
 from news_fetch import Fetcher, normalize_url
 
+_URL_DATES = (
+    re.compile(r"/((?:19|20)\d\d)/(\d{1,2})/(\d{1,2})/"),  # /2021/01/12/ and KRGV's old /2005/8/31/
+    re.compile(r"/((?:19|20)\d\d)-(\d\d)-(\d\d)(?:/|$)"),
+)
 SITEMAP = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 NEWS_NS = "{http://www.google.com/schemas/sitemap-news/0.9}"
 
@@ -47,6 +51,18 @@ class NewsSource(Protocol):
     def listings(self, fetcher: Fetcher) -> Iterator[Listing]: ...
 
     def parse(self, url: str, html: str, listing: Listing) -> Page | None: ...
+
+
+def date_in_url(url: str) -> str | None:
+    """'/2021/01/12/', '/2005/8/31/' or '/2015-07-10/' in an address as an ISO day; None if there is none or it is not a real date."""
+    for pattern in _URL_DATES:
+        hit = pattern.search(url)
+        if hit:
+            try:
+                return date(*map(int, hit.groups())).isoformat()
+            except ValueError:
+                return None
+    return None
 
 
 def to_utc(stamp: str | None) -> str | None:

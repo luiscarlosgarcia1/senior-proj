@@ -112,6 +112,7 @@ and water systems, and anything that says "water"**, in English and Spanish. Eac
 matched (`flood`, `rain`, `storm`, `drought`, `water_system`, `water`), so you can narrow it again.
 
 Every source is read side by side (one thread each), back to the first story its sitemaps show: there is no date floor.
+The four old newspaper sites that no sitemap lists any more are read from the Wayback Machine (last four rows).
 
 | Source id | Publisher | How stories are listed | Archive begins |
 | --- | --- | --- | --- |
@@ -128,6 +129,8 @@ Every source is read side by side (one thread each), back to the first story its
 | `news-tpr` | Texas Public Radio | one sitemap a month, `sitemap-YYYYMM.xml` | 2004 |
 | `news-texastribune` | The Texas Tribune | Yoast sitemaps | 2011 |
 | `official-cameroncounty`, `official-pharr`, `official-ibwc` | Cameron County, City of Pharr, International Boundary and Water Commission | WordPress sitemaps | 2019 to 2024 |
+| `news-wayback-themonitor`, `-brownsvilleherald`, `-valleymorningstar` | The Monitor, Brownsville Herald, Valley Morning Star, before they moved to `myrgv.com` | Wayback Machine index, copies made up to 2015 | to be filled from the data |
+| `news-wayback-krgv` | KRGV's old site (`/2005/8/31/4232/Headline` addresses) | the same, copies made up to 2016 | to be filled from the data |
 
 `python pipeline/build_news.py --list` prints the ids. Outlets that cover far more than the Valley (Border Report,
 Texas Public Radio, the Texas Tribune) are only read for a story whose address names a Valley place.
@@ -146,13 +149,27 @@ identifies itself, although robots.txt allows crawling. We do not disguise the c
 story is its address, its day (from that day's sitemap) and a headline made from the address (`headline_from = address`,
 no description). ValleyCentral's local-news and weather sections are accepted without a named town.
 
+**The Wayback Machine** (`news_wayback.py`) holds copies of the old Monitor, Brownsville Herald, Valley Morning Star and
+KRGV pages, back to the mid-2000s. For each old site the build asks the archive's index (the CDX server) for the pages that
+loaded (HTTP 200, HTML) and whose *address* has a water word, which works because these papers put the headline's first words
+in the address (`/articles/alamo-27894-body-canal.html`). Only the first copy of each address is read, addresses with a `?` query
+(comment and mobile variants) and pictures are left out, and the same story under two address forms is read once.
+The page is fetched as the publisher served it (the archive's `id_` form) and its headline and `publication_date` are read from the
+page, or the day is taken from the address (KRGV's). **A story with no date of its own is skipped: nothing is dated by the day
+the archive copied it.** The stored link goes to the archived copy, since the publisher's address no longer works. The old
+pages' descriptions only repeat the headline and its tags, so no excerpt is stored, and a story is kept only if its headline
+names a Valley place. Each site stops where its live sitemaps begin (the three papers at the end of 2015, because `myrgv.com`
+begins in 2016; KRGV at the end of 2016), so no story is listed twice. The archive is one host and is asked for one page every
+2.5 seconds, slower if it asks us to slow down. Their publisher names end in "(via Wayback Machine)".
+
 **What is stored:** the headline, the first 300 characters of the page's own description, the link, publisher, day,
 county and city, topics, and any streets or waterways named. **Never article text**, and no coordinates.
 
 **The fetcher is built for a long crawl** (`news_fetch.py`): robots.txt and `Crawl-delay` obeyed (a host asking for more than
-30 seconds is skipped); one request at a time to each host, at least a second apart, while different hosts run in parallel;
-a host that answers 401/403 five times in a row is left alone for the run; a 429/503 is retried once after the wait the
-server asks for; pages that do not exist (404) are remembered; every page is cached gzip-compressed in `tmp/news/`, so a
+30 seconds is skipped); one request at a time to each host, at least a second apart (the Wayback Machine, 2.5 seconds), while
+different hosts run in parallel; a host that answers 401/403 five times in a row is left alone for the run; a 429/503 is retried
+once after the wait the server asks for, and a host that says it twice in a row is then asked half as often (up to 30 seconds
+apart); pages that do not exist (404) are remembered; every page is cached gzip-compressed in `tmp/news/`, so a
 rerun reads the cache and works offline.
 
 **Running it.** The first run downloads tens of thousands of pages and takes hours. Stop it any time (Ctrl+C) and run it
@@ -163,9 +180,10 @@ A publisher that gave nothing this time (down, or its sitemap changed) keeps the
 Each source gets a `data_sources` row: how many stories it listed, how many were kept, and what was skipped and why.
 
 **Limits.** A water word is a broad net ("water", "storm", "canal"), so some stories are only loosely about water; the
-topics let you tell. The Wayback Machine and Common Crawl, which could reach the old Monitor, Brownsville Herald,
-Valley Morning Star and KRGV sites before 2016, were both down when this was built (HTTP 503 and 504), so the archives
-here begin where each outlet's sitemaps do. Streets and waterways named in a headline are approximate. Terms of service
+topics let you tell. Before 2016 only the four Wayback sites above are covered: ValleyCentral's old KVEO and KGBT addresses
+carry a number and no words (`story.aspx?id=...`), so the archive's index cannot be asked for water stories there, and
+Common Crawl's index (another archive) did not answer when this was built. A copied page is only as dated as the page
+itself, and the archive holds some of each old site's pages, not all of them. Streets and waterways named in a headline are approximate. Terms of service
 were not reviewed: robots.txt allows crawling, which is not permission to republish, so only short excerpts and links are kept.
 
 ## `build_layers.py` — map layers
