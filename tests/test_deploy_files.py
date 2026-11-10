@@ -1,4 +1,4 @@
-"""Deployment files: Docker image, Compose with Caddy, GitHub Actions."""
+"""Deployment files: Docker image and Compose with Caddy. (The GitHub workflows were removed on purpose.)"""
 
 from pathlib import Path
 
@@ -27,15 +27,6 @@ def test_caddy_proxies_to_the_app():
     assert "encode zstd gzip" in caddyfile
 
 
-def test_workflows_parse_and_schedule_monthly():
-    ci = _yaml(".github/workflows/ci.yml")
-    release = _yaml(".github/workflows/release.yml")
-    # PyYAML reads the key `on` as True
-    release_triggers = release.get("on", release.get(True))
-
-    assert "test" in ci["jobs"]
-    assert release_triggers["schedule"] == [{"cron": "0 9 1 * *"}]
-    assert "workflow_dispatch" in release_triggers
 
 
 def test_dockerfile_runs_as_non_root_and_has_healthcheck():

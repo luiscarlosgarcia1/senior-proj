@@ -9,8 +9,9 @@ data files are generated along the way. Steps, in order:
                         curated reports in data/seed/)
   2. build_history.py   the year-by-year record: NFIP claims and policies, NWS
                         flood reports, each rain gauge's yearly totals
-  3. build_news.py      flood-related news stories, 2018 on (headline, excerpt, link),
-                        from KRGV and myrgv.com, downloaded politely and cached
+  3. build_news.py      water-related news stories and official announcements from
+                        the Valley's outlets and the Wayback Machine (headline,
+                        excerpt, link), downloaded politely, cached and cleaned
   4. build_layers.py    every map layer (seed GeoJSON in data/seed/, waterways,
                         the state flood plan, city drainage, Overture bridges,
                         the Hidalgo drainage district's layers, NWS flood
@@ -41,7 +42,7 @@ from paths import DATABASE, REPO_ROOT
 STEPS = [
     ("flood events, reports and weather", "pipeline/build_events.py"),
     ("claims, policies and the yearly record", "pipeline/build_history.py"),
-    ("flood news stories", "pipeline/build_news.py"),
+    ("water news stories", "pipeline/build_news.py"),
     ("map layers", "pipeline/build_layers.py"),
 ]
 
