@@ -41,9 +41,10 @@ def _wait_before_retry(attempt: int, attempts: int, error: Exception) -> None:
     time.sleep(wait)
 
 
-def get_bytes(url: str, *, headers: dict | None = None, timeout: int = 60) -> bytes:
+def get_bytes(url: str, *, headers: dict | None = None, timeout: int = 60, limit: int | None = None) -> bytes:
+    """The response body, or only its first `limit` bytes (enough for a page's <head>)."""
     with urllib.request.urlopen(_request(url, headers=headers), timeout=timeout) as response:
-        return response.read()
+        return response.read(limit) if limit else response.read()
 
 
 def get_text(url: str, *, timeout: int = 60) -> str:

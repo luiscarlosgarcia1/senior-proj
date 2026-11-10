@@ -1,16 +1,26 @@
-"""A polite fetcher for news sites: obeys robots.txt, waits between requests to a
-host, and keeps every page it downloads in the download cache.
+"""A polite fetcher for news sites: obeys robots.txt and its crawl-delay, waits
+between requests to a host, and keeps every page it downloads in the download cache.
+
+Many hosts can be fetched side by side (one thread per publisher), but each host
+sees one request at a time, at least `delay` seconds apart. A host that keeps
+answering "forbidden" is left alone for the rest of the run: this crawler
+identifies itself and never tries to look like a browser.
 
 A page already in the cache is returned without any network request, so a
 rebuild only fetches what is missing and works offline once the cache is full.
+Cache files are gzip-compressed; files cached uncompressed by earlier builds are
+still read.
 """
 
 from __future__ import annotations
 
+import gzip
 import hashlib
+import inspect
+import threading
 import time
 import urllib.error
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -22,6 +32,9 @@ from paths import DOWNLOAD_CACHE
 
 NEWS_CACHE = DOWNLOAD_CACHE / "news"
 TRACKING_PARAMS = frozenset(("fbclid", "gclid"))
+GZIP_MAGIC = b"\x1f\x8b"
+MAX_CRAWL_DELAY = 30.0  # a host asking for more than this between requests is skipped, not waited on
+MAX_RETRY_WAIT = 120.0
 
 
 def normalize_url(url: str) -> str:
@@ -37,33 +50,49 @@ def normalize_url(url: str) -> str:
 
 
 class Fetcher:
+    BLOCK_AFTER = 5  # consecutive 401/403 answers before a host is left alone
+
     def __init__(
         self,
         cache_dir: Path = NEWS_CACHE,
         *,
         delay: float = 1.0,
-        get: Callable[[str], bytes] = net.get_bytes,
+        get: Callable[..., bytes] = net.get_bytes,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.cache_dir = cache_dir
         self.delay = delay
         self._get, self._sleep, self._clock = get, sleep, clock
+        self._takes_limit = "limit" in inspect.signature(get).parameters
         self._robots: dict[str, RobotFileParser | None] = {}  # None: the host could not be checked, so skip it
+        self._host_delay: dict[str, float] = {}
         self._last_request: dict[str, float] = {}
+        self._refusals: dict[str, int] = defaultdict(int)
+        self.blocked_hosts: set[str] = set()
         self.stats: Counter[str] = Counter()
+        self._lock = threading.Lock()
+        self._host_locks: dict[str, threading.Lock] = {}
 
-    # ---- network, paced
+    def _count(self, key: str) -> None:
+        with self._lock:
+            self.stats[key] += 1
 
-    def _request(self, url: str) -> bytes:
+    def _host_lock(self, host: str) -> threading.Lock:
+        with self._lock:
+            return self._host_locks.setdefault(host, threading.Lock())
+
+    # ---- network, paced (callers hold the host's lock)
+
+    def _request(self, url: str, limit: int | None = None) -> bytes:
         host = urlsplit(url).netloc
         last = self._last_request.get(host)
         if last is not None:
-            wait = self.delay - (self._clock() - last)
+            wait = self._host_delay.get(host, self.delay) - (self._clock() - last)
             if wait > 0:
                 self._sleep(wait)
         try:
-            return self._get(url)
+            return self._get(url, limit=limit) if self._takes_limit else self._get(url)
         finally:
             self._last_request[host] = self._clock()
 
@@ -82,10 +111,15 @@ class Fetcher:
             except NETWORK_ERRORS:
                 parser = None
             self._robots[host] = parser
+            if parser is not None:
+                asked = parser.crawl_delay(net.USER_AGENT["User-Agent"])
+                if asked:
+                    self._host_delay[host] = max(self.delay, float(asked))
         return self._robots[host]
 
     def allowed(self, url: str) -> bool:
-        parser = self._robots_for(url)
+        with self._host_lock(urlsplit(url).netloc):
+            parser = self._robots_for(url)
         return parser is not None and parser.can_fetch(net.USER_AGENT["User-Agent"], url)
 
     # ---- the cache
@@ -93,22 +127,66 @@ class Fetcher:
     def _cache_path(self, url: str) -> Path:
         return self.cache_dir / urlsplit(url).netloc / hashlib.sha1(url.encode()).hexdigest()
 
-    def get(self, url: str) -> bytes | None:
-        """The page's bytes, or None if robots.txt forbids it or it can't be fetched."""
+    @staticmethod
+    def _read_cached(path: Path) -> bytes:
+        data = path.read_bytes()
+        return gzip.decompress(data) if data[:2] == GZIP_MAGIC else data
+
+    # ---- the one public call
+
+    def get(self, url: str, *, limit: int | None = None) -> bytes | None:
+        """The page's bytes (only the first `limit` of them, if given), or None if robots.txt forbids
+        it, the host is being left alone, or it can't be fetched."""
         url = normalize_url(url)
+        host = urlsplit(url).netloc
         cached = self._cache_path(url)
         if cached.is_file() and cached.stat().st_size > 0:
-            self.stats["cached"] += 1
-            return cached.read_bytes()
-        if not self.allowed(url):
-            self.stats["blocked_by_robots"] += 1
-            return None
-        try:
-            body = self._request(url)
-        except NETWORK_ERRORS:
-            self.stats["failed"] += 1
+            self._count("cached")
+            return self._read_cached(cached)
+        with self._host_lock(host):
+            if host in self.blocked_hosts:
+                self._count("host_blocked")
+                return None
+            parser = self._robots_for(url)
+            if parser is None or not parser.can_fetch(net.USER_AGENT["User-Agent"], url):
+                self._count("blocked_by_robots")
+                return None
+            if self._host_delay.get(host, 0) > MAX_CRAWL_DELAY:
+                self._count("crawl_delay_too_long")
+                return None
+            body = self._download(url, host, limit)
+        if body is None:
             return None
         cached.parent.mkdir(parents=True, exist_ok=True)
-        cached.write_bytes(body)
-        self.stats["fetched"] += 1
+        cached.write_bytes(gzip.compress(body, 6))
+        self._count("fetched")
         return body
+
+    def _download(self, url: str, host: str, limit: int | None) -> bytes | None:
+        for attempt in (1, 2):
+            try:
+                body = self._request(url, limit)
+            except urllib.error.HTTPError as error:
+                if error.code in (401, 403):
+                    self._refusals[host] += 1
+                    if self._refusals[host] >= self.BLOCK_AFTER:
+                        self.blocked_hosts.add(host)
+                elif error.code in (429, 503) and attempt == 1:
+                    self._sleep(self._retry_wait(error))
+                    continue
+                self._count("failed")
+                return None
+            except NETWORK_ERRORS:
+                self._count("failed")
+                return None
+            self._refusals[host] = 0
+            return body[:limit] if limit else body
+        return None
+
+    @staticmethod
+    def _retry_wait(error: urllib.error.HTTPError) -> float:
+        try:
+            asked = float((error.headers or {}).get("Retry-After", ""))
+        except (TypeError, ValueError):
+            asked = 30.0
+        return max(1.0, min(asked, MAX_RETRY_WAIT))
