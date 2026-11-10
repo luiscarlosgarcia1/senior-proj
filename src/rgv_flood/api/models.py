@@ -138,6 +138,13 @@ class NwsReport(BaseModel):
     lat: float | None = None
 
 
+class OtherOutlet(BaseModel):
+    """Another outlet that told the same story (a copy cleaning merged into this one)."""
+
+    publisher: str
+    source_url: str
+
+
 class NewsArticle(BaseModel):
     id: str
     publisher: str
@@ -152,6 +159,7 @@ class NewsArticle(BaseModel):
     topics: list[str] = []
     kind: str = "news"
     headline_from: str = "page"
+    also_reported_by: list[OtherOutlet] = []
 
 
 class EventContext(BaseModel):
@@ -343,3 +351,82 @@ class ChatStatus(BaseModel):
     email: str | None = None
     remaining: int | None = None
     limit: int | None = None
+
+
+# ---- what the news archive says ----
+
+
+class NewsMonth(BaseModel):
+    month: str  # YYYY-MM
+    stories: int  # flood, rain and storm stories
+    rain_inches: float | None = None  # the gauges' average, None when no gauge reported most of the month
+    nws_reports: int
+    claims: int
+
+
+class NewsCorrelation(BaseModel):
+    months: int
+    rain_months: int
+    rain: float | None = None  # Spearman's rank correlation, -1 to 1
+    rain_next_month: float | None = None  # rain in one month against the next month's stories
+    nws: float | None = None
+    claims: float | None = None
+
+
+class NewsDay(BaseModel):
+    date: str
+    stories: int
+    outlets: int
+    headline: str
+    source_url: str
+
+
+class CountyCoverage(BaseModel):
+    county: str
+    stories: int
+    claims: int
+    nws_reports: int
+    stories_per_100_claims: float | None = None
+    stories_per_nws_report: float | None = None
+
+
+class RecurringPlace(BaseModel):
+    name: str
+    stories: int
+    first: str
+    last: str
+    latest_headline: str
+    latest_url: str
+
+
+class WaterProblemTown(BaseModel):
+    city: str
+    county: str | None = None
+    stories: int
+    first: str
+    last: str
+    latest_headline: str
+    latest_url: str
+
+
+class NewsLanguages(BaseModel):
+    spanish: int
+    english: int
+
+
+class NewsInsights(BaseModel):
+    first_year: int
+    months: list[NewsMonth]
+    correlation: NewsCorrelation | None = None
+    wet_quiet: list[NewsMonth]
+    loud_dry: list[NewsMonth]
+    busiest_days: list[NewsDay]
+    coverage: list[CountyCoverage]
+    places: list[RecurringPlace]
+    water_systems: list[WaterProblemTown]
+    languages: NewsLanguages
+
+
+class NewsTimelineDay(BaseModel):
+    date: str
+    stories: list[NewsArticle]

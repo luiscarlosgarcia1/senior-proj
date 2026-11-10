@@ -275,7 +275,30 @@ def _news_rows(db: Database, query: str, parameters: tuple | dict = ()) -> list[
     for row in rows:
         row["counties"] = [slug for slug in row["counties"].split(",") if slug]
         row["topics"] = [topic for topic in row["topics"].split(",") if topic]
+    _attach_copies(db, rows)
     return rows
+
+
+def _attach_copies(db: Database, rows: list[dict]) -> None:
+    """Each story's `also_reported_by`: the other outlets that told the same story (cleaning's copies), each linked."""
+    copies: dict[str, list[dict]] = {}
+    ids = [row["id"] for row in rows]
+    for start in range(0, len(ids), 500):
+        chunk = ids[start:start + 500]
+        try:
+            found = db.app_rows(
+                f"select article_id, publisher, source_url from news_article_copies where article_id in ({','.join('?' * len(chunk))})"
+                " order by published_at, id",
+                tuple(chunk),
+            )
+        except sqlite3.OperationalError as error:
+            if "no such table" not in str(error):
+                raise
+            found = []
+        for copy in found:
+            copies.setdefault(copy.pop("article_id"), []).append(copy)
+    for row in rows:
+        row["also_reported_by"] = copies.get(row["id"], [])
 
 
 def news_articles(
@@ -679,3 +702,216 @@ def trends(db: Database, county_slug: str | None, station_id: str | None, last_y
         "news_by_year": (news := _news_by_year(db, county_slug, last_year)),
         "news_first_year": news[0]["year"] if news else None,
     }
+
+
+# ---- what the news archive says, measured against the data ----
+
+# Before 2017 every outlet's archive is thin (under 100 stories a year), so comparisons start here.
+NEWS_ANALYSIS_FIRST_YEAR = 2017
+# The topics that are about the weather itself, counted against rain, NWS reports and claims.
+WEATHER_TOPICS = ("flood", "rain", "storm")
+# Water words that report a problem with the water service, not a project or a plan.
+WATER_PROBLEM_TERMS = frozenset((
+    "boil water", "water outage", "water pressure", "water main", "water mains", "water line", "water lines", "sewage",
+    "water restrictions", "water shortage", "water shortages", "water rationing",
+))
+BUSIEST_DAYS = 10
+TOP_PLACES = 20
+TOP_WATER_TOWNS = 15
+SURPRISES = 6
+TIMELINE_MAX_DAYS = 31
+NEWS_COUNTIES = ("cameron", "hidalgo", "starr", "willacy")
+# A street or waterway that is only a kind of road, not a place.
+VAGUE_PLACES = frozenset(("state highway", "highway", "expressway", "business"))
+_SPANISH_WORDS = frozenset(("de", "la", "el", "los", "las", "en", "por", "para", "del", "se", "con", "y", "tras", "una",
+                            "un", "al", "que", "su", "sus", "lluvias", "agua", "inundaciones", "condado", "ciudad"))
+_ENGLISH_WORDS = frozenset(("the", "of", "in", "for", "to", "and", "after", "with", "on", "at", "from", "is", "are", "by",
+                            "residents", "city", "county", "water", "flooding", "rain"))
+
+
+def headline_is_spanish(headline: str) -> bool:
+    """Whether a headline is in Spanish: more Spanish than English words, and at least two, so a place name alone
+    ("La Joya", "Los Fresnos") does not count."""
+    words = [word.strip(".,:;!?¿¡'\"()").lower() for word in headline.split()]
+    spanish = sum(word in _SPANISH_WORDS for word in words) + sum(any(c in "áéíóúñ" for c in word) for word in words)
+    english = sum(word in _ENGLISH_WORDS for word in words)
+    return spanish >= 2 and spanish > english
+
+
+def _months(first_year: int, through: date) -> list[str]:
+    return [f"{year:04d}-{month:02d}" for year in range(first_year, through.year + 1) for month in range(1, 13)
+            if (year, month) <= (through.year, through.month)]
+
+
+def _count_by(db: Database, query: str, parameters: tuple | dict = ()) -> dict[str, int]:
+    """{key: n} from a query that selects `key, n`; empty when the table is missing (an older database)."""
+    try:
+        return {row["key"]: row["n"] for row in db.app_rows(query, parameters)}
+    except sqlite3.OperationalError as error:
+        if "no such table" not in str(error):
+            raise
+        return {}
+
+
+def _weather_story() -> str:
+    return "(" + " or ".join(f"',' || topics || ',' like '%,{topic},%'" for topic in WEATHER_TOPICS) + ")"
+
+
+def _percentile(values: list[float], share: float) -> float:
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(share * len(ordered)))]
+
+
+def _surprises(months: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Wet months the news hardly mentioned, and months heavy with weather news but little rain."""
+    rainy = [m for m in months if m["rain_inches"] is not None]
+    if len(rainy) < 10:
+        return [], []
+    rain = [m["rain_inches"] for m in rainy]
+    news = [m["stories"] for m in rainy]
+    wet, rain_middle = _percentile(rain, 0.9), _percentile(rain, 0.5)
+    loud, news_middle = _percentile(news, 0.9), _percentile(news, 0.5)
+    wet_quiet = sorted((m for m in rainy if m["rain_inches"] >= wet and m["stories"] <= news_middle), key=lambda m: -m["rain_inches"])
+    loud_dry = sorted((m for m in rainy if m["stories"] >= loud and m["stories"] and m["rain_inches"] <= rain_middle),
+                      key=lambda m: -m["stories"])
+    return wet_quiet[:SURPRISES], loud_dry[:SURPRISES]
+
+
+def news_insights(db: Database, county_slug: str | None, through: date) -> dict:
+    """What the news archive shows from NEWS_ANALYSIS_FIRST_YEAR to `through`, set against the measurements:
+    weather stories per month beside rain, NWS flood reports and flood-insurance claims (and how closely they move
+    together), the busiest news days, each county's coverage against its claims and reports, the streets and waterways
+    named again and again, water-service problems town by town, and how many headlines are in Spanish.
+
+    Counts are of what the outlets published, not of what happened; the page says so."""
+    first = NEWS_ANALYSIS_FIRST_YEAR
+    empty = {"first_year": first, "months": [], "correlation": None, "wet_quiet": [], "loud_dry": [], "busiest_days": [],
+             "coverage": [], "places": [], "water_systems": [], "languages": {"spanish": 0, "english": 0}}
+    try:
+        db.app_rows("select 1 from news_articles limit 1")
+    except sqlite3.OperationalError as error:
+        if "no such table" not in str(error):
+            raise
+        return empty
+    since, until = f"{first}-01-01", through.isoformat()
+    where, parameters = (NEWS_COUNTY, {"county": county_slug, "like": f"%,{county_slug},%"}) if county_slug else ("1=1", {})
+    window = {"since": since, "until": until + "T99"}  # a time on the last day still counts
+    in_window = "published_at >= :since and published_at <= :until"
+
+    stories = _count_by(db, f"""select substr(published_at, 1, 7) as key, count(*) as n from news_articles
+                                where {where} and {_weather_story()} and {in_window} group by key""", parameters | window)
+    county = {"county": county_slug} if county_slug else {}
+    nws = _count_by(db, "select substr(reported_at, 1, 7) as key, count(*) as n from nws_flood_reports"
+                        + (" where county = :county" if county_slug else "") + " group by key", county)
+    claims = _count_by(db, "select substr(date_of_loss, 1, 7) as key, count(*) as n from nfip_claims where date_of_loss is not null"
+                           + (" and county = :county" if county_slug else "") + " group by key", county)
+    rain = {f"{m['year']:04d}-{m['month']:02d}": m["inches"] for m in _rain_months(db, county_slug, None)}
+    months = [{"month": key, "stories": stories.get(key, 0), "rain_inches": rain.get(key), "nws_reports": nws.get(key, 0),
+               "claims": claims.get(key, 0)} for key in _months(first, through)]
+
+    rainy = [m for m in months if m["rain_inches"] is not None]
+    following = [(m["rain_inches"], months[i + 1]["stories"]) for i, m in enumerate(months[:-1]) if m["rain_inches"] is not None]
+    correlation = {
+        "months": len(months),
+        "rain_months": len(rainy),
+        "rain": rank_correlation([m["stories"] for m in rainy], [m["rain_inches"] for m in rainy]) if len(rainy) >= 12 else None,
+        "rain_next_month": rank_correlation([s for _, s in following], [r for r, _ in following]) if len(following) >= 12 else None,
+        "nws": rank_correlation([m["stories"] for m in months], [m["nws_reports"] for m in months]),
+        "claims": rank_correlation([m["stories"] for m in months], [m["claims"] for m in months]),
+    }
+    wet_quiet, loud_dry = _surprises(months)
+
+    rows = db.app_rows(f"""select id, publisher, source_url, headline, published_at, county, counties, city, places,
+                                  matched_terms, topics from news_articles
+                           where {where} and {in_window} order by published_at, id""", parameters | window)
+    spanish = sum(headline_is_spanish(row["headline"]) for row in rows)
+    return {
+        "first_year": first,
+        "months": months,
+        "correlation": correlation,
+        "wet_quiet": wet_quiet,
+        "loud_dry": loud_dry,
+        "busiest_days": _busiest_days(rows),
+        "coverage": _coverage(db, since, until),
+        "places": _recurring_places(rows),
+        "water_systems": _water_problems(rows),
+        "languages": {"spanish": spanish, "english": len(rows) - spanish},
+    }
+
+
+def _busiest_days(rows: list[dict]) -> list[dict]:
+    days: dict[str, list[dict]] = {}
+    for row in rows:
+        if set(row["topics"].split(",")) & set(WEATHER_TOPICS):
+            days.setdefault(row["published_at"][:10], []).append(row)
+    ranked = sorted(days.items(), key=lambda item: (-len(item[1]), item[0]))[:BUSIEST_DAYS]
+    return [{"date": day, "stories": len(stories), "outlets": len({s["publisher"] for s in stories}),
+             "headline": stories[0]["headline"], "source_url": stories[0]["source_url"]} for day, stories in ranked]
+
+
+def _coverage(db: Database, since: str, until: str) -> list[dict]:
+    """Each county's stories (those that name it; Valley-wide ones belong to no county) beside its claims and NWS reports."""
+    result = []
+    for slug in NEWS_COUNTIES:
+        stories = db.scalar(
+            """select count(*) from news_articles where (county = :county or ',' || counties || ',' like :like)
+               and published_at >= :since and published_at <= :until""",
+            {"county": slug, "like": f"%,{slug},%", "since": since, "until": until + "T99"},
+        ) or 0
+        claims = _count_by(db, "select 'all' as key, count(*) as n from nfip_claims where county = ? and date_of_loss >= ?"
+                               " and date_of_loss <= ?", (slug, since, until)).get("all", 0)
+        nws = _count_by(db, "select 'all' as key, count(*) as n from nws_flood_reports where county = ? and reported_at >= ?"
+                            " and reported_at <= ?", (slug, since, until + "T99")).get("all", 0)
+        result.append({
+            "county": slug, "stories": stories, "claims": claims, "nws_reports": nws,
+            "stories_per_100_claims": round(100 * stories / claims, 1) if claims else None,
+            "stories_per_nws_report": round(stories / nws, 1) if nws else None,
+        })
+    return result
+
+
+def _recurring_places(rows: list[dict]) -> list[dict]:
+    """Streets and waterways named in two or more stories ("The Military Highway" is Military Highway)."""
+    found: dict[str, dict] = {}
+    for row in rows:
+        names = {name.strip().removeprefix("The ").strip() for name in (row["places"] or "").split(";") if name.strip()}
+        for name in names:
+            if name.lower() in VAGUE_PLACES:
+                continue
+            place = found.setdefault(name.lower(), {"name": name, "ids": set(), "first": row["published_at"][:10]})
+            place["ids"].add(row["id"])
+            place |= {"last": row["published_at"][:10], "latest_headline": row["headline"], "latest_url": row["source_url"]}
+    ranked = sorted((p for p in found.values() if len(p["ids"]) >= 2), key=lambda p: (-len(p["ids"]), p["name"]))
+    return [{"name": p["name"], "stories": len(p["ids"]), "first": p["first"], "last": p["last"],
+             "latest_headline": p["latest_headline"], "latest_url": p["latest_url"]} for p in ranked[:TOP_PLACES]]
+
+
+def _water_problems(rows: list[dict]) -> list[dict]:
+    """Towns with stories about a problem with their water service (boil-water notices, outages, low pressure, broken
+    mains, sewage, restrictions), most first."""
+    towns: dict[str, dict] = {}
+    for row in rows:
+        terms = {term.strip().replace("-", " ") for term in row["matched_terms"].split(",")}
+        if not row["city"] or not terms & WATER_PROBLEM_TERMS:
+            continue
+        town = towns.setdefault(row["city"], {"city": row["city"], "county": row["county"], "stories": 0,
+                                              "first": row["published_at"][:10]})
+        town["stories"] += 1
+        town |= {"last": row["published_at"][:10], "latest_headline": row["headline"], "latest_url": row["source_url"]}
+    return sorted(towns.values(), key=lambda t: (-t["stories"], t["city"]))[:TOP_WATER_TOWNS]
+
+
+def news_timeline(db: Database, start: date, end: date, county_slug: str | None = None) -> list[dict]:
+    """Every day from `start` to `end` with the stories published that day, oldest first."""
+    where, parameters = (NEWS_COUNTY, {"county": county_slug, "like": f"%,{county_slug},%"}) if county_slug else ("1=1", {})
+    stories = _news_rows(
+        db,
+        f"""select {NEWS_COLUMNS} from news_articles where {where}
+            and substr(published_at, 1, 10) between :start and :end order by published_at, id""",
+        parameters | {"start": start.isoformat(), "end": end.isoformat()},
+    )
+    by_day: dict[str, list[dict]] = {}
+    for story in stories:
+        by_day.setdefault(story["published_at"][:10], []).append(story)
+    days = [(start + timedelta(days=n)).isoformat() for n in range((end - start).days + 1)]
+    return [{"date": day, "stories": by_day.get(day, [])} for day in days]

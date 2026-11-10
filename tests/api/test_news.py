@@ -12,7 +12,7 @@ def test_news_lists_newest_first(api_client):
         "id": "news-1", "publisher": "KRGV Channel 5 News", "source_url": "https://example.test/news/news-1",
         "headline": "Flooding closes Weslaco streets", "published_at": "2020-07-27T14:03:00Z",
         "excerpt": "A short description.", "county": "hidalgo", "counties": ["hidalgo"], "city": "Weslaco",
-        "places": None, "topics": ["flood"], "kind": "news", "headline_from": "page",
+        "places": None, "topics": ["flood"], "kind": "news", "headline_from": "page", "also_reported_by": [],
     }
 
 
