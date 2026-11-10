@@ -3,8 +3,7 @@ district, the state flood plan and two cities; FEMA's NFIP claims; Census
 tracts and water lines; and the National Weather Service's storm reports.
 
 Each function returns data that is downloaded once and kept in a cache folder
-exactly as the publisher sent it. The map build uses the default cache under
-`tmp/`; `fetch_ml_inputs.py` passes its own folder for the layers it shares.
+exactly as the publisher sent it, in the default cache under `tmp/`.
 """
 
 from __future__ import annotations

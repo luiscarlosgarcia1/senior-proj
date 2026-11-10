@@ -13,7 +13,7 @@ data/generated/
 # them again. Safe to delete.
 /tmp/
 
-# Inputs for the Hidalgo model: public downloads from pipeline/fetch_ml_inputs.py.
+# Leftover downloads from the dropped ML work (ignored until the folder is deleted).
 data/ml/
 
 # The only data that IS committed is data/seed/ (see data/seed/README.md).

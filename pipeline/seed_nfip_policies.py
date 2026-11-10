@@ -5,13 +5,13 @@ and year, from FEMA's "FIMA NFIP Redacted Policies v2" export.
 FEMA retired that dataset on 2026-10-15, and the newer v3 cannot be filtered by
 county, so the counts are kept as a seed file rather than downloaded on each
 build. Run this only to regenerate them from a saved copy of the export (one
-JSON policy per line, as `fetch_ml_inputs.py --only nfip_policies` saved it).
+JSON policy per line).
 
 A row of the export is one policy term, usually a year long, with the number of
 policies it covers. Policies in force in a year are counted as the policies
 whose term began that year.
 
-Run:  uv run python pipeline/seed_nfip_policies.py [path/to/nfip_policies_v2.ndjson]
+Run:  uv run python pipeline/seed_nfip_policies.py path/to/nfip_policies_v2.ndjson
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from paths import ML_RAW, SEED_DIR
+from paths import SEED_DIR
 
 from rgv_flood.counties import FIPS_TO_SLUG
 
@@ -44,7 +44,9 @@ def policies_by_year(export: Path) -> Counter:
 
 
 def main() -> None:
-    export = Path(sys.argv[1]) if len(sys.argv) > 1 else ML_RAW / "nfip" / "nfip_policies_v2.ndjson"
+    if len(sys.argv) != 2:
+        raise SystemExit("Usage: seed_nfip_policies.py path/to/nfip_policies_v2.ndjson")
+    export = Path(sys.argv[1])
     counts = policies_by_year(export)
     with SEED_FILE.open("w", encoding="utf-8", newline="") as out:
         writer = csv.writer(out)

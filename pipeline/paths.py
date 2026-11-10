@@ -19,7 +19,6 @@ SEED_DIR = DATA_DIR / "seed"
 # them again. Only a cache: delete it and the next build downloads everything.
 DOWNLOAD_CACHE = REPO_ROOT / "tmp"
 
-ML_RAW = DATA_DIR / "ml" / "raw"  # inputs for the Hidalgo model (fetch_ml_inputs.py)
 
 
 def seed_file(slug: str, name: str, seed_dir: Path = SEED_DIR) -> Path:

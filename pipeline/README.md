@@ -290,17 +290,6 @@ source and update the `live_signals` table through `live_signals.py`
 run by hand, and takes `--output` to write to a different database file.
 `run_live_signal_fixture.py` loads the test fixture instead of a live source.
 
-## `fetch_ml_inputs.py` — inputs for the Hidalgo model
-
-```bash
-uv run --group pipeline python pipeline/fetch_ml_inputs.py [--only hcdd1,nfip,...]
-```
-
-Separate from the app build. Gathers elevation, NLCD, soils, rainfall-frequency
-grids, Overture layers, NFIP claims and policies, and the drainage district's
-published layers into the gitignored `data/ml/raw/` for the planned
-flood-susceptibility model. Re-runs skip files already present.
-
 ## Shared helpers
 
 | Module | What it holds |

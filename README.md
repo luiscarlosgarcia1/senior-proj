@@ -294,11 +294,6 @@ The only data files in the repository are the seed files in `data/seed/`:
 flood-hazard geometry, curated reports and yearly NFIP policy counts that no
 publisher offers as a scripted download. See [data/seed/README.md](data/seed/README.md).
 
-`pipeline/fetch_ml_inputs.py` is separate from the app: it gathers the public
-inputs for the planned Hidalgo flood-susceptibility model (elevation, NLCD,
-soils, Atlas 14 rainfall, Overture buildings and roads, NFIP claims and
-policies, Hidalgo drainage-district layers) into the gitignored `data/ml/raw/`.
-
 ## Configuration
 
 Settings are environment variables, all optional:
@@ -357,7 +352,6 @@ handoff kept in `docs/design/handoff/`.
 | `data/seed/` | The seed files (see above) | yes |
 | `data/generated/` | The database | no |
 | `tmp/` | Download cache of the publishers' files; safe to delete | no |
-| `data/ml/raw/` | Downloads from `fetch_ml_inputs.py` | no |
 
 ## Troubleshooting
 
