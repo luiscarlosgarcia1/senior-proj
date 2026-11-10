@@ -31,6 +31,28 @@ single gauge:
 Each chart can be viewed as a table. Flood insurance claims and policies stay
 on `/claims`, which `/trends` links to.
 
+## Water in the news
+
+`/news` sets the news archive against what was measured, from 2017 (before that every outlet's archive is thin),
+for the four counties together or one at a time:
+
+- **News against the measurements.** Flood, rain and storm stories per month beside the gauges' average rain,
+  flood reports to NWS Brownsville and flood-insurance claims by date of loss, with Spearman rank correlations
+  (same month, and rain against the next month's stories). It also names the wet months the news hardly
+  mentioned and the news-heavy months with little rain (usually the aftermath of a flood the month before).
+- **The busiest news days.** Pick one to see every outlet's stories from three days before to three days after,
+  day by day.
+- **Places named again and again.** Streets, roads and waterways named in two or more stories.
+- **Water-service problems, town by town.** Boil-water notices, outages, low pressure, broken mains, sewage and
+  water restrictions, by the town each story names first.
+- **Coverage against what happened.** Each county's stories (Valley-wide stories are not credited to any one
+  county) beside its claims and NWS reports, as stories per 100 claims and per report, and the share of
+  Spanish headlines.
+
+Counts are of what the outlets published, not of what happened, and correlation is not cause; the page says so.
+Wherever a story appears, a headline rebuilt from the story's web address (ValleyCentral, Border Report) is
+labeled as such, and the other outlets that told the same story are linked under it.
+
 ## Ask the data (the chat box)
 
 An optional **Ask the data** button sits at the bottom right of every page. It opens a chat where a
@@ -187,7 +209,8 @@ The front page, `/`, is a short landing page: what the project compares, which c
 - **News stories.** A picked event also lists news stories for its county from
   the day before it began to three days after it ended. Nothing links a story
   to one NOAA event, so this is a match on county and date only, and the panel
-  says so. Stories are not verified conditions.
+  says so. Stories are not verified conditions. A headline rebuilt from the web address is labeled,
+  and other outlets that told the same story are linked under it.
 - **County.** The county selector fits the map to that county and narrows the
   events, rainfall records, reports and alerts to it.
 - **Basemap labels.** Town, road and place names show on the US side only;
@@ -236,6 +259,8 @@ responses at `/docs`:
 | `GET /api/v1/news` | Water-related news stories and announcements, filterable by county, year, topic (flood, rain, storm, drought, water_system, water) and kind (news, official) |
 | `GET /api/v1/live-signals`, `/api/v1/live-signals.geojson` | Current official alerts and when they were last refreshed |
 | `GET /api/v1/history` | Claims, payments, policies, rain and events, year by year |
+| `GET /api/v1/news/insights` | What the news archive shows from 2017 through last month against rain, NWS reports and claims: monthly series and rank correlations, surprising months, busiest days, coverage by county, recurring places, water-service problems by town, Spanish share; filter by county |
+| `GET /api/v1/news/timeline` | Every day from `start` to `end` (at most a month) with that day's stories; filter by county |
 | `GET /api/v1/trends` | Rain by year and month, flood events, NWS reports and news stories per year; filter by county and gauge |
 | `POST /api/v1/chat`, `GET /api/v1/chat/status` | The data assistant: ask a question (read-only, limited per day) and see the messages left |
 | `/auth/login`, `/auth/callback`, `/auth/logout` | Sign in with a UTRGV Microsoft account (browser redirects, not JSON) |
