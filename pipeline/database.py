@@ -186,10 +186,12 @@ TABLES: dict[str, tuple[str, ...]] = {
            )""",
         "CREATE INDEX IF NOT EXISTS nws_flood_reports_by_county_time ON nws_flood_reports(county, reported_at)",
     ),
-    # Flood-related news stories, 2018 on: the headline, the page's own short
-    # description and a link, never the article text. `counties` and
-    # `matched_terms` are comma-separated; `county` is the first county the
-    # story names. A story gets no coordinate: nothing here is a location.
+    # Water-related news stories and official announcements (floods, rain, storms,
+    # drought, water systems, anything about water) from the Valley's publishers:
+    # the headline, the page's own short description and a link, never the article
+    # text. `counties`, `topics` and `matched_terms` are comma-separated; `county`
+    # is the first county the story names, null when it names only the Valley as a
+    # whole. A story gets no coordinate: nothing here is a location.
     "news_articles": (
         """CREATE TABLE IF NOT EXISTS news_articles (
              id TEXT PRIMARY KEY,                  -- hash of the normalized URL
@@ -203,6 +205,9 @@ TABLES: dict[str, tuple[str, ...]] = {
              city TEXT,
              places TEXT,                          -- streets and water named in the headline or description
              matched_terms TEXT NOT NULL,
+             topics TEXT NOT NULL,                 -- flood, rain, storm, drought, water_system, water
+             kind TEXT NOT NULL,                   -- news, or official for a county, city or agency
+             headline_from TEXT NOT NULL,          -- page, or address when the publisher's pages are closed to us and the headline is made from the address
              retrieved_at TEXT NOT NULL
            )""",
         "CREATE INDEX IF NOT EXISTS news_articles_by_county_date ON news_articles(county, published_at)",

@@ -128,7 +128,8 @@ def _news(story_id: str, county: str, published_at: str, headline: str, **values
         "id": story_id, "publisher": "KRGV Channel 5 News", "source_url": f"https://example.test/news/{story_id}",
         "headline": headline, "published_at": published_at, "excerpt": "A short description.",
         "county": county, "counties": county, "city": None, "places": None,
-        "matched_terms": "flood", "retrieved_at": "2026-10-23T12:00:00Z", **values,
+        "matched_terms": "flood", "topics": "flood", "kind": "news", "headline_from": "page",
+        "retrieved_at": "2026-10-23T12:00:00Z", **values,
     }
 
 
