@@ -17,7 +17,7 @@ def test_landing_page_links_to_claims_and_lists_the_counties(page, live_server):
     page.goto(f"{live_server}/")
 
     expect(page.locator("[data-county]")).to_have_text(["Cameron", "Hidalgo", "Starr", "Willacy"])
-    expect(page.locator("#landing").get_by_role("link", name="Claims & rainfall by year")).to_have_attribute("href", "/claims")
+    expect(page.locator("#landing").get_by_role("link", name="Claims & Rainfall by Year")).to_have_attribute("href", "/claims")
 
 
 def test_old_shared_map_links_still_open_the_map(page, live_server):

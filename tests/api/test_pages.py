@@ -36,8 +36,8 @@ def test_map_page_renders(api_client):
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-cache"
     html = response.text
-    assert "<title>RGV Flood Impact Visualizer</title>" in html
-    assert 'href="/claims"' in html and "Map explorer" in html
+    assert "<title>Map Explorer · RGV Flood Impact Visualizer</title>" in html
+    assert 'href="/claims"' in html and "Map Explorer" in html
     assert 'data-theme="light"' in html  # the default before the bootstrap script runs
     assert "/static/vendor/alpine/alpine-csp.min.js" in html
     assert "Educational project only" not in html  # removed at the reader's request
@@ -48,7 +48,7 @@ def test_claims_page_renders(api_client):
     response = api_client.get("/claims")
 
     assert response.status_code == 200
-    assert "Claims &amp; rainfall by year" in response.text
+    assert "Claims &amp; Rainfall by Year" in response.text
 
 
 def test_county_selector_lists_the_four_counties(api_client):
@@ -153,7 +153,7 @@ def test_news_page_renders_and_every_page_links_to_it(api_client):
 
     assert response.status_code == 200
     assert 'id="news-page"' in response.text and "js/pages/news.js" in response.text
-    for section in ("data-busiest", "data-places", "data-water-systems", "data-coverage", 'data-chart="stories"', 'data-chart="signals"'):
+    for section in ("data-outlet-directory", "data-outlet-archive", "data-source-stories", "data-outlet-profile"):
         assert section in response.text, section
     assert 'href="/news"' in api_client.get("/").text and 'href="/news"' in api_client.get("/map").text
     assert response.headers["cache-control"] == "no-cache"

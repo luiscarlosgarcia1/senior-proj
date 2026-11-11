@@ -4,6 +4,7 @@
 {% block title %}{{ t("app.trends_title") }}{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="trends-page" x-data="trendsPage">
+  <h1 class="mb-4 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">{{ t("nav.trends") }}</h1>
   <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
     {{ county_select("trends") }}
     <label class="flex h-8 items-center gap-2 rounded-md border border-line bg-bg px-2.5">

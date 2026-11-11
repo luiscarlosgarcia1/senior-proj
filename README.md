@@ -33,6 +33,15 @@ on `/claims`, which `/trends` links to.
 
 ## Water in the news
 
+### Demo 1: source-first coverage atlas
+
+This branch makes `/news` a publisher-led demo: an outlet directory opens each
+publisher's linked archive, subject filters narrow that outlet's coverage, and
+the side rail compares the selected outlet's subject counts with the full
+archive. It is deliberately distinct from the Claims and Trends dashboards:
+the central question is which publishers covered a water issue, not how one
+time series moved.
+
 `/news` sets the news archive against what was measured, from 2017 (before that every outlet's archive is thin),
 for the four counties together or one at a time:
 

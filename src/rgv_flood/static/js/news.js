@@ -1,230 +1,76 @@
-/* What the news archive says, measured against the data: weather stories per month beside rain, NWS flood
- * reports and flood-insurance claims; the months where they disagree; the busiest news days, each opening a
- * day-by-day timeline of every outlet's stories; the streets and waterways named again and again; water-service
- * problems town by town; and each county's coverage against its claims and reports.
- * Data: /api/v1/news/insights and /api/v1/news/timeline. */
+/* A source-first view of the water-news archive. The selected publisher owns the main reading pane. */
 
 import { getJson, isAbort } from "./api.js";
 import { t } from "./i18n.js";
-import { MONTHS, baseLayout, capitalized, drawChart, sum, token } from "./charts.js";
 import { day } from "./panels/format.js";
-import { storyMethods } from "./story.js";
 
-const TIMELINE_DAYS_AROUND = 3;
-
-const monthName = (key) => `${MONTHS[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
-
-/** "2020-07-27" moved by `days`, as an ISO day. */
-function shift(iso, days) {
-  const moment = new Date(`${iso}T00:00:00Z`);
-  moment.setUTCDate(moment.getUTCDate() + days);
-  return moment.toISOString().slice(0, 10);
-}
-
-/** A rank correlation in words: the number and how strong it is. */
-function strength(r) {
-  if (r === null || r === undefined) return "—";
-  const word = Math.abs(r) >= 0.5 ? "strong" : Math.abs(r) >= 0.3 ? "moderate" : Math.abs(r) >= 0.1 ? "weak" : "none";
-  return `${r.toFixed(2)} · ${t(`news.page.r.${word}`)}`;
+function initials(name) {
+  const known = {
+    "KRGV Channel 5 News": "C5",
+  };
+  if (known[name]) return known[name];
+  if (name.startsWith("ValleyCentral")) return "VC";
+  return name.split(/\s+/).filter((word) => /[A-Za-z]/.test(word)).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
 }
 
 document.addEventListener("alpine:init", () => {
   const Alpine = window.Alpine;
-
   Alpine.data("newsPage", () => ({
-    insights: null,
-    timeline: [],
-    openDate: null,
-    loadingTimeline: false,
-
-    init() {
-      Alpine.effect(() => this.load(Alpine.store("app").county));
-      window.addEventListener("rgv:theme", () => this.draw());
-    },
+    stories: [], activeOutlet: "", activeTopic: "", loading: true,
+    init() { Alpine.effect(() => this.load(Alpine.store("app").county)); },
     async load(county) {
+      this.loading = true;
+      this.activeTopic = "";
       try {
-        this.insights = await getJson("news/insights", { county: county || null });
-        this.timeline = [];
-        this.openDate = null;
-        this.$nextTick(() => this.draw());
+        this.stories = await getJson("news", { county: county || null });
+        if (!this.outlets.some((outlet) => outlet.name === this.activeOutlet)) this.activeOutlet = this.outlets[0]?.name || "";
       } catch (error) {
-        if (!isAbort(error)) console.warn("news insights unavailable", error);
+        if (!isAbort(error)) console.warn("news archive unavailable", error);
+        this.stories = [];
+        this.activeOutlet = "";
+      } finally { this.loading = false; }
+    },
+    get outlets() {
+      const groups = new Map();
+      for (const story of this.stories) {
+        const outlet = groups.get(story.publisher) || { name: story.publisher, stories: [], topics: new Set() };
+        outlet.stories.push(story);
+        story.topics.forEach((topic) => outlet.topics.add(topic));
+        groups.set(story.publisher, outlet);
       }
+      return [...groups.values()].map((outlet) => ({ ...outlet, count: outlet.stories.length, latest: outlet.stories[0], initials: initials(outlet.name) }))
+        .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
     },
-
-    // ---- header and tiles
-    get months() {
-      return this.insights?.months || [];
+    get active() { return this.outlets.find((outlet) => outlet.name === this.activeOutlet); },
+    get activeStories() { return this.active?.stories || []; },
+    get filteredStories() { return this.activeTopic ? this.activeStories.filter((story) => story.topics.includes(this.activeTopic)) : this.activeStories; },
+    get outletTopics() { return [...(this.active?.topics || [])].sort(); },
+    get activeInitials() { return this.active?.initials || "—"; },
+    get activeSummary() { return this.active ? t("news.atlas.active_summary", { stories: this.active.count.toLocaleString() }) : ""; },
+    get outletProfile() { return this.active ? t("news.atlas.profile_copy", { stories: this.active.count.toLocaleString(), outlet: this.active.name }) : ""; },
+    get archiveSpan() {
+      if (!this.activeStories.length) return "—";
+      const dates = this.activeStories.map((story) => story.published_at).sort();
+      return `${day(dates[0])} – ${day(dates.at(-1))}`;
     },
-    get place() {
-      const slug = Alpine.store("app").county;
-      return slug ? t("claims.county", { name: capitalized(slug) }) : t("county.all");
-    },
-    get span() {
-      if (!this.months.length) return "";
-      return t("news.page.span", { place: this.place, first: monthName(this.months[0].month), last: monthName(this.months.at(-1).month) });
-    },
-    get tileStories() {
-      return this.months.length ? sum(this.months.map((m) => m.stories)).toLocaleString() : "—";
-    },
-    get tileStoriesSub() {
-      return t(Alpine.store("app").county ? "news.page.tile.stories_sub_county" : "news.page.tile.stories_sub");
-    },
-    get tileRain() {
-      return strength(this.insights?.correlation?.rain);
-    },
-    get tileRainSub() {
-      const c = this.insights?.correlation;
-      return c ? t("news.page.tile.rain_sub", { months: c.rain_months, next: strength(c.rain_next_month) }) : "";
-    },
-    get tileNws() {
-      return strength(this.insights?.correlation?.nws);
-    },
-    get tileNwsSub() {
-      return t("news.page.tile.nws_sub");
-    },
-    get tileClaims() {
-      return strength(this.insights?.correlation?.claims);
-    },
-    get tileClaimsSub() {
-      return t("news.page.tile.claims_sub");
-    },
-
-    // ---- months where the news and the rain disagree (inside x-for: `this.m`)
-    get wetQuiet() {
-      return this.insights?.wet_quiet || [];
-    },
-    get loudDry() {
-      return this.insights?.loud_dry || [];
-    },
-    monthName() {
-      return monthName(this.m.month);
-    },
-    monthNumbers() {
-      return t("news.page.month_numbers", { rain: this.m.rain_inches.toFixed(1), stories: this.m.stories });
-    },
-
-    // ---- the busiest days (inside x-for: `this.d`) and the timeline around one
-    get busiest() {
-      return this.insights?.busiest_days || [];
-    },
-    dayName() {
-      return day(this.d.date);
-    },
-    dayCounts() {
-      return t("news.page.day_counts", { stories: this.d.stories, outlets: this.d.outlets });
-    },
-    isOpen() {
-      return this.openDate === this.d.date;
-    },
-    dayClass() {
-      return this.isOpen() ? "border-accent" : "";
-    },
-    async openDay() {
-      const date = this.d.date;
-      this.openDate = date;
-      this.loadingTimeline = true;
-      try {
-        this.timeline = await getJson("news/timeline", {
-          start: shift(date, -TIMELINE_DAYS_AROUND), end: shift(date, TIMELINE_DAYS_AROUND), county: Alpine.store("app").county || null,
-        });
-      } catch (error) {
-        if (!isAbort(error)) console.warn("news timeline unavailable", error);
-      } finally {
-        this.loadingTimeline = false;
+    get profileTopics() { return this.outletTopics.map((topic) => this.topicLabel(topic)).join(", "); },
+    get notablePlaces() {
+      const counts = new Map();
+      for (const story of this.activeStories) {
+        if (story.city) counts.set(story.city, (counts.get(story.city) || 0) + 1);
       }
+      return [...counts].map(([name, count]) => ({ name, count })).sort((left, right) => right.count - left.count || left.name.localeCompare(right.name)).slice(0, 5);
     },
-    get timelineTitle() {
-      return this.openDate ? t("news.page.timeline_title", { day: day(this.openDate), around: TIMELINE_DAYS_AROUND }) : "";
-    },
-    timelineDay() {
-      return day(this.tday.date);
-    },
-    // inside x-for: `this.story` (components/news_story.html)
-    ...storyMethods,
-
-    // ---- recurring places (this.p) and water-service problems (this.w)
-    get places() {
-      return this.insights?.places || [];
-    },
-    placeSpan() {
-      return t("news.page.span_days", { first: day(this.p.first), last: day(this.p.last) });
-    },
-    get towns() {
-      return this.insights?.water_systems || [];
-    },
-    townSpan() {
-      return t("news.page.span_days", { first: day(this.w.first), last: day(this.w.last) });
-    },
-
-    // ---- coverage by county (this.c)
-    get coverage() {
-      return this.insights?.coverage || [];
-    },
-    countyName() {
-      return capitalized(this.c.county);
-    },
-    perClaims() {
-      return this.c.stories_per_100_claims ?? "—";
-    },
-    perReport() {
-      return this.c.stories_per_nws_report ?? "—";
-    },
-    get languageText() {
-      const languages = this.insights?.languages;
-      if (!languages) return "";
-      const total = languages.spanish + languages.english;
-      const share = total ? Math.round((100 * languages.spanish) / total) : 0;
-      return t("news.page.languages", { spanish: languages.spanish.toLocaleString(), total: total.toLocaleString(), share });
-    },
-
-    // ---- charts
-    figure(chart) {
-      const months = this.months;
-      const x = months.map((m) => `${m.month}-15`);
-      const text = months.map((m) => monthName(m.month));
-      const muted = token("--muted");
-      const series = chart === "stories"
-        ? [
-            { type: "bar", name: t("news.page.series.stories"), y: months.map((m) => m.stories), color: "--c-photos" },
-            { type: "scatter", name: t("news.page.series.rain"), y: months.map((m) => m.rain_inches), color: "--c-nfhl", yaxis: "y2" },
-          ]
-        : [
-            { type: "bar", name: t("news.page.series.nws"), y: months.map((m) => m.nws_reports), color: "--c-nws" },
-            { type: "scatter", name: t("news.page.series.claims"), y: months.map((m) => m.claims), color: "--c-claims", yaxis: "y2" },
-          ];
-      const data = series.map((s) => ({
-        type: s.type, name: s.name, x, y: s.y, customdata: text, yaxis: s.yaxis || "y",
-        mode: s.type === "scatter" ? "lines" : undefined,
-        connectgaps: false,
-        marker: { color: token(s.color), line: { width: 0 } },
-        line: { color: token(s.color), width: 1.5 },
-        hovertemplate: `%{customdata} · %{y}<extra>${s.name}</extra>`,
-      }));
-      const axis = { fixedrange: true, gridcolor: token("--line"), zeroline: false, nticks: 3, rangemode: "tozero", tickformat: "~s" };
-      return {
-        data,
-        layout: {
-          ...baseLayout(190, { l: 48, r: 48, t: 10, b: 24 }),
-          bargap: 0.15,
-          hovermode: "x unified",
-          showlegend: true,
-          legend: { orientation: "h", y: 1.2, x: 0, font: { size: 10, color: muted } },
-          xaxis: { type: "date", fixedrange: true, showgrid: false, zeroline: false },
-          yaxis: axis,
-          // "auto": Plotly otherwise lines the right axis's ticks up with the left's, at odd numbers
-          yaxis2: { ...axis, overlaying: "y", side: "right", showgrid: false, tickmode: "auto" },
-        },
-      };
-    },
-    draw() {
-      if (!this.months.length || !window.Plotly) return;
-      for (const chart of ["stories", "signals"]) {
-        const element = this.$root.querySelector(`[data-chart="${chart}"]`);
-        if (!element) continue;
-        const { data, layout } = this.figure(chart);
-        drawChart(element, data, layout);
-      }
-    },
+    get storyTotal() { return this.stories.length.toLocaleString(); },
+    get leadingOutlet() { return this.outlets[0]?.name || "—"; },
+    get archiveLabel() { return this.stories.length ? t("news.atlas.archive_summary", { stories: this.storyTotal }) : ""; },
+    get outletCountLabel() { return this.outlets.length ? t("news.atlas.outlet_count", { outlets: this.outlets.length }) : ""; },
+    selectOutlet(name) { this.activeOutlet = name; this.activeTopic = ""; },
+    toggleTopic(topic) { this.activeTopic = this.activeTopic === topic ? "" : topic; },
+    outletClass(name) { return name === this.activeOutlet ? "border-brand ring-1 ring-brand/25" : "border-line"; },
+    topicClass(topic) { return topic === this.activeTopic ? "border-brand bg-brand text-white" : "border-line bg-bg text-muted hover:border-brand/60"; },
+    outletSummary(outlet) { return t("news.atlas.outlet_summary", { stories: outlet.count.toLocaleString(), date: day(outlet.latest.published_at) }); },
+    storyDate(story) { return day(story.published_at); },
+    topicLabel(topic) { return t(`news.atlas.topic.${topic}`); },
   }));
 });

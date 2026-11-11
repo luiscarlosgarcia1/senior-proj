@@ -1,5 +1,6 @@
-"""Water in the news: news against the measurements, the busiest days and their timelines, places, water-service
-problems and coverage by county."""
+"""Water in the news: a source-first archive of publisher coverage."""
+
+import re
 
 from browser_support import wait_js
 from playwright.sync_api import expect
@@ -7,34 +8,32 @@ from playwright.sync_api import expect
 
 def _open(page, live_server):
     page.goto(f"{live_server}/news")
-    wait_js(page, "document.querySelectorAll('[data-chart].js-plotly-plot').length === 2")
+    wait_js(page, "document.querySelectorAll('[data-outlet]').length > 0")
     return page
 
 
-def test_news_page_draws_both_charts_and_every_section(page, live_server, console_errors):
+def test_news_page_groups_the_archive_by_publisher(page, live_server, console_errors):
     _open(page, live_server)
 
-    stories = page.evaluate("document.querySelector('[data-chart=stories]').data[0].y.reduce((a, b) => a + b, 0)")
-    assert stories == 3  # the fixture's three stories are all flood, rain or storm stories
-    expect(page.locator("[data-tile=stories] [data-value]")).to_have_text("3")
-    for section in ("[data-busiest]", "[data-places]", "[data-water-systems]", "[data-coverage]"):
-        expect(page.locator(section)).to_be_visible()
-    expect(page.locator("[data-coverage] tbody tr")).to_have_count(4)
+    expect(page.locator("[data-outlet-directory] [data-outlet]")).to_have_count(1)
+    expect(page.locator("[data-outlet-directory] [data-outlet] span").first).to_have_text("C5")
+    expect(page.locator("[data-outlet-archive]")).to_contain_text("KRGV Channel 5 News")
+    expect(page.locator("[data-source-stories] a")).to_have_count(3)
+    expect(page.locator("[data-published-timeline]")).to_be_visible()
+    expect(page.locator("[data-outlet-profile]")).to_contain_text("3 linked water-related stories")
+    expect(page.locator("[data-notable-places]")).to_contain_text("Weslaco")
     assert console_errors == []
 
 
-def test_a_busy_day_opens_every_outlets_stories_day_by_day(page, live_server):
+def test_topic_filter_narrows_the_selected_publishers_archive(page, live_server):
     _open(page, live_server)
-    day = page.locator("[data-day]").first
-    expect(day).to_contain_text("Jul 27, 2020")
 
-    day.click()
+    topic = page.get_by_role("button", name="Rain")
+    topic.click()
 
-    timeline = page.locator("[data-timeline]")
-    expect(timeline).to_be_visible()
-    expect(timeline.locator("[data-timeline-story]")).to_have_count(2)
-    expect(timeline).to_contain_text("Flooding closes Weslaco streets")
-    expect(day).to_have_attribute("aria-pressed", "true")
+    expect(topic).to_have_class(re.compile(r".*\bbg-brand\b.*"))
+    expect(page.locator("[data-source-stories] a")).to_have_count(1)
+    expect(page.locator("[data-source-stories]")).to_contain_text("Hidalgo County drainage crews")
 
 
 def test_the_county_narrows_the_page(page, live_server):
@@ -42,7 +41,7 @@ def test_the_county_narrows_the_page(page, live_server):
 
     page.locator("#county-news").select_option("cameron")
 
-    expect(page.locator("[data-tile=stories] [data-value]")).to_have_text("1")
+    expect(page.locator("[data-outlet-profile]")).to_contain_text("1 linked water-related stories")
 
 
 def test_every_page_links_to_the_news_page(page, live_server):

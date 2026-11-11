@@ -1,157 +1,60 @@
 {% extends "base.html" %}
 {% from "components/county_select.html" import county_select %}
-{% from "components/stat_tile.html" import stat_tile %}
 {% block title %}{{ t("app.news_title") }}{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="news-page" x-data="newsPage">
-  <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
-    {{ county_select("news") }}
-    <p class="text-sm text-muted lg:ml-auto" x-text="span"></p>
-  </div>
-  <p class="mt-3 max-w-[920px] text-sm text-muted">{{ t("news.page.intro") }}</p>
-
-  <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-    {{ stat_tile("stories", t("news.page.tile.stories"), "tileStories", "tileStoriesSub") }}
-    {{ stat_tile("rain", t("news.page.tile.rain"), "tileRain", "tileRainSub") }}
-    {{ stat_tile("nws", t("news.page.tile.nws"), "tileNws", "tileNwsSub") }}
-    {{ stat_tile("claims", t("news.page.tile.claims"), "tileClaims", "tileClaimsSub") }}
-  </div>
-
-  {# 1. news against the measurements, month by month #}
-  <div class="mt-4 flex flex-col rounded-lg border border-line bg-panel shadow-1">
-    {% for chart, dot in (("stories", "bg-layer-photos"), ("signals", "bg-layer-nws")) %}
-    <section class="relative px-2 py-1 {{ 'border-b border-line' if not loop.last }}" data-chart-card="{{ chart }}">
-      <div class="flex items-center gap-2 px-2 pt-2 text-sm">
-        <i class="h-2 w-2 rounded-sm {{ dot }}" aria-hidden="true"></i>
-        <b class="font-semibold">{{ t("news.page.chart." ~ chart) }}</b>
+<main class="mx-auto max-w-[1440px] px-4 pb-10 pt-6 lg:px-8" id="news-page" x-data="newsPage">
+  <div class="border-b border-line pb-5">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div class="max-w-3xl">
+        <p class="font-mono text-xs font-medium uppercase tracking-[0.18em] text-brand">{{ t("news.atlas.kicker") }}</p>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">{{ t("news.title") }}</h1>
+        <p class="mt-2 max-w-2xl text-base leading-relaxed text-muted">{{ t("news.atlas.intro") }}</p>
       </div>
-      <p class="px-2 text-xs text-muted">{{ t("news.page.note." ~ chart) }}</p>
-      <div data-chart="{{ chart }}" class="w-full"></div>
-    </section>
-    {% endfor %}
+      <div class="min-w-[190px]">{{ county_select("news") }}</div>
+    </div>
+    <p class="mt-3 font-mono text-xs text-muted" x-text="archiveLabel"></p>
   </div>
 
-  <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-    {% for list, getter in (("wet_quiet", "wetQuiet"), ("loud_dry", "loudDry")) %}
-    <section class="rounded-lg border border-line bg-panel p-4 shadow-1" data-surprises="{{ list }}">
-      <h2 class="text-md font-semibold">{{ t("news.page." ~ list) }}</h2>
-      <p class="mt-0.5 text-xs text-muted">{{ t("news.page." ~ list ~ "_note") }}</p>
-      <ul class="mt-2 flex flex-col gap-1 font-mono text-sm">
-        <template x-for="m in {{ getter }}" x-bind:key="m.month">
-          <li class="flex justify-between gap-3 border-t border-line pt-1"><span x-text="monthName()"></span><span class="text-muted" x-text="monthNumbers()"></span></li>
-        </template>
-      </ul>
-      <p class="mt-2 text-sm text-muted" x-show="!{{ getter }}.length" x-cloak>{{ t("news.page.none_found") }}</p>
-    </section>
-    {% endfor %}
-  </div>
-
-  {# 2. the busiest days, and every outlet's stories around one of them #}
-  <section class="mt-4 rounded-lg border border-line bg-panel p-4 shadow-1" data-busiest>
-    <h2 class="text-md font-semibold">{{ t("news.page.busiest") }}</h2>
-    <p class="mt-0.5 text-xs text-muted">{{ t("news.page.busiest_note") }}</p>
-    <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-      <template x-for="d in busiest" x-bind:key="d.date">
-        <button type="button" class="rounded-md border border-line bg-bg p-2.5 text-left hover:border-accent" data-day
-                x-on:click="openDay()" x-bind:aria-pressed="isOpen()" x-bind:class="dayClass()">
-          <div class="font-mono text-sm font-medium" x-text="dayName()"></div>
-          <div class="text-xs text-muted" x-text="dayCounts()"></div>
-          <div class="mt-1 line-clamp-2 text-xs leading-snug" x-text="d.headline"></div>
+  <section class="mt-6" aria-labelledby="outlet-directory-title">
+    <div class="flex items-baseline justify-between gap-4">
+      <div>
+        <p class="font-mono text-xs uppercase tracking-[0.16em] text-muted">{{ t("news.atlas.directory_eyebrow") }}</p>
+        <h2 class="mt-1 text-xl font-semibold" id="outlet-directory-title">{{ t("news.atlas.directory") }}</h2>
+      </div>
+      <p class="text-sm text-muted" x-text="outletCountLabel"></p>
+    </div>
+    <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3" data-outlet-directory>
+      <template x-for="outlet in outlets" x-bind:key="outlet.name">
+        <button type="button" class="group flex min-h-[94px] items-center gap-3 rounded-xl border bg-panel px-3.5 py-3 text-left shadow-1 transition hover:-translate-y-0.5 hover:border-brand/60 hover:shadow-2"
+                x-on:click="selectOutlet(outlet.name)" x-bind:aria-pressed="outlet.name === activeOutlet" x-bind:class="outletClass(outlet.name)" data-outlet>
+          <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand/10 font-mono text-base font-semibold text-brand" x-text="outlet.initials"></span>
+          <span class="min-w-0 flex-1"><span class="block truncate text-base font-semibold" x-text="outlet.name"></span><span class="mt-1 block font-mono text-sm text-muted" x-text="outletSummary(outlet)"></span></span>
+          <span class="text-muted transition group-hover:text-brand" aria-hidden="true">→</span>
         </button>
       </template>
     </div>
-
-    <div class="mt-4 border-t border-line pt-3" x-show="openDate" x-cloak data-timeline>
-      <h3 class="text-sm font-semibold" x-text="timelineTitle"></h3>
-      <p class="text-sm text-muted" x-show="loadingTimeline">{{ t("news.page.loading") }}</p>
-      <ol class="mt-2 flex flex-col gap-3">
-        <template x-for="tday in timeline" x-bind:key="tday.date">
-          <li x-show="tday.stories.length">
-            <div class="font-mono text-xs font-medium text-muted" x-text="timelineDay()"></div>
-            <ul class="mt-1 flex flex-col gap-1.5 text-sm leading-snug">
-              <template x-for="story in tday.stories" x-bind:key="story.id">
-                <li data-timeline-story>{% include "components/news_story.html" %}</li>
-              </template>
-            </ul>
-          </li>
-        </template>
-      </ol>
-    </div>
+    <p class="mt-3 text-sm text-muted" x-show="!outlets.length && !loading" x-cloak>{{ t("news.none") }}</p>
   </section>
 
-  <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-    {# 3. the streets and waterways named again and again #}
-    <section class="rounded-lg border border-line bg-panel p-4 shadow-1" data-places>
-      <h2 class="text-md font-semibold">{{ t("news.page.places") }}</h2>
-      <p class="mt-0.5 text-xs text-muted">{{ t("news.page.places_note") }}</p>
-      <table class="mt-2 w-full border-collapse text-sm">
-        <thead class="text-xs text-muted"><tr><th class="py-1 text-left">{{ t("news.page.col.place") }}</th><th class="py-1 text-right">{{ t("news.page.col.stories") }}</th><th class="py-1 pl-3 text-left">{{ t("news.page.col.latest") }}</th></tr></thead>
-        <tbody>
-          <template x-for="p in places" x-bind:key="p.name">
-            <tr class="border-t border-line align-top">
-              <td class="py-1.5 font-medium" x-text="p.name"></td>
-              <td class="py-1.5 text-right font-mono" x-text="p.stories"></td>
-              <td class="py-1.5 pl-3"><a x-bind:href="p.latest_url" target="_blank" rel="noopener" x-text="p.latest_headline"></a>
-                <div class="font-mono text-xs text-muted" x-text="placeSpan()"></div></td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-      <p class="mt-2 text-sm text-muted" x-show="!places.length" x-cloak>{{ t("news.page.none_found") }}</p>
+  <div class="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+    <section class="rounded-xl border border-line bg-panel shadow-1" aria-live="polite" data-outlet-archive>
+      <header class="border-b border-line px-5 py-5 sm:flex sm:items-center sm:justify-between sm:gap-5">
+        <div class="flex items-center gap-3"><span class="flex h-12 w-12 items-center justify-center rounded-lg bg-brand text-base font-semibold text-white" x-text="activeInitials"></span><div><p class="font-mono text-xs uppercase tracking-[0.14em] text-muted">{{ t("news.atlas.selected_outlet") }}</p><h2 class="mt-0.5 text-2xl font-semibold" x-text="activeOutlet || '{{ t("news.atlas.choose_outlet") }}'"></h2></div></div>
+        <p class="mt-3 text-base text-muted sm:mt-0" x-text="activeSummary"></p>
+      </header>
+      <div class="px-5 py-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3"><p class="text-base font-medium">{{ t("news.atlas.archive") }}</p><div class="flex flex-wrap gap-1.5" aria-label="{{ t('news.atlas.filter_topics') }}"><template x-for="topic in outletTopics" x-bind:key="topic"><button type="button" class="rounded-full border px-2.5 py-1 text-sm font-medium transition" x-on:click="toggleTopic(topic)" x-bind:class="topicClass(topic)" x-text="topicLabel(topic)"></button></template></div></div>
+        <p class="py-8 text-sm text-muted" x-show="loading">{{ t("news.atlas.loading") }}</p>
+        <ol class="relative divide-y divide-line before:absolute before:bottom-0 before:left-[100px] before:top-0 before:hidden before:w-px before:bg-line sm:before:block" x-show="!loading" data-published-timeline data-source-stories><template x-for="story in filteredStories" x-bind:key="story.id"><li class="grid gap-3 py-4 sm:grid-cols-[112px_minmax(0,1fr)]"><div class="relative hidden pr-5 text-right font-mono text-sm leading-relaxed text-muted sm:block"><span class="relative z-10 bg-panel px-1" x-text="storyDate(story)"></span><span class="absolute right-[-5px] top-1.5 z-10 h-2.5 w-2.5 rounded-full border-2 border-panel bg-brand" aria-hidden="true"></span></div><article><p class="mb-1 font-mono text-sm text-muted sm:hidden" x-text="storyDate(story)"></p><a class="text-lg font-semibold leading-snug text-ink underline decoration-brand/35 underline-offset-4 transition hover:text-brand hover:decoration-brand" x-bind:href="story.source_url" target="_blank" rel="noopener" x-text="story.headline"></a><p class="mt-1.5 line-clamp-2 text-base leading-relaxed text-muted" x-show="story.excerpt" x-text="story.excerpt"></p><div class="mt-2 flex flex-wrap gap-1.5"><template x-for="topic in story.topics" x-bind:key="topic"><span class="rounded bg-bg px-1.5 py-0.5 font-mono text-xs text-muted" x-text="topicLabel(topic)"></span></template><span class="rounded bg-bg px-1.5 py-0.5 font-mono text-xs text-muted" x-show="story.city" x-text="story.city"></span></div></article></li></template></ol>
+        <p class="py-8 text-sm text-muted" x-show="!loading && activeOutlet && !filteredStories.length" x-cloak>{{ t("news.atlas.empty_outlet") }}</p>
+      </div>
     </section>
-
-    {# 4. water-service problems, town by town #}
-    <section class="rounded-lg border border-line bg-panel p-4 shadow-1" data-water-systems>
-      <h2 class="text-md font-semibold">{{ t("news.page.water") }}</h2>
-      <p class="mt-0.5 text-xs text-muted">{{ t("news.page.water_note") }}</p>
-      <table class="mt-2 w-full border-collapse text-sm">
-        <thead class="text-xs text-muted"><tr><th class="py-1 text-left">{{ t("news.page.col.town") }}</th><th class="py-1 text-right">{{ t("news.page.col.stories") }}</th><th class="py-1 pl-3 text-left">{{ t("news.page.col.latest") }}</th></tr></thead>
-        <tbody>
-          <template x-for="w in towns" x-bind:key="w.city">
-            <tr class="border-t border-line align-top">
-              <td class="py-1.5 font-medium" x-text="w.city"></td>
-              <td class="py-1.5 text-right font-mono" x-text="w.stories"></td>
-              <td class="py-1.5 pl-3"><a x-bind:href="w.latest_url" target="_blank" rel="noopener" x-text="w.latest_headline"></a>
-                <div class="font-mono text-xs text-muted" x-text="townSpan()"></div></td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-      <p class="mt-2 text-sm text-muted" x-show="!towns.length" x-cloak>{{ t("news.page.none_found") }}</p>
-    </section>
+    <aside class="space-y-4" aria-label="{{ t('news.atlas.outlet_context') }}">
+      <section class="rounded-xl border border-line bg-panel p-4 shadow-1" data-outlet-profile><p class="font-mono text-xs uppercase tracking-[0.16em] text-muted">{{ t("news.atlas.profile_eyebrow") }}</p><h2 class="mt-1 text-xl font-semibold" x-text="activeOutlet"></h2><p class="mt-2 text-base leading-relaxed text-muted" x-text="outletProfile"></p><dl class="mt-4 divide-y divide-line"><div class="flex items-baseline justify-between gap-3 py-2"><dt class="text-base text-muted">{{ t("news.atlas.archive_span") }}</dt><dd class="text-right font-mono text-sm" x-text="archiveSpan"></dd></div><div class="py-2"><dt class="text-base text-muted">{{ t("news.atlas.subjects") }}</dt><dd class="mt-1.5 text-base" x-text="profileTopics"></dd></div></dl></section>
+      <section class="rounded-xl border border-line bg-panel p-4 shadow-1" data-notable-places><p class="font-mono text-xs uppercase tracking-[0.16em] text-muted">{{ t("news.atlas.places_eyebrow") }}</p><h2 class="mt-1 text-xl font-semibold">{{ t("news.atlas.places") }}</h2><p class="mt-1 text-sm leading-relaxed text-muted">{{ t("news.atlas.places_note") }}</p><ol class="mt-3 divide-y divide-line" x-show="notablePlaces.length"><template x-for="place in notablePlaces" x-bind:key="place.name"><li class="flex items-baseline justify-between gap-3 py-2"><span class="text-base" x-text="place.name"></span><span class="font-mono text-sm text-muted" x-text="place.count"></span></li></template></ol><p class="mt-3 text-base text-muted" x-show="!notablePlaces.length">{{ t("news.atlas.no_places") }}</p></section>
+      <section class="rounded-xl border border-brand/20 bg-brand/[0.04] p-4"><p class="font-mono text-xs uppercase tracking-[0.16em] text-brand">{{ t("news.atlas.reading_note_eyebrow") }}</p><p class="mt-2 text-base leading-relaxed text-muted">{{ t("news.atlas.reading_note") }}</p></section>
+    </aside>
   </div>
-
-  {# 5. coverage against what happened, county by county #}
-  <section class="mt-4 rounded-lg border border-line bg-panel p-4 shadow-1" data-coverage>
-    <h2 class="text-md font-semibold">{{ t("news.page.coverage") }}</h2>
-    <p class="mt-0.5 text-xs text-muted">{{ t("news.page.coverage_note") }}</p>
-    <div class="overflow-auto">
-      <table class="mt-2 w-full min-w-[560px] border-collapse font-mono text-sm">
-        <thead class="font-sans text-xs text-muted"><tr>
-          <th class="py-1 text-left">{{ t("news.page.col.county") }}</th><th class="py-1 text-right">{{ t("news.page.col.stories") }}</th>
-          <th class="py-1 text-right">{{ t("news.page.col.claims") }}</th><th class="py-1 text-right">{{ t("news.page.col.nws") }}</th>
-          <th class="py-1 text-right">{{ t("news.page.col.per_claims") }}</th><th class="py-1 text-right">{{ t("news.page.col.per_nws") }}</th></tr></thead>
-        <tbody>
-          <template x-for="c in coverage" x-bind:key="c.county">
-            <tr class="border-t border-line">
-              <td class="py-1.5 font-sans font-medium" x-text="countyName()"></td><td class="py-1.5 text-right" x-text="c.stories"></td>
-              <td class="py-1.5 text-right" x-text="c.claims"></td><td class="py-1.5 text-right" x-text="c.nws_reports"></td>
-              <td class="py-1.5 text-right" x-text="perClaims()"></td><td class="py-1.5 text-right" x-text="perReport()"></td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
-    <p class="mt-3 text-sm" x-text="languageText" data-languages></p>
-  </section>
-
-  <p class="mt-4 text-xs leading-relaxed text-muted">{{ t("news.page.caveat") }}</p>
-  {% if built_label %}
-  <footer class="mt-2 text-[11.5px] leading-relaxed text-muted"><p>{{ built_label }}</p></footer>
-  {% endif %}
-</div>
+</main>
 {% endblock %}
-{% block scripts %}
-<script defer src="{{ asset_url('vendor/plotly/plotly-basic.min.js') }}"></script>
-<script type="module" src="{{ asset_url('js/pages/news.js') }}"></script>
-{% endblock %}
+{% block scripts %}<script type="module" src="{{ asset_url('js/pages/news.js') }}"></script>{% endblock %}

@@ -5,6 +5,7 @@
 {% block title %}{{ t("app.claims_title") }}{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-[1440px] px-4 pb-8 pt-5 lg:px-8" id="claims-page" x-data="claimsPage">
+  <h1 class="mb-4 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">{{ t("nav.claims") }}</h1>
   <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
     {{ county_select("claims") }}
     {{ segmented("metric", [("claims", t("claims.metric.claims")), ("paid", t("claims.metric.paid")), ("rate", t("claims.metric.rate"))]) }}
