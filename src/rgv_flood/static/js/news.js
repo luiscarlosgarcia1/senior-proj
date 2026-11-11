@@ -45,15 +45,22 @@ document.addEventListener("alpine:init", () => {
     get activeStories() { return this.active?.stories || []; },
     get filteredStories() { return this.activeTopic ? this.activeStories.filter((story) => story.topics.includes(this.activeTopic)) : this.activeStories; },
     get outletTopics() { return [...(this.active?.topics || [])].sort(); },
-    get topicComparison() {
-      return this.outletTopics.map((topic) => ({
-        topic,
-        outlet: this.activeStories.filter((story) => story.topics.includes(topic)).length,
-        archive: this.stories.filter((story) => story.topics.includes(topic)).length,
-      }));
-    },
     get activeInitials() { return this.active?.initials || "—"; },
     get activeSummary() { return this.active ? t("news.atlas.active_summary", { stories: this.active.count.toLocaleString() }) : ""; },
+    get outletProfile() { return this.active ? t("news.atlas.profile_copy", { stories: this.active.count.toLocaleString(), outlet: this.active.name }) : ""; },
+    get archiveSpan() {
+      if (!this.activeStories.length) return "—";
+      const dates = this.activeStories.map((story) => story.published_at).sort();
+      return `${day(dates[0])} – ${day(dates.at(-1))}`;
+    },
+    get profileTopics() { return this.outletTopics.map((topic) => this.topicLabel(topic)).join(", "); },
+    get notablePlaces() {
+      const counts = new Map();
+      for (const story of this.activeStories) {
+        if (story.city) counts.set(story.city, (counts.get(story.city) || 0) + 1);
+      }
+      return [...counts].map(([name, count]) => ({ name, count })).sort((left, right) => right.count - left.count || left.name.localeCompare(right.name)).slice(0, 5);
+    },
     get storyTotal() { return this.stories.length.toLocaleString(); },
     get leadingOutlet() { return this.outlets[0]?.name || "—"; },
     get archiveLabel() { return this.stories.length ? t("news.atlas.archive_summary", { stories: this.storyTotal }) : ""; },

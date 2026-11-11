@@ -20,8 +20,8 @@ def test_news_page_groups_the_archive_by_publisher(page, live_server, console_er
     expect(page.locator("[data-outlet-archive]")).to_contain_text("KRGV Channel 5 News")
     expect(page.locator("[data-source-stories] a")).to_have_count(3)
     expect(page.locator("[data-published-timeline]")).to_be_visible()
-    expect(page.locator("[data-coverage-context]")).to_contain_text("3")
-    expect(page.locator("[data-topic-comparison]")).to_contain_text("Flooding2 / 2")
+    expect(page.locator("[data-outlet-profile]")).to_contain_text("3 linked water-related stories")
+    expect(page.locator("[data-notable-places]")).to_contain_text("Weslaco")
     assert console_errors == []
 
 
@@ -41,7 +41,7 @@ def test_the_county_narrows_the_page(page, live_server):
 
     page.locator("#county-news").select_option("cameron")
 
-    expect(page.locator("[data-coverage-context]")).to_contain_text("1")
+    expect(page.locator("[data-outlet-profile]")).to_contain_text("1 linked water-related stories")
 
 
 def test_every_page_links_to_the_news_page(page, live_server):
