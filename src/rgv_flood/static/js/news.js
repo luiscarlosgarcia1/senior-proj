@@ -7,9 +7,9 @@ import { day } from "./panels/format.js";
 function initials(name) {
   const known = {
     "KRGV Channel 5 News": "C5",
-    ValleyCentral: "VC",
   };
   if (known[name]) return known[name];
+  if (name.startsWith("ValleyCentral")) return "VC";
   return name.split(/\s+/).filter((word) => /[A-Za-z]/.test(word)).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
 }
 
