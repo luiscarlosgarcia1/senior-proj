@@ -16,8 +16,10 @@ def test_news_page_groups_the_archive_by_publisher(page, live_server, console_er
     _open(page, live_server)
 
     expect(page.locator("[data-outlet-directory] [data-outlet]")).to_have_count(1)
+    expect(page.locator("[data-outlet-directory] [data-outlet] span").first).to_have_text("C5")
     expect(page.locator("[data-outlet-archive]")).to_contain_text("KRGV Channel 5 News")
     expect(page.locator("[data-source-stories] a")).to_have_count(3)
+    expect(page.locator("[data-published-timeline]")).to_be_visible()
     expect(page.locator("[data-coverage-context]")).to_contain_text("3")
     expect(page.locator("[data-topic-comparison]")).to_contain_text("Flooding2 / 2")
     assert console_errors == []
