@@ -7,6 +7,7 @@ safe to show the model.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -254,7 +255,9 @@ def flood_events(db: Database, *, county: str | None = None, place: str | None =
                         "and substr(reported_at, 1, 10) between ? and ? order by reported_at desc",
                     (county_name, start, end), row_cap=5000)["rows"]
     if city is not None:
-        nws = [r for r in nws if fold(r[2] or "").endswith(city)]  # NWS writes "3 ENE Weslaco"
+        # NWS writes the town alone or as a distance and direction from it: "Weslaco", "3 ENE Weslaco".
+        town = re.compile(rf"^(?:\d+(?:\.\d+)?\s+[nsew]{{1,3}}\s+)?{re.escape(city)}$")
+        nws = [r for r in nws if town.match(fold(r[2] or ""))]
     result = {
         "noaa_count": len(noaa), "nws_count": len(nws),
         "noaa": [dict(zip(("date", "type", "location", "summary", "source_url"), r, strict=True)) for r in noaa[:n]],
