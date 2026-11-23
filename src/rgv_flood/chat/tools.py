@@ -8,8 +8,11 @@ safe to show the model.
 from __future__ import annotations
 
 import unicodedata
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from rgv_flood.chat.sqltool import QueryRefused, run_bound
+from rgv_flood.data_access import COMPLETE_GAUGE_DAYS
 from rgv_flood.db import Database
 
 COUNTIES = ("cameron", "hidalgo", "starr", "willacy")
@@ -67,3 +70,112 @@ def find_place(db: Database, name: str) -> dict:
     if not matches:
         result["hint"] = f"No Valley place by that name; ask about a county instead ({', '.join(COUNTIES)})."
     return result
+
+
+# ---- year ranges ---------------------------------------------------------------------------------
+
+DEFAULT_YEARS = 10  # with no years given, the last ten full years in the data
+
+
+def year_range(db: Database, table: str, column: str, year_from: int | None, year_to: int | None) -> tuple[int, int]:
+    """The years to report: the request clipped to what `table` holds, or by default its last ten full
+    years. Reversed bounds are swapped; a request entirely outside the data is refused with the range."""
+    lo, hi = run_bound(db, f"select min({column}), max({column}) from {table}")["rows"][0]
+    if lo is None:
+        raise ToolError(f"{table} has no rows.")
+    lo, hi = int(lo), int(hi)
+    if year_from is None and year_to is None:
+        this_year = datetime.now(ZoneInfo("America/Chicago")).year  # the Valley's calendar
+        last = hi - 1 if hi >= this_year and hi > lo else hi
+        return max(lo, last - DEFAULT_YEARS + 1), last
+    start = int(year_from if year_from is not None else lo)
+    end = int(year_to if year_to is not None else hi)
+    if start > end:
+        start, end = end, start
+    if end < lo or start > hi:
+        raise ToolError(f"{table} covers {lo}–{hi}; ask within that.")
+    return max(start, lo), min(end, hi)
+
+
+def _one_place(db: Database, place: str) -> dict:
+    found = find_place(db, place)
+    if not found["matches"]:
+        raise ToolError(found["hint"])
+    if found["ambiguous"]:
+        names = ", ".join(f"{m['name']} ({m['county']})" for m in found["matches"])
+        raise ToolError(f"{place!r} matches several places: {names}. Use the exact name.")
+    return found["matches"][0]
+
+
+def _county_or_place(county: str | None, place: str | None) -> str | None:
+    """The normalized county, or None when the question is about a place; exactly one must be given."""
+    if (county is None) == (place is None):
+        raise ToolError("Give a county or a place, not both and not neither.")
+    return normalize_county(county) if county is not None else None
+
+
+# ---- claims --------------------------------------------------------------------------------------
+
+
+def claims_summary(db: Database, *, county: str | None = None, place: str | None = None,
+                   year_from: int | None = None, year_to: int | None = None) -> dict:
+    """NFIP claims and dollars paid (building + contents + increased cost of compliance) per year, for a
+    county or for the census tracts making up a place. Claims per 1,000 policies only at county level, and
+    only where policy counts exist."""
+    county_name = _county_or_place(county, place)
+    first, last = year_range(db, "nfip_claims", "year_of_loss", year_from, year_to)
+    if place is not None:
+        match = _one_place(db, place)
+        if not match["tracts"]:
+            raise ToolError(f"No census tracts are linked to {match['name']}; ask about {match['county']} county.")
+        where = f"census_tract in ({','.join('?' * len(match['tracts']))})"
+        params: tuple = (*match["tracts"],)
+        scope, who = f"tracts of {match['name']}", f"{match['name']} ({match['county']} county, by census tract)"
+    else:
+        where, params, scope, who = "county = ?", (county_name,), "county", f"{county_name} county"
+    paid = "paid_building + paid_contents + paid_increased_cost_of_compliance"
+    found = {y: (n, p) for y, n, p in run_bound(
+        db, f"select year_of_loss, count(*), sum({paid}) from nfip_claims where {where} "
+            "and year_of_loss between ? and ? group by year_of_loss", (*params, first, last))["rows"]}
+    policies = {}
+    if place is None:
+        policies = dict(run_bound(db, "select year, policies from nfip_policies_by_year where county = ? "
+                                      "and year between ? and ?", (county_name, first, last))["rows"])
+    rows = []
+    for year in range(first, last + 1):
+        claims, paid_total = found.get(year, (0, 0))
+        held = policies.get(year)
+        rows.append({"year": year, "claims": claims, "paid_total": round(paid_total or 0, 2), "policies": held,
+                     "claims_per_1000_policies": round(claims / held * 1000, 2) if held else None})
+    totals = {"claims": sum(r["claims"] for r in rows), "paid_total": round(sum(r["paid_total"] for r in rows), 2)}
+    tables = "nfip_claims" + (", nfip_policies_by_year" if place is None else ", places, place_tracts")
+    return {"rows": rows, "totals": totals, "scope": scope, "from": f"{tables}; {who}; {first}–{last}"}
+
+
+# ---- rain vs claims ------------------------------------------------------------------------------
+
+TENTHS_MM_PER_INCH = 254  # COMPLETE_GAUGE_DAYS comes from data_access: the same rule as the year-by-year page
+
+
+def rain_vs_claims(db: Database, *, county: str, year_from: int | None = None, year_to: int | None = None) -> dict:
+    """Per year: mean rainfall over the county's gauges with a complete year, claims, and NOAA flood events."""
+    name = normalize_county(county)
+    first, last = year_range(db, "nfip_claims", "year_of_loss", year_from, year_to)
+    rain = {y: (total, gauges) for y, total, gauges in run_bound(
+        db, "select r.year, avg(case when r.days_reported >= ? then r.total_tenths_mm end), "
+            "sum(r.days_reported >= ?) from rainfall_station_years r "
+            "join weather_stations s on s.station_id = r.station_id "
+            "where s.county = ? and r.year between ? and ? group by r.year",
+        (COMPLETE_GAUGE_DAYS, COMPLETE_GAUGE_DAYS, name, first, last))["rows"]}
+    claims = dict(run_bound(db, "select year_of_loss, count(*) from nfip_claims where county = ? "
+                                "and year_of_loss between ? and ? group by year_of_loss", (name, first, last))["rows"])
+    events = dict(run_bound(db, "select cast(substr(date, 1, 4) as integer), count(*) from flood_events "
+                                "where county = ? and substr(date, 1, 4) between ? and ? group by 1",
+                            (name, str(first), str(last)))["rows"])
+    rows = []
+    for year in range(first, last + 1):
+        total, gauges = rain.get(year, (None, 0))
+        rows.append({"year": year, "rain_in": round(total / TENTHS_MM_PER_INCH, 2) if total is not None else None,
+                     "gauges": int(gauges or 0), "claims": claims.get(year, 0), "noaa_events": events.get(year, 0)})
+    return {"rows": rows, "from": (f"rainfall_station_years (gauges with at least {COMPLETE_GAUGE_DAYS} days reported), "
+                                   f"nfip_claims, flood_events; {name} county; {first}–{last}")}
