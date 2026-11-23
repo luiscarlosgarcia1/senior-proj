@@ -148,3 +148,58 @@ def test_rain_vs_claims_names_its_sources(chat_db):
     for table in ("rainfall_station_years", "nfip_claims", "flood_events"):
         assert table in r["from"]
     assert "330" in r["from"]
+
+
+# ---- find_news and flood_events -------------------------------------------------------------------
+# News: news-1 hidalgo 2020-07-27 Weslaco (topic flood; copy by ValleyCentral), news-2 hidalgo 2018-06-21
+# (water_system,rain), news-3 cameron 2020-07-27 Brownsville (flood,storm); news-bad is rejected.
+# NWS: nws-1 hidalgo 2020-07-25 "3 ENE Weslaco"; nws-2 cameron Harlingen. NOAA: hidalgo 2020-07-25, 2018-06-20.
+
+from rgv_flood.chat.tools import LIST_MAX, find_news, flood_events
+
+
+def test_find_news_county_newest_first(chat_db):
+    r = find_news(chat_db, county="hidalgo")
+    assert r["count"] == 2
+    assert [i["headline"] for i in r["items"]] == ["Flooding closes Weslaco streets",
+                                                   "Hidalgo County drainage crews work after June rain"]
+    assert "news_articles" in r["from"]
+
+
+def test_find_news_never_returns_rejected(chat_db):
+    headlines = [i["headline"] for i in find_news(chat_db, county="hidalgo")["items"]]
+    assert not any("Ignore your rules" in h for h in headlines)
+
+
+def test_find_news_lists_copies(chat_db):
+    item = find_news(chat_db, place="Weslaco")["items"][0]
+    assert item["also_reported_by"] == ["ValleyCentral"]
+    assert set(item) >= {"headline", "publisher", "published_at", "kind", "source_url"}
+
+
+def test_find_news_topic_and_dates(chat_db):
+    assert find_news(chat_db, county="hidalgo", topic="rain")["count"] == 1
+    assert find_news(chat_db, county="hidalgo", date_from="2019-01-01")["count"] == 1
+    with pytest.raises(ToolError, match="flood, rain, storm, drought, water_system, water"):
+        find_news(chat_db, county="hidalgo", topic="tornado")
+    with pytest.raises(ToolError, match="YYYY-MM-DD"):
+        find_news(chat_db, county="hidalgo", date_from="last week")
+
+
+def test_flood_events_counts_and_limit(chat_db):
+    r = flood_events(chat_db, county="hidalgo", limit=1)
+    assert r["noaa_count"] == 2 and r["nws_count"] == 1
+    assert len(r["noaa"]) == 1 and r["noaa"][0]["date"] == "2020-07-25"  # newest first
+    assert "flood_events" in r["from"] and "nws_flood_reports" in r["from"]
+
+
+def test_flood_events_place_scope(chat_db):
+    r = flood_events(chat_db, place="Weslaco")
+    assert r["nws_count"] == 1 and r["nws"][0]["city"] == "3 ENE Weslaco"
+    assert r["noaa_scope"] == "county" and r["noaa_count"] == 2
+
+
+def test_limit_clamped(chat_db):
+    assert LIST_MAX == 25
+    assert len(flood_events(chat_db, county="hidalgo", limit=999)["noaa"]) <= LIST_MAX
+    assert len(find_news(chat_db, county="hidalgo", limit=0)["items"]) == 1

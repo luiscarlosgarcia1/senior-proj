@@ -8,7 +8,7 @@ safe to show the model.
 from __future__ import annotations
 
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from rgv_flood.chat.sqltool import QueryRefused, run_bound
@@ -179,3 +179,88 @@ def rain_vs_claims(db: Database, *, county: str, year_from: int | None = None, y
                      "gauges": int(gauges or 0), "claims": claims.get(year, 0), "noaa_events": events.get(year, 0)})
     return {"rows": rows, "from": (f"rainfall_station_years (gauges with at least {COMPLETE_GAUGE_DAYS} days reported), "
                                    f"nfip_claims, flood_events; {name} county; {first}–{last}")}
+
+
+# ---- lists: news and flood events ----------------------------------------------------------------
+
+LIST_LIMIT = 10  # items returned by default
+LIST_MAX = 25
+NEWS_TOPICS = ("flood", "rain", "storm", "drought", "water_system", "water")
+FAR_PAST, FAR_FUTURE = "0000-00-00", "9999-99-99"
+
+
+def _limit(value: int | None) -> int:
+    return max(1, min(int(value if value is not None else LIST_LIMIT), LIST_MAX))
+
+
+def _day(value: str | None, default: str) -> str:
+    """A YYYY-MM-DD bound, compared as text against ISO dates and timestamps."""
+    if value is None:
+        return default
+    text = str(value).strip()
+    try:
+        if len(text) != 10:
+            raise ValueError
+        date.fromisoformat(text)
+    except ValueError:
+        raise ToolError(f"Dates must look like YYYY-MM-DD, not {value!r}.") from None
+    return text
+
+
+def _county_and_city(db: Database, county: str | None, place: str | None) -> tuple[str, str | None]:
+    """The county to filter by, and the place's folded name to match on a city field (None for a county)."""
+    county_name = _county_or_place(county, place)
+    if place is None:
+        return county_name, None
+    match = _one_place(db, place)
+    return match["county"], fold(match["name"])
+
+
+def find_news(db: Database, *, county: str | None = None, place: str | None = None, topic: str | None = None,
+              date_from: str | None = None, date_to: str | None = None, limit: int | None = None) -> dict:
+    """Water news stories and official notices, newest first, never a rejected story. Each item lists the
+    other outlets that told the same story (`also_reported_by`)."""
+    county_name, city = _county_and_city(db, county, place)
+    if topic is not None and topic not in NEWS_TOPICS:
+        raise ToolError(f"Unknown topic {topic!r}. Use one of: {', '.join(NEWS_TOPICS)}.")
+    start, end = _day(date_from, FAR_PAST), _day(date_to, FAR_FUTURE)
+    rows = run_bound(db, "select id, headline, publisher, published_at, kind, source_url, city, topics "
+                         "from news_articles where county = ? and substr(published_at, 1, 10) between ? and ? "
+                         "order by published_at desc", (county_name, start, end), row_cap=5000)["rows"]
+    picked = [r for r in rows
+              if (city is None or fold(r[6] or "") == city)
+              and (topic is None or topic in (r[7] or "").split(","))]
+    items = []
+    for story_id, headline, publisher, published_at, kind, source_url, _city, _topics in picked[:_limit(limit)]:
+        copies = run_bound(db, "select publisher from news_article_copies where article_id = ? order by publisher",
+                           (story_id,))["rows"]
+        items.append({"headline": headline, "publisher": publisher, "published_at": published_at, "kind": kind,
+                      "source_url": source_url, "also_reported_by": [c[0] for c in copies]})
+    who = f"{place} ({county_name} county)" if place is not None else f"{county_name} county"
+    return {"count": len(picked), "items": items,
+            "from": f"news_articles (rejected stories excluded), news_article_copies; {who}"}
+
+
+def flood_events(db: Database, *, county: str | None = None, place: str | None = None,
+                 date_from: str | None = None, date_to: str | None = None, limit: int | None = None) -> dict:
+    """NOAA Storm Events flood events and flood reports to NWS Brownsville, newest first. For a place, NWS
+    reports are matched on their city; NOAA events are the place's whole county (`noaa_scope`)."""
+    county_name, city = _county_and_city(db, county, place)
+    start, end = _day(date_from, FAR_PAST), _day(date_to, FAR_FUTURE)
+    n = _limit(limit)
+    noaa = run_bound(db, "select date, type, location, summary, source_url from flood_events where county = ? "
+                         "and date between ? and ? order by date desc", (county_name, start, end), row_cap=5000)["rows"]
+    nws = run_bound(db, "select reported_at, kind, city, remark, source from nws_flood_reports where county = ? "
+                        "and substr(reported_at, 1, 10) between ? and ? order by reported_at desc",
+                    (county_name, start, end), row_cap=5000)["rows"]
+    if city is not None:
+        nws = [r for r in nws if fold(r[2] or "").endswith(city)]  # NWS writes "3 ENE Weslaco"
+    result = {
+        "noaa_count": len(noaa), "nws_count": len(nws),
+        "noaa": [dict(zip(("date", "type", "location", "summary", "source_url"), r, strict=True)) for r in noaa[:n]],
+        "nws": [dict(zip(("reported_at", "kind", "city", "remark", "source"), r, strict=True)) for r in nws[:n]],
+        "from": f"flood_events (NOAA Storm Events), nws_flood_reports; {county_name} county",
+    }
+    if place is not None:
+        result["noaa_scope"] = "county"
+    return result
