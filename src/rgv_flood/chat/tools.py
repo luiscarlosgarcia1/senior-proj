@@ -17,6 +17,15 @@ from rgv_flood.data_access import COMPLETE_GAUGE_DAYS
 from rgv_flood.db import Database
 
 COUNTIES = ("cameron", "hidalgo", "starr", "willacy")
+ROWS_MAX = 20000  # rows a tool reads before counting; past this it asks for a narrower question
+
+
+def _all_rows(db: Database, sql: str, params: tuple = ()) -> list:
+    """Every row, or a refusal: a count over a cut-off list would be silently wrong."""
+    result = run_bound(db, sql, params, row_cap=ROWS_MAX)
+    if result["truncated"]:
+        raise ToolError(f"That matches more than {ROWS_MAX:,} records; narrow the dates or the place.")
+    return result["rows"]
 
 
 class ToolError(QueryRefused):
@@ -56,16 +65,16 @@ def find_place(db: Database, name: str) -> dict:
     wanted = fold(name)
     if not wanted:
         raise ToolError("Give a place name, e.g. Edinburg.")
-    places = run_bound(db, "select place_id, name, full_name, kind, county from places", row_cap=5000)["rows"]
-    aliases = dict(run_bound(db, "select alias, place_id from place_aliases", row_cap=5000)["rows"])
+    places = _all_rows(db, "select place_id, name, full_name, kind, county from places")
+    aliases = dict(_all_rows(db, "select alias, place_id from place_aliases"))
     exact = [p for p in places if fold(p[1]) == wanted or aliases.get(wanted) == p[0]]
     chosen = exact or [p for p in places if fold(p[1]).startswith(wanted)]
     matches = []
     for place_id, place_name, full_name, kind, county in sorted(chosen, key=lambda p: p[1]):
-        tracts = run_bound(db, "select tract, vintage from place_tracts where place_id = ? order by tract",
-                           (place_id,))["rows"]
+        tracts = _all_rows(db, "select tract, vintage from place_tracts where place_id = ? order by tract",
+                           (place_id,))
         matches.append({"place_id": place_id, "name": place_name, "full_name": full_name, "kind": kind,
-                        "county": county, "tracts": [t for t, _ in tracts],
+                        "county": county, "tracts": sorted({t for t, _ in tracts}),
                         "tract_vintages": sorted({v for _, v in tracts})})
     result = {"matches": matches, "ambiguous": len(matches) > 1, "from": "places, place_tracts"}
     if not matches:
@@ -225,9 +234,9 @@ def find_news(db: Database, *, county: str | None = None, place: str | None = No
     if topic is not None and topic not in NEWS_TOPICS:
         raise ToolError(f"Unknown topic {topic!r}. Use one of: {', '.join(NEWS_TOPICS)}.")
     start, end = _day(date_from, FAR_PAST), _day(date_to, FAR_FUTURE)
-    rows = run_bound(db, "select id, headline, publisher, published_at, kind, source_url, city, topics "
+    rows = _all_rows(db, "select id, headline, publisher, published_at, kind, source_url, city, topics "
                          "from news_articles where county = ? and substr(published_at, 1, 10) between ? and ? "
-                         "order by published_at desc", (county_name, start, end), row_cap=5000)["rows"]
+                         "order by published_at desc", (county_name, start, end))
     picked = [r for r in rows
               if (city is None or fold(r[6] or "") == city)
               and (topic is None or topic in (r[7] or "").split(","))]
@@ -249,11 +258,11 @@ def flood_events(db: Database, *, county: str | None = None, place: str | None =
     county_name, city = _county_and_city(db, county, place)
     start, end = _day(date_from, FAR_PAST), _day(date_to, FAR_FUTURE)
     n = _limit(limit)
-    noaa = run_bound(db, "select date, type, location, summary, source_url from flood_events where county = ? "
-                         "and date between ? and ? order by date desc", (county_name, start, end), row_cap=5000)["rows"]
-    nws = run_bound(db, "select reported_at, kind, city, remark, source from nws_flood_reports where county = ? "
+    noaa = _all_rows(db, "select date, type, location, summary, source_url from flood_events where county = ? "
+                         "and date between ? and ? order by date desc", (county_name, start, end))
+    nws = _all_rows(db, "select reported_at, kind, city, remark, source from nws_flood_reports where county = ? "
                         "and substr(reported_at, 1, 10) between ? and ? order by reported_at desc",
-                    (county_name, start, end), row_cap=5000)["rows"]
+                    (county_name, start, end))
     if city is not None:
         # NWS writes the town alone or as a distance and direction from it: "Weslaco", "3 ENE Weslaco".
         town = re.compile(rf"^(?:\d+(?:\.\d+)?\s+[nsew]{{1,3}}\s+)?{re.escape(city)}$")

@@ -280,15 +280,16 @@ TABLES: dict[str, tuple[str, ...]] = {
              lat REAL
            )""",
     ),
-    # The census tracts that make up a place: those with at least 20% of their area inside it. Both the 2010
+    # The census tracts that make up a place: those with at least 20% of their area inside it (a small town
+    # under that in every tract keeps the one tract covering most of it). Both the 2010
     # and 2023 tract vintages, because NFIP claims carry tract ids from both.
     "place_tracts": (
         """CREATE TABLE IF NOT EXISTS place_tracts (
              place_id TEXT NOT NULL,
              tract TEXT NOT NULL,                  -- 11-digit tract GEOID
              share_of_tract REAL NOT NULL,         -- how much of the tract lies inside the place
-             vintage INTEGER NOT NULL,             -- 2010 or 2023
-             PRIMARY KEY (place_id, tract)
+             vintage INTEGER NOT NULL,             -- 2010 or 2023 (most tract ids are the same in both)
+             PRIMARY KEY (place_id, tract, vintage)
            ) WITHOUT ROWID""",
         "CREATE INDEX IF NOT EXISTS place_tracts_by_tract ON place_tracts(tract)",
     ),

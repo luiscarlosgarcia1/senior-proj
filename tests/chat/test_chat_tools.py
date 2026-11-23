@@ -35,7 +35,7 @@ def test_find_place_exact(chat_db):
     assert r["ambiguous"] is False
     m = r["matches"][0]
     assert m["county"] == "hidalgo" and m["kind"] == "city"
-    assert set(m["tracts"]) == {"48215020100", "48215020200"}
+    assert m["tracts"] == ["48215020100", "48215020200"]  # an id in both vintages is listed once
     assert set(m["tract_vintages"]) == {2010, 2023}
     assert r["from"] == "places, place_tracts"
 
@@ -208,3 +208,13 @@ def test_limit_clamped(chat_db):
 def test_nws_place_match_is_the_town_not_a_longer_name(chat_db):
     assert [r["city"] for r in flood_events(chat_db, place="Mission")["nws"]] == []
     assert [r["city"] for r in flood_events(chat_db, place="La Mission")["nws"]] == ["2 N La Mission"]
+
+
+def test_counts_are_never_silently_cut(chat_db, monkeypatch):
+    from rgv_flood.chat import tools
+
+    monkeypatch.setattr(tools, "ROWS_MAX", 1)  # hidalgo has 2 NOAA events and 2 news stories
+    with pytest.raises(ToolError, match="narrow"):
+        flood_events(chat_db, county="hidalgo")
+    with pytest.raises(ToolError, match="narrow"):
+        find_news(chat_db, county="hidalgo")

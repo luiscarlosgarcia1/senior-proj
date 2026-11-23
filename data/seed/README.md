@@ -77,6 +77,7 @@ records of the same shape; `build_events.py` picks it up on the next build.
 
 `place-aliases.csv` (`alias,place_name`) gives other spellings of a Census place's
 name, so the chatbot can find a town typed without its accent or by a local name.
-`place_name` must match a place's Census name exactly (e.g. `Peñitas`), or
-`build_places.py` stops with an error. Accents are already ignored when matching,
-so only add names that differ in more than accents.
+`place_name` must match a place's Census name exactly, or `build_places.py` stops
+with an error. Census names carry no accents ("Penitas"), and the chatbot ignores
+accents when matching, so "Peñitas" already finds it; only add names that differ in
+more than accents. The file starts with no aliases.

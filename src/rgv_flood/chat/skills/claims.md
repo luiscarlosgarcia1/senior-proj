@@ -10,7 +10,7 @@ tables: [nfip_claims, nfip_policies_by_year, places, place_tracts]
 3. Use query_database only for what claims_summary does not give (for example claims by flood event name or by cause of damage), and keep the same rules.
 
 ## Traps
-- Claims carry a county and a census tract, never a city. For a town, the numbers are claims in the census tracts that make up most of it. Say "in the tracts that make up most of Edinburg", never "in Edinburg".
+- Claims carry a county and a census tract, never a city. For a town, the numbers are claims in the census tracts that make up most of it. Say "in the tracts that make up most of Edinburg", never "in Edinburg". A small town may have only one tract, which can be much bigger than the town; say so.
 - Claims per 1,000 policies exists only for whole counties, and only for years with a policy count (2009 on). Never divide town claims by county policies.
 - Dollars paid are building plus contents plus increased cost of compliance. They are what FEMA paid, not the damage.
 - Few claims does not mean little flooding: most homes in the Valley have no flood insurance.

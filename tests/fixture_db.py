@@ -298,6 +298,7 @@ PLACES = [
 PLACE_TRACTS = [
     {"place_id": "4822660", "tract": "48215020100", "share_of_tract": 0.9, "vintage": 2023},
     {"place_id": "4822660", "tract": "48215020200", "share_of_tract": 0.4, "vintage": 2010},
+    {"place_id": "4822660", "tract": "48215020100", "share_of_tract": 0.9, "vintage": 2010},  # same id, both vintages
     {"place_id": "4848768", "tract": "48215021000", "share_of_tract": 1.0, "vintage": 2023},
 ]
 PLACE_ALIASES = [{"alias": "penitas", "place_id": "4857008"}]

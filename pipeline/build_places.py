@@ -20,7 +20,8 @@ from shapely.geometry.base import BaseGeometry
 
 from rgv_flood.counties import COUNTIES
 
-TRACT_SHARE_MIN = 0.2  # a tract belongs to a place when at least this much of its area is inside it
+TRACT_SHARE_MIN = 0.2  # a tract belongs to a place when at least this much of its area is inside it;
+# a place with no such tract keeps the single tract covering most of it
 AREA_CRS = "EPSG:32614"  # UTM 14N: all four counties, in metres
 ALIASES_SEED = "place-aliases.csv"
 
@@ -57,9 +58,14 @@ def tract_rows(places: gpd.GeoDataFrame, tracts: gpd.GeoDataFrame, vintage: int)
     t["tract_area"] = t.geometry.area
     pieces = gpd.overlay(t, p, how="intersection", keep_geom_type=True)
     pieces["share"] = pieces.geometry.area / pieces["tract_area"]
-    pieces = pieces[pieces["share"] >= TRACT_SHARE_MIN]
+    pieces["piece_area"] = pieces.geometry.area
+    kept = pieces[pieces["share"] >= TRACT_SHARE_MIN]
+    # A small town is under the threshold in every tract around it; it keeps the one tract covering most of it.
+    small = pieces[~pieces["place_id"].isin(kept["place_id"])]
+    main_tract = small.loc[small.groupby("place_id")["piece_area"].idxmax()] if len(small) else small
+    chosen = pieces.loc[sorted([*kept.index, *main_tract.index])]
     return [{"place_id": str(r.place_id), "tract": str(r.tract), "share_of_tract": round(float(r.share), 4),
-             "vintage": vintage} for r in pieces.itertuples()]
+             "vintage": vintage} for r in chosen.itertuples()]
 
 
 def alias_rows(aliases: list[dict], places: list[dict]) -> list[dict]:

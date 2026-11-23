@@ -82,3 +82,25 @@ def test_schema_has_places_tables():
     assert columns["places"] == ["place_id", "name", "full_name", "kind", "county", "lon", "lat"]
     assert columns["place_tracts"] == ["place_id", "tract", "share_of_tract", "vintage"]
     assert columns["place_aliases"] == ["alias", "place_id"]
+
+
+def test_same_tract_in_both_vintages_can_be_stored():
+    # most tract ids did not change between 2010 and 2023, so a place lists the same id twice
+    rows = [{"place_id": "1", "tract": "48215020100", "share_of_tract": 0.9, "vintage": v} for v in (2010, 2023)]
+    with closing(sqlite3.connect(":memory:")) as connection:
+        ensure_schema(connection)
+        connection.executemany("insert into place_tracts values (:place_id, :tract, :share_of_tract, :vintage)", rows)
+        assert connection.execute("select count(*) from place_tracts").fetchone()[0] == 2
+
+
+def test_small_place_gets_the_tract_covering_most_of_it():
+    # a small town is under 20% of every tract around it; it still needs one tract to answer questions
+    town = places_frame(("4822576", "Edcouch", "Edcouch city", "C1", box(-98.00, 26.30, -97.99, 26.31)))
+    tracts = gpd.GeoDataFrame(
+        {"GEOID": ["48215024100", "48215024200"]},
+        geometry=[box(-98.10, 26.20, -97.993, 26.40), box(-97.993, 26.20, -97.90, 26.40)],  # 70% / 30% of the town
+        crs="EPSG:4326",
+    )
+    rows = tract_rows(town, tracts, vintage=2023)
+    assert [r["tract"] for r in rows] == ["48215024100"]
+    assert rows[0]["share_of_tract"] < TRACT_SHARE_MIN  # kept anyway, as the town's main tract
