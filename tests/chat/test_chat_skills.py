@@ -26,7 +26,6 @@ def test_skill_fields_parse(tmp_path):
                       "## How to answer\nCall the tool.")
 
 
-@pytest.mark.xfail(strict=True, reason="the new tools are registered in prompt.TOOLS in Task 6")
 def test_skills_name_only_real_tools():
     from rgv_flood.chat.prompt import TOOLS
 

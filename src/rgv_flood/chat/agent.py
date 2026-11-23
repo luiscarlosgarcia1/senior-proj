@@ -13,18 +13,33 @@ from typing import Protocol
 
 import httpx2
 
-from rgv_flood.chat.prompt import FINAL_INSTRUCTION, SYSTEM_PROMPT, TOOLS
+from rgv_flood.chat import tools
+from rgv_flood.chat.prompt import FINAL_INSTRUCTION, TOOLS, build_system_prompt
+from rgv_flood.chat.skills import load_skills
 from rgv_flood.chat.sqltool import QueryRefused, describe_database, run_select
 from rgv_flood.db import Database
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_CALLS = 8
+MAX_TOOL_CALLS = 10  # loading a skill uses one
 MAX_OUTPUT_TOKENS = 800
 REASONING_OUTPUT_TOKENS = 3200  # a reasoning model's budget also covers its hidden thinking
 MAX_TOOL_CHARS = 12000  # a tool result is cut to this many characters before the model sees it
 UNAVAILABLE = "The assistant is unavailable right now."
 NO_ANSWER = "I couldn't produce an answer to that. Please try rephrasing the question."
+
+
+SKILLS = load_skills()  # a broken skill file fails here, at startup, not in a visitor's chat
+SYSTEM_TEXT = build_system_prompt(SKILLS)
+
+# The fixed data tools: name -> (function, the arguments its schema in TOOLS allows).
+DATA_TOOLS = {
+    "find_place": (tools.find_place, {"name"}),
+    "claims_summary": (tools.claims_summary, {"county", "place", "year_from", "year_to"}),
+    "rain_vs_claims": (tools.rain_vs_claims, {"county", "year_from", "year_to"}),
+    "find_news": (tools.find_news, {"county", "place", "topic", "date_from", "date_to", "limit"}),
+    "flood_events": (tools.flood_events, {"county", "place", "date_from", "date_to", "limit"}),
+}
 
 
 class ModelUnavailable(Exception):
@@ -134,6 +149,20 @@ def _run_tool(db: Database, name: str, arguments: str) -> str:
             if not isinstance(sql, str):
                 return 'Error: query_database needs a string argument "sql".'
             return _fit(json.dumps(run_select(db, sql), default=str))
+        if name == "load_skill":
+            skill = SKILLS.get(str(parsed.get("name", "")))
+            if skill is None:
+                return f"Error: there is no skill by that name. Skills: {', '.join(sorted(SKILLS))}."
+            return skill.body
+        if name in DATA_TOOLS:
+            function, allowed = DATA_TOOLS[name]
+            extra = sorted(set(parsed) - allowed)
+            if extra:
+                return f"Error: {name} does not take {', '.join(extra)}; it takes {', '.join(sorted(allowed))}."
+            arguments = {key: value for key, value in parsed.items() if value is not None}
+            if name == "find_place":
+                return _fit(json.dumps(function(db, arguments.get("name", "")), default=str))
+            return _fit(json.dumps(function(db, **arguments), default=str))
         return f"Error: there is no tool named {name}."
     except json.JSONDecodeError:
         return "Error: the arguments were not valid JSON."
@@ -145,7 +174,7 @@ def _run_tool(db: Database, name: str, arguments: str) -> str:
 
 
 def run_agent(model: ModelClient, db: Database, history: list[dict], message: str) -> AgentResult:
-    messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}, *history, {"role": "user", "content": message}]
+    messages: list[dict] = [{"role": "system", "content": SYSTEM_TEXT}, *history, {"role": "user", "content": message}]
     used = 0
     while True:
         capped = used >= MAX_TOOL_CALLS

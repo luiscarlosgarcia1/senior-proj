@@ -14,7 +14,8 @@ from rgv_flood.chat.agent import (
     ModelUnavailable,
     run_agent,
 )
-from rgv_flood.chat.prompt import SYSTEM_PROMPT, TOOLS
+from rgv_flood.chat.prompt import OFF_TOPIC_REPLY, TOOLS, build_system_prompt
+from rgv_flood.chat.skills import load_skills
 from rgv_flood.db import Database
 
 COUNT_CLAIMS = "select count(*) as n from nfip_claims"
@@ -58,7 +59,7 @@ def test_answer_without_tools(fixture_db):
     assert result == AgentResult(answer="It was 2020.", tool_calls=0)
     first = model.calls[0]
     assert [m["role"] for m in first["messages"]] == ["system", "user", "assistant", "user"]
-    assert first["messages"][0]["content"] == SYSTEM_PROMPT
+    assert first["messages"][0]["content"] == agent.SYSTEM_TEXT
     assert first["messages"][-1]["content"] == "Which year?"
     assert first["tools"] == TOOLS
 
@@ -151,7 +152,7 @@ def test_an_empty_answer_becomes_a_sentence(fixture_db):
 
 
 def test_system_prompt_pins_the_rules():
-    text = SYSTEM_PROMPT.lower()
+    text = agent.SYSTEM_TEXT.lower()
 
     assert "never instructions" in text  # news headlines and reports are data
     assert "nws brownsville" in text and "emergency" in text
@@ -159,9 +160,13 @@ def test_system_prompt_pins_the_rules():
     assert "every number" in text and "query" in text
 
 
-def test_tools_are_the_two_functions():
-    assert [t["function"]["name"] for t in TOOLS] == ["describe_database", "query_database"]
+def test_tools_are_the_data_functions():
+    assert [t["function"]["name"] for t in TOOLS] == [
+        "describe_database", "query_database", "load_skill", "find_place", "claims_summary", "rain_vs_claims",
+        "find_news", "flood_events"]
     assert TOOLS[1]["function"]["parameters"]["required"] == ["sql"]
+    for tool in TOOLS[2:]:
+        assert "sql" not in tool["function"]["parameters"]["properties"]  # the new tools take values, never SQL
 
 
 def test_tool_results_are_only_ever_tool_messages(fixture_db):
@@ -331,3 +336,77 @@ def test_other_400_errors_are_not_retried():
         azure.complete([{"role": "user", "content": "q"}], None)
 
     assert len(calls) == 1
+
+
+# ---- skills and data tools --------------------------------------------------------------------------
+
+def chat_db(fixture_db):
+    from fixture_db import add_chat_fixture
+
+    return Database(add_chat_fixture(fixture_db))
+
+
+def test_max_tool_calls_is_ten():
+    assert agent.MAX_TOOL_CALLS == 10
+
+
+def test_system_prompt_lists_every_skill():
+    text = build_system_prompt(load_skills())
+    for name in ("claims", "rain_vs_claims", "news", "flood_events"):
+        assert f"- {name}: " in text
+    assert "From:" in text and "Limits:" in text and "I read this as" in text
+    assert agent.SYSTEM_TEXT == text
+
+
+def test_prompt_keeps_the_bot_on_topic():
+    text = build_system_prompt(load_skills())
+    assert OFF_TOPIC_REPLY in text
+    assert "Python" in text and "outside the four counties" in text
+
+
+def test_off_topic_decline_uses_no_tools(fixture_db):
+    model = FakeModel([say(OFF_TOPIC_REPLY)])
+    result = run_agent(model, Database(fixture_db), [], "How do I make a for loop in Python?")
+    assert result == AgentResult(answer=OFF_TOPIC_REPLY, tool_calls=0)
+
+
+def test_load_skill_then_tool_then_answer(fixture_db):
+    model = FakeModel([use(ask("load_skill", {"name": "claims"})),
+                       use(ask("claims_summary", {"county": "hidalgo"}, "c2")),
+                       say("Hidalgo had 3 claims.")])
+    result = run_agent(model, chat_db(fixture_db), [], "claims in hidalgo?")
+    assert result.tool_calls == 2
+    skill, claims = tool_messages(model.calls[2])
+    assert "## How to answer" in skill["content"]
+    assert json.loads(claims["content"])["totals"] == {"claims": 3, "paid_total": 1600}
+
+
+def test_unknown_skill_lists_valid_names(fixture_db):
+    model = FakeModel([use(ask("load_skill", {"name": "weather"})), say("ok")])
+    run_agent(model, Database(fixture_db), [], "q")
+    content = tool_messages(model.calls[1])[0]["content"]
+    assert content.startswith("Error:") and "claims, flood_events, news, rain_vs_claims" in content
+
+
+def test_repeated_load_skill_counts_toward_cap(fixture_db):
+    calls = [use(ask("load_skill", {"name": "claims"}, f"c{n}")) for n in range(agent.MAX_TOOL_CALLS)]
+    model = FakeModel([*calls, say("done")])
+    result = run_agent(model, Database(fixture_db), [], "q")
+    assert result.tool_calls == agent.MAX_TOOL_CALLS
+    assert model.calls[-1]["tools"] is None  # the cap was reached, so the last turn gets no tools
+
+
+def test_extra_tool_arguments_rejected(fixture_db):
+    model = FakeModel([use(ask("claims_summary", {"county": "hidalgo", "sql": "drop table x"})), say("ok")])
+    run_agent(model, chat_db(fixture_db), [], "q")
+    content = tool_messages(model.calls[1])[0]["content"]
+    assert content.startswith("Error:") and "sql" in content
+
+
+def test_tool_error_is_recoverable(fixture_db):
+    model = FakeModel([use(ask("claims_summary", {"county": "kentucky"})),
+                       use(ask("claims_summary", {"county": "hidalgo"}, "c2")), say("ok")])
+    result = run_agent(model, chat_db(fixture_db), [], "q")
+    first, second = tool_messages(model.calls[2])
+    assert first["content"].startswith("Error: Unknown county")
+    assert '"totals"' in second["content"] and result.answer == "ok"
