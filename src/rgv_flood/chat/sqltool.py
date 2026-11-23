@@ -106,6 +106,20 @@ def run_select(
 ) -> dict:
     """Run one read-only SELECT and return `{columns, rows, row_count, truncated}`."""
     _check_single_select(sql)
+    return _execute(db, sql, (), row_cap=row_cap, cell_cap=cell_cap, seconds=seconds)
+
+
+def run_bound(
+    db: Database, sql: str, params: tuple | dict = (), *, row_cap: int = ROW_CAP, cell_cap: int = CELL_CAP,
+    seconds: float = QUERY_SECONDS,
+) -> dict:
+    """Like run_select, for SQL written in code with values bound as parameters. Never give it model text as SQL:
+    the chat tools pass the model's values only as `params`."""
+    _check_single_select(sql)
+    return _execute(db, sql, params, row_cap=row_cap, cell_cap=cell_cap, seconds=seconds)
+
+
+def _execute(db: Database, sql: str, params, *, row_cap: int, cell_cap: int, seconds: float) -> dict:
     connection = _read_only(db)
     deadline = time.monotonic() + seconds
     timed_out = False
@@ -119,7 +133,7 @@ def run_select(
         connection.set_authorizer(_authorizer)
         connection.set_progress_handler(stop_when_late, 1000)
         try:
-            cursor = connection.execute(sql)
+            cursor = connection.execute(sql, params)
             fetched = cursor.fetchmany(row_cap + 1)
             columns = [column[0] for column in cursor.description or []]
         except sqlite3.Error as error:
