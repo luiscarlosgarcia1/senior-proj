@@ -8,6 +8,7 @@ everything the app reads:
   build_history.py  fills  rainfall_station_years, rainfall_station_months, nws_flood_reports,
                            nfip_claims, nfip_policies_by_year
   build_news.py     fills  news_articles
+  build_places.py   fills  places, place_tracts, place_aliases
   build_layers.py   fills  layers, layer_tiles
   build_all.py      fills  build_info
   every build       note what they loaded in  data_sources
@@ -265,6 +266,35 @@ TABLES: dict[str, tuple[str, ...]] = {
              policies INTEGER NOT NULL,
              PRIMARY KEY (county, year)
            ) WITHOUT ROWID""",
+    ),
+    # Census places (cities, towns and census-designated places) in the four counties, so the chatbot can
+    # turn a town's name into its county and census tracts. `county` holds most of the place's area.
+    "places": (
+        """CREATE TABLE IF NOT EXISTS places (
+             place_id TEXT PRIMARY KEY,            -- Census GEOID
+             name TEXT NOT NULL,                   -- Edinburg
+             full_name TEXT NOT NULL,              -- Edinburg city
+             kind TEXT NOT NULL,                   -- city or cdp
+             county TEXT NOT NULL,
+             lon REAL,                             -- a point inside the place
+             lat REAL
+           )""",
+    ),
+    # The census tracts that make up a place: those with at least 20% of their area inside it. Both the 2010
+    # and 2023 tract vintages, because NFIP claims carry tract ids from both.
+    "place_tracts": (
+        """CREATE TABLE IF NOT EXISTS place_tracts (
+             place_id TEXT NOT NULL,
+             tract TEXT NOT NULL,                  -- 11-digit tract GEOID
+             share_of_tract REAL NOT NULL,         -- how much of the tract lies inside the place
+             vintage INTEGER NOT NULL,             -- 2010 or 2023
+             PRIMARY KEY (place_id, tract)
+           ) WITHOUT ROWID""",
+        "CREATE INDEX IF NOT EXISTS place_tracts_by_tract ON place_tracts(tract)",
+    ),
+    # Other spellings of a place's name (from data/seed/place-aliases.csv), e.g. without the ñ.
+    "place_aliases": (
+        "CREATE TABLE IF NOT EXISTS place_aliases (alias TEXT PRIMARY KEY, place_id TEXT NOT NULL)",
     ),
     # Where each dataset in this database came from and when it was fetched.
     "data_sources": (

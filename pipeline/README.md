@@ -31,6 +31,9 @@ Every table is defined in `database.py`. Every query the app runs is in
 | `rainfall_station_months` | station and month: days with a rain reading, total, wettest day (for the trends page) | `build_history.py` |
 | `nfip_claims` | NFIP flood-insurance claim in the four counties, 1978 on | `build_history.py` |
 | `nfip_policies_by_year` | county and year: NFIP policies in force, 2009 on | `build_history.py` |
+| `places` | Census city, town or census-designated place in the four counties, with the county holding most of it (for the chatbot's place lookups) | `build_places.py` |
+| `place_tracts` | place and census tract (2010 and 2023 vintages) with at least 20% of the tract inside the place | `build_places.py` |
+| `place_aliases` | another spelling of a place's name, from `data/seed/place-aliases.csv` | `build_places.py` |
 | `nws_flood_reports` | flood, flash flood, heavy rain or coastal flood report to NWS Brownsville, 2005 on | `build_history.py` |
 | `news_articles` | water-related news story or official announcement, cleaned: headline, excerpt (at most 300 characters), county, city, topics, link | `build_news.py` |
 | `news_article_copies`, `news_rejected` | stories cleaning merged into another outlet's copy, and stories that failed a check, whole, with the reason | `build_news.py` |
