@@ -72,3 +72,12 @@ Reports about the same flood share a `duplicate_group_id`:
 
 To add reports for another county, create `<county>/public-reports.ndjson` with
 records of the same shape; `build_events.py` picks it up on the next build.
+
+## Place aliases
+
+`place-aliases.csv` (`alias,place_name`) gives other spellings of a Census place's
+name, so the chatbot can find a town typed without its accent or by a local name.
+`place_name` must match a place's Census name exactly, or `build_places.py` stops
+with an error. Census names carry no accents ("Penitas"), and the chatbot ignores
+accents when matching, so "Peñitas" already finds it; only add names that differ in
+more than accents. The file starts with no aliases.

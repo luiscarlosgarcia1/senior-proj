@@ -297,6 +297,16 @@ def census_places(cached: Path = DOWNLOAD_CACHE / "census" / "2023_gaz_place_48.
     return cached
 
 
+PLACE_POLYGONS = "https://www2.census.gov/geo/tiger/TIGER2023/PLACE/tl_2023_48_place.zip"
+
+
+def census_place_polygons(cache_dir: Path = DOWNLOAD_CACHE / "places", *, force: bool = False) -> Path:
+    """The Census TIGER shapefile (zipped) of Texas place outlines: cities, towns and census-designated places."""
+    cached = cache_dir / PLACE_POLYGONS.rsplit("/", 1)[-1]
+    download(PLACE_POLYGONS, cached, force=force)
+    return cached
+
+
 # ---- FEMA flood photos (Wikimedia Commons) ----------------------------------
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
